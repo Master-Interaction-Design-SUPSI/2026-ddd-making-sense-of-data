@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Data Driven Design</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="description" content="Data Driven Design — MAInD, Master of Arts in Interaction Design, SUPSI" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='72' font-size='72' text-anchor='middle'%3E%E2%9C%B6%3C/text%3E%3C/svg%3E" />
+    <link rel="stylesheet" href="static/main.css" />
+  </head>
+  <body>
+    <header class="site-bar">
+      <h1>Data Driven Design</h1>
+      <p id="current" class="bar-current"></p>
+      <p id="current-authors" class="bar-authors"></p>
+      <p id="markers" class="bar-markers" aria-hidden="true"></p>
+    </header>
+
+    <div class="layout">
+      <aside class="site-side">
+        <header class="site-header">
+          <p id="count" class="site-count"></p>
+          <p id="grid" class="site-count"></p>
+        </header>
+        <nav id="nav" class="site-nav" aria-label="Entries"></nav>
+        <footer class="site-footer">
+          <a href="https://maind.supsi.ch/master-interaction-design/en" target="_blank" rel="noopener">MAInD — Master of Arts in Interaction Design, SUPSI</a>
+        </footer>
+      </aside>
+
+      <main id="entries">
+        <noscript>
+          <p class="site-note">This site renders in the browser and needs JavaScript.</p>
+        </noscript>
+      </main>
+    </div>
+
+    <div id="lightbox" hidden>
+      <button type="button" class="lightbox-close" aria-label="Close">⟨Close⟩</button>
+      <img src="" alt="" />
+    </div>
+
+    <script src="static/vendor/marked.min.js"></script>
+    <script src="static/main.js"></script>
+  </body>
+</html>
