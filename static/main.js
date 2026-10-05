@@ -267,8 +267,6 @@ function buildNav(entries) {
     a.append(idx, ` ${entry.title}`);
     nav.appendChild(a);
   });
-  const count = document.getElementById("count");
-  if (count) count.textContent = `⟨Entries: ${entries.length}⟩`;
 }
 
 /* The bar readout: the Entry currently under the reading band. The
@@ -288,18 +286,6 @@ function buildMarkers(entries) {
   const el = document.getElementById("markers");
   if (!el) return;
   el.innerHTML = entries.map(() => `<span>${DEFAULT_MARKER}</span>`).join("");
-}
-
-/* The readout is real: 80 columns by however many 20px rows the viewport
-   currently holds. */
-function watchGrid() {
-  const el = document.getElementById("grid");
-  if (!el) return;
-  const report = () => {
-    el.textContent = `⟨Grid: 80×${Math.floor(window.innerHeight / 20)}⟩`;
-  };
-  report();
-  window.addEventListener("resize", report);
 }
 
 function watchSections(entries) {
@@ -421,7 +407,6 @@ function setupInteractions() {
 /* ---------- boot ---------- */
 
 (async function init() {
-  watchGrid();
   const container = document.getElementById("entries");
   let folders;
   try {
