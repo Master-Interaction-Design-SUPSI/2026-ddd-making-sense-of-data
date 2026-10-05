@@ -7,8 +7,8 @@
    content | 80 margin. Each entry runs caption, copy, then visual below,
    all full content width.
    Interface voice 14px/20px, weight 400; entry copy 16px/20px, justified.
-   Two voices: Arial for content, system monospace for system speech
-   (indices, count, ⟨controls⟩). #1e1e1e ink on #fefefe paper, 1px rules,
+   Two voices: Arial for content, system monospace for navigation indices.
+   #1e1e1e ink on #fefefe paper, 1px rules,
    no radius, no shadows. One signal colour (#0000EE). */
 
 :root {
@@ -140,12 +140,6 @@ main {
 }
 
 /* ---------- header & nav (left column) ---------- */
-
-.site-count {
-  margin: var(--u) 0;
-  font-family: var(--mono);
-  color: var(--mid);
-}
 
 .site-nav {
   display: flex;
@@ -545,11 +539,6 @@ body.show-grid::after {
     display: flex;
     flex-wrap: wrap;
     gap: 0 var(--u);
-  }
-
-  /* the 80 columns aren't real below 1000px: no column readout, rows only */
-  #grid {
-    display: none;
   }
 
   body.show-grid::after {
