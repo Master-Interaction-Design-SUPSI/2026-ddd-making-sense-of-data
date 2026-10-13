@@ -3,6 +3,9 @@
 import json
 import re
 from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+from content_contract import MEDIA_EXTENSIONS, PATH_PART, MAX_FILES
 
 
 SITE_DIRECTORIES = frozenset({"static", "scripts", "_site", "templates"})
@@ -17,6 +20,26 @@ class Group:
     repository: str
     branch: str
     enabled: bool
+    exclude: tuple[str, ...] = ()
+    require_visual: bool = True
+
+
+def validate_exclusions(exclude):
+    if not isinstance(exclude, list) or len(exclude) > MAX_FILES:
+        raise ValueError("exclude: expected a list of at most 100 optional media paths")
+    seen = set()
+    for name in exclude:
+        if not isinstance(name, str) or len(name) > 512:
+            raise ValueError("exclude: expected optional media paths")
+        parts = name.split("/")
+        path = PurePosixPath(name)
+        if (name in {"text.md", "visual.svg"} or len(parts) > 16
+                or not all(PATH_PART.fullmatch(part) for part in parts)
+                or not (len(parts) == 1 or parts[0] == "media")
+                or path.suffix not in MEDIA_EXTENSIONS or name in seen):
+            raise ValueError(f"exclude: invalid or duplicate optional media path {name!r}")
+        seen.add(name)
+    return tuple(exclude)
 
 
 def validate_branch(branch):
@@ -44,7 +67,7 @@ def load_registry(path):
         if not isinstance(entry, dict):
             raise ValueError(f"{label}: expected an object")
         if not {"slug", "repository", "enabled"} <= entry.keys() or entry.keys() - {
-            "slug", "repository", "branch", "enabled"
+            "slug", "repository", "branch", "enabled", "exclude", "require_visual"
         }:
             raise ValueError(f"{label}: require slug, repository, enabled; branch is optional")
         slug = entry["slug"]
@@ -60,7 +83,11 @@ def load_registry(path):
         if type(entry["enabled"]) is not bool:
             raise ValueError(f"{label}: enabled must be true or false")
         branch = validate_branch(entry.get("branch", "main"))
-        groups.append(Group(slug, repository, branch, entry["enabled"]))
+        exclude = validate_exclusions(entry.get("exclude", []))
+        require_visual = entry.get("require_visual", True)
+        if type(require_visual) is not bool:
+            raise ValueError(f"{label}: require_visual must be true or false")
+        groups.append(Group(slug, repository, branch, entry["enabled"], exclude, require_visual))
         slugs.add(slug)
         repositories.add(repository.casefold())
     return groups

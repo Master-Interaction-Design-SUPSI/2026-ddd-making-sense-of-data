@@ -109,6 +109,24 @@ class ImportTests(unittest.TestCase):
         self.assertTrue((self.root / "imports/alpha/visual.svg").is_file())
         self.assertTrue((self.root / "imports/beta/visual.svg").is_file())
 
+    def test_excluded_oversized_media_is_never_downloaded(self):
+        _, nodes = self.api.add("course/alpha")
+        nodes.append(dict(path="media/12.mov", size=MAX_MEDIA_BYTES + 1,
+                          type="blob", mode="100644", sha="a" * 40))
+        result = self.run_import([Group("alpha", "course/alpha", "main", True, ("media/12.mov",))])[0]
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["excluded_files"], ["media/12.mov"])
+        self.assertNotIn("media/12.mov", result["files"])
+        self.assertFalse(any(call.endswith("a" * 40) for call in self.api.calls))
+
+    def test_reference_to_excluded_media_still_fails(self):
+        self.api.add("course/alpha", {"text.md": TEXT + b' [[Watch|media/12.mov]]',
+                                     "visual.svg": SVG, "media/detail.svg": SVG,
+                                     "media/12.mov": b'video'})
+        result = self.run_import([Group("alpha", "course/alpha", "main", True, ("media/12.mov",))])[0]
+        self.assertEqual(result["status"], "failed")
+        self.assertIn("must reference an imported file", result["error"])
+
     def test_inline_playback_template_imports_and_builds_real_media(self):
         template = Path(__file__).resolve().parent.parent / "templates/group"
         files = {path.relative_to(template).as_posix(): path.read_bytes()
