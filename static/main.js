@@ -54,7 +54,7 @@ function extensionOf(url) {
 
 function parseFrontmatter(raw) {
   const meta = {};
-  let body = raw.replace(/^﻿/, "");
+  let body = raw.replace(/^﻿/, "").replace(/\r\n?/g, "\n");
   const match = body.match(/^---[ \t]*\n([\s\S]*?)\n---[ \t]*\n?/);
   if (match) {
     body = body.slice(match[0].length);
@@ -72,16 +72,19 @@ function expandAnnotations(src) {
   return CourseAnnotations.replace(src, (annotation) => {
     const { label, target, resource, type, style, color, marker } = annotation;
     if (!annotation.valid || (color && !CSS.supports("color", color))) return annotation.source;
-    const content = resource ? resourceHtml(target) : type === "quote" ? `<q>${target}</q>` : target;
+    const bibliography = type === "bibliography";
+    let content = target;
+    if (resource) content = bibliography ? linkHtml(target) : resourceHtml(target);
+    else if (type === "quote") content = `<q>${target}</q>`;
     const mark = marker || ({ note: "∗", bibliography: "■" }[type] || DEFAULT_MARKER);
     const glyph = type === "note" ? `&#123;${esc(mark)}&#125;` : type === "bibliography" ? `(${esc(mark)})` : esc(mark);
-    const appearance = color ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
+    const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
     return (
-      `<span class="annotation annotation-${type} annotation-style-${style}"${appearance}>` +
-      `<button type="button" class="annotation-toggle" aria-expanded="false">` +
+      `<span class="annotation annotation-${type} annotation-style-${style}${bibliography ? " open" : ""}"${appearance}>` +
+      `<button type="button" class="annotation-toggle" aria-expanded="${bibliography}">` +
       `${label}<span class="annotation-marker" aria-hidden="true">${glyph}</span>` +
       `</button>` +
-      `<span class="annotation-content${resource ? "" : " annotation-text"}" hidden>${content}</span>` +
+      `<span class="annotation-content${resource ? "" : " annotation-text"}"${bibliography ? "" : " hidden"}>${content}</span>` +
       `</span>`
     );
   });
@@ -136,9 +139,13 @@ function resourceHtml(url) {
     return `<audio controls preload="none" src="${resolved}"></audio>`;
   if (VIDEO_EXTS.includes(ext))
     return `<video controls preload="metadata" src="${resolved}"></video>`;
+  return linkHtml(url);
+}
+
+function linkHtml(url) {
   let label = url.replace(/^https?:\/\//, "").replace(/\/$/, "");
   if (label.length > 60) label = label.slice(0, 57) + "…";
-  return `<a href="${resolved}" target="_blank" rel="noopener">${esc(label)}</a>`;
+  return `<a href="${esc(url)}" target="_blank" rel="noopener">${esc(label)}</a>`;
 }
 
 /* Colour span: {colour|text} — any CSS colour (named, #hex, rgb(), oklch()…).
@@ -166,7 +173,27 @@ function renderMarkdown(body) {
   // Keep Markdown blockquotes (>) while preventing contributor HTML (<...>).
   const plain = body.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const expanded = expandColours(expandAnnotations(plain));
-  return marked.parse(expanded);
+  const tokens = marked.lexer(expanded);
+  marked.walkTokens(tokens, (token) => {
+    if (token.type === "br") {
+      token.type = "text";
+      token.text = " ";
+    } else if (token.type === "text" && !token.tokens) {
+      token.text = token.text.replace(/[ \t]*(?:\r?\n[ \t]*)+/g, " ");
+    }
+  });
+  const flow = [];
+  for (const token of tokens) {
+    if (token.type === "space") continue;
+    const previous = flow[flow.length - 1];
+    if (token.type === "paragraph" && previous?.type === "paragraph") {
+      previous.tokens.push({ type: "text", raw: " ", text: " " });
+      for (const inline of token.tokens) previous.tokens.push(inline);
+    } else {
+      flow.push(token);
+    }
+  }
+  return marked.parser(flow);
 }
 
 /* ---------- loading ---------- */

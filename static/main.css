@@ -1,12 +1,12 @@
 /* Data Driven Design — MAInD SUPSI
    Cell grid, terminal-fashion: 80 real columns across the viewport — margins
-   and gutters are columns, not padding — by one 20px row everywhere. The
+   and gutters are columns, not padding — with 20px interface rows. The
    viewport shows however many rows fit; the page is the scrollback buffer.
    Press g to see the grid.
    Column map, a 10:70 split: 1 margin | 2–10 nav | 11 gutter | 12–79
    content | 80 margin. Each entry runs caption, copy, then visual below,
    all full content width.
-   Interface voice 14px/20px, weight 400; entry copy 16px/20px, justified.
+   Interface voice 14px/20px, weight 400; entry copy 16px/22px, justified.
    Two voices: Arial for content, system monospace for navigation indices.
    #1e1e1e ink on #fefefe paper, 1px rules,
    no radius, no shadows. One signal colour (#0000EE). */
@@ -17,7 +17,7 @@
   --mid: #8c8c8c;
   --signal: #0000ee;
   --annotation-default: var(--signal);
-  --u: 20px; /* the row: every vertical distance is a whole number of these */
+  --u: 20px; /* interface grid row; prose uses its own leading */
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
@@ -206,7 +206,7 @@ main {
 
 .entry-text {
   font-size: 16px;
-  line-height: 20px; /* the same row as everything else, set near-solid */
+  line-height: 1.375;
   text-align: justify;
   hyphens: auto;
 }
@@ -324,7 +324,7 @@ main {
   display: none;
 }
 
-/* Inline images fit the current prose row; ticket 10 will tune leading. */
+/* Inline images fit within the prose leading; taller players grow their line. */
 .entry-text .inline-image {
   display: inline-block;
   vertical-align: -0.15em;
@@ -490,11 +490,24 @@ main {
   content: "}";
 }
 
-.annotation-bibliography .annotation-text::before {
+.annotation-bibliography {
+  --annotation-default: #000;
+  --annotation-color: #000;
+  color: #000;
+}
+
+.annotation-bibliography .annotation-content {
+  float: none;
+  width: auto;
+  background: none;
+  color: #000;
+}
+
+.annotation-bibliography .annotation-content::before {
   content: " (";
 }
 
-.annotation-bibliography .annotation-text::after {
+.annotation-bibliography .annotation-content::after {
   content: ")";
 }
 
