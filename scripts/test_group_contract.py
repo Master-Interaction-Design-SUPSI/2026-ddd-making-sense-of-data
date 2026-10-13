@@ -34,6 +34,15 @@ class GroupContractTests(unittest.TestCase):
         self.assertEqual(group.branch, "main")
         self.assertTrue(group.enabled)
 
+    def test_optional_media_exclusions(self):
+        group = self.load([self.group(exclude=["media/12.mov"])])[0]
+        self.assertEqual(group.exclude, ("media/12.mov",))
+        for exclude in ("media/12.mov", ["text.md"], ["visual.svg"],
+                        ["../movie.mov"], ["media/movie.mov", "media/movie.mov"],
+                        ["other/movie.mov"], ["media/code.js"], [None]):
+            with self.subTest(exclude=exclude), self.assertRaises(ValueError):
+                self.load([self.group(exclude=exclude)])
+
     def test_repository_change_preserves_slug_and_disabled_entries_are_retained(self):
         before = self.load([self.group()])[0]
         after = self.load([self.group(repository="new-owner/renamed", enabled=False, branch="draft/content")])[0]

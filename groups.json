@@ -11,6 +11,13 @@
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta",
       "branch": "main",
       "enabled": true
+    },
+    {
+      "slug": "ddd-abstract",
+      "repository": "ginevraterenghi/ddd-abstract",
+      "branch": "main",
+      "enabled": true,
+      "exclude": ["media/12.mov", "media/4.mov"]
     }
   ]
 }

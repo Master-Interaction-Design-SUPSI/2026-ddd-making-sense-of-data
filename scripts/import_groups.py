@@ -24,7 +24,7 @@ def object_sha(value):
     return value
 
 
-def validate_tree(tree):
+def validate_tree(tree, exclude=()):
     nodes = tree.get("tree")
     if tree.get("truncated") is not False or not isinstance(nodes, list) or len(nodes) > MAX_TREE_ENTRIES:
         raise ImportFailure("tree_limit", "Repository listing is incomplete or exceeds 2,000 entries; reduce repository contents")
@@ -48,7 +48,7 @@ def validate_tree(tree):
     for name in paths:
         if any("/".join(name.split("/")[:n]) in files for n in range(1, len(name.split("/")))):
             raise ValueError(f"{name}: a parent path is a file")
-    selected = select_content_files({name: node["size"] for name, node in files.items()})
+    selected = select_content_files({name: node["size"] for name, node in files.items() if name not in exclude})
     return {name: files[name] for name in selected}
 
 
@@ -144,7 +144,9 @@ def import_group(group, destination, client, result):
     tree = client.json(repository + "/git/trees/" + tree_sha + "?recursive=1")
     if tree["sha"] != tree_sha:
         raise ImportFailure("invalid_response", "GitHub returned a different tree")
-    files = validate_tree(tree)
+    files = validate_tree(tree, group.exclude)
+    result["excluded_files"] = sorted(node["path"] for node in tree["tree"]
+                                      if node["path"] in group.exclude)
     with tempfile.TemporaryDirectory(prefix=".candidate-", dir=destination) as temporary:
         candidate = Path(temporary)
         for name, node in files.items():

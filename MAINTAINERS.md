@@ -16,7 +16,9 @@ The **Validate course entries** workflow runs tests and the build on pull reques
 
 Public group repositories are the agreed model. The local template is in `templates/group/`; copy its **contents** to the root of each future group repository. It contains a browser-only README, demonstration text and main SVG, and an optional example in `media/`. Do not copy the parent `templates` folder. Use the provisioning steps below for real groups; do not register the demonstration as a real group.
 
-Register each group once in `groups.json`. It currently registers the two public pilot repositories: alpha supplies `dust`, and beta supplies `pilot-beta`. For future groups, replace the illustrative owner/repository below with the real public GitHub address:
+Register each group once in `groups.json`. Alpha supplies `dust`, beta supplies `pilot-beta`, and `ginevraterenghi/ddd-abstract` supplies `ddd-abstract`. For future groups, replace the illustrative owner/repository below with the real public GitHub address:
+
+An optional `exclude` list omits exact optional media paths before downloads and size accounting. It cannot exclude `text.md` or `visual.svg`; text references to excluded files still fail validation. Import reports record matching `excluded_files`. The `ddd-abstract` entry excludes `media/12.mov` and `media/4.mov`, both over the 20 MiB file limit. At registration, this repository also lacks the required root `visual.svg`; it will be skipped until that file is supplied. Remove the exclusions after suitable replacements are uploaded. Exclusions leave source repository files untouched.
 
 ```json
 {
