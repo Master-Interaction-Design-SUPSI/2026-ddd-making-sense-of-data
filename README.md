@@ -1,63 +1,83 @@
 # Share your Data Driven Design work
 
-Follow these steps to put your group's work on the course website. You need a GitHub account and an invitation from the course team to edit this repository. Ask them for the repository link and the website link. A course maintainer reviews each contribution before it appears on the website.
+Each group edits its own public GitHub repository. The main course repository collects the registered groups' text and media and publishes them together on the course website.
 
-Open the [`example` folder](example/) to see a complete entry. Its numbers and visual are invented for demonstration; use your own work in your group's folder.
+**Before you begin:** the course team will give you an invitation, your group's repository link, its group identifier, and the website link. These instructions apply once that setup is ready. You need only a GitHub account and a browser.
 
-## 1. Prepare your visual
+Edit your contribution in your group's repository. The course team maintains this main repository and its publishing setup. All group repositories are public, so use material intended for public sharing.
 
-Choose a short, unique name for your group, such as `city-water`. Use lowercase letters, numbers and hyphens. The name will also appear in the link to your work, so choose one you can keep.
+The [group template](templates/group/) contains demonstration text and invented numbers. Replace them with your group's work. Keep the repository name and file locations supplied by the course team.
 
-Prepare one image at **1920 × 1080 pixels** if possible. Other sizes will fit inside the same wide space on the page. Name it `visual.png`, `visual.jpg`, `visual.jpeg`, `visual.webp` or `visual.gif`, according to its file type. Keep it on your computer for now.
+## 1. Write your text
 
-## 2. Write your text on GitHub
+Sign in to GitHub, accept the invitation from the course team, and open **your group's repository**. Check that the branch menu shows **main**.
 
-1. Sign in to GitHub and open the course repository.
-2. Choose **Add file → Create new file**.
-3. In the filename box, type your group name, a slash, and `text.md`. For example: `city-water/text.md`. This also creates your group's folder.
-4. Paste this example into the large text box and replace its title, names and paragraphs with your own:
+Open `text.md` and click the pencil icon. Replace the title, authors, and paragraphs with your own work. Keep the three dashes above and below the title and authors:
 
-   ```text
-   ---
-   title: City Water
-   authors: Ada Rossi, Ben Kaya
-   ---
+```text
+---
+title: Your project title
+authors: Your group members
+---
 
-   What changed in the city's water use?
+What question did you investigate?
 
-   We compared the records with what we saw in the neighbourhood.
-   ```
+Explain what you found and how you worked with the data.
+```
 
-5. Keep the three dashes above and below the title and authors. Choose **Commit changes** and create a new branch when GitHub offers that choice. Open a pull request for your group’s work.
+Choose **Commit changes**, select **Commit directly to the main branch**, and confirm. A commit is a saved change. You can edit the same file again whenever you need to make a correction.
 
-GitHub calls a saved change a *commit*. You do not need to install software or use a terminal. GitHub's [file creation guide](https://docs.github.com/en/repositories/working-with-files/managing-files/creating-new-files) shows the editor if you need pictures.
+If GitHub offers only a fork or a proposed change, check that you accepted the invitation and opened the correct repository. Ask the course team to check your access if direct saving is unavailable. GitHub's [editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files) shows the editor.
 
-## 3. Upload your visual
+## 2. Upload your main visual
 
-1. Open the folder you just made on GitHub (`city-water` in this example).
-2. Choose **Add file → Upload files** and select your `visual.png` (or the image ending you chose).
-3. Check that GitHub shows the image inside your folder, then choose **Commit changes** and save it to the same branch as your text. Your pull request should contain both files.
+Prepare a **1920 × 1080 pixel** frame or artboard and export the whole frame as SVG. Name it **visual.svg**. Renaming a PNG or JPG file to `.svg` does not convert it.
 
-You can add extra pictures, audio or video to the same folder later if your text uses them. GitHub's [upload guide](https://docs.github.com/en/repositories/working-with-files/managing-files/adding-a-file-to-a-repository) shows the upload screen. A single file uploaded through GitHub's browser interface must be under **25 MB**.
+At the top level of your group's repository, choose **Add file → Upload files**, select `visual.svg`, and commit directly to **main**. Uploading the same filename replaces the previous visual. Keep `text.md` and `visual.svg` together at the top level; you do not need to create a group folder inside this repository.
 
-Your work appears automatically after a course maintainer approves and merges the pull request containing both `text.md` and the visual. You do not need to edit a list or tell the website where to find your folder.
+The SVG should contain `viewBox="0 0 1920 1080"`. If it also specifies width and height, they must be 1920 and 1080 pixels. Keep only one main visual: remove any older `visual.png` or `visual.jpg` using **… → Delete file**, then commit to **main**.
 
-## 4. Check your work
+## 3. Check your entry
 
-After the website has updated, open it. The example stays first, followed by group folders in alphabetical order. Find your title in the list, then check your text, visual and any links. If your work does not appear, check that your folder sits beside `example` and contains `text.md` and exactly one image named `visual.png`, `visual.jpg`, `visual.jpeg`, `visual.webp` or `visual.gif`. The spelling and capital letters must match.
+After the course team has connected your repository and enabled publishing, valid changes appear automatically without content approval. The site checks for changes roughly every ten minutes, but updates can take longer. Open the website link supplied by the course team, find your title, and check your text, visual, and links.
 
-## Add links, notes or colour to your text
+If an update does not appear, open [publication results](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml), choose the latest completed run on **main**, and find **Course publication** in its summary. Use the group identifier supplied by the course team to find your row.
 
-You can write plain paragraphs in `text.md`. These extras are optional:
-
-| Write this in your text | What a visitor can do |
+| Status | What it means |
 | --- | --- |
-| `[[the original data\|https://example.org/data]]` | Click the highlighted words to open a website. |
-| `[[our photograph\|photo.jpg]]` | Click to see `photo.jpg`, if that file is in your folder. Sound and video files work the same way. |
-| `[[three visits\|we visited in April, May and June]]` | Click to reveal a short note in the sentence. |
-| `[[our photograph\|photo.jpg\|📷]]` | Use your own emoji as the marker. |
-| `{crimson\|a key finding}` | Show those words in a colour you choose. |
+| `updated` | Your new files were selected for this publication. |
+| `unchanged` | The selected version is the same as before. |
+| `retained` | The update could not be used; your previous published version was kept. Read the explanation in your row. |
+| `skipped` | This group has no usable published version yet. Read the explanation, correct the files, and save again. |
+| `disabled` | Publication for this group has been turned off by the course team. |
 
-Put a YouTube, Vimeo, Giphy or Tenor link in place of `photo.jpg` to show a player. For a file in your folder, write only its filename: `photo.jpg`, rather than the folder name and filename. Names must match exactly, including capital letters. A note cannot contain `|`, `[` or `]`.
+A run marked **verified** confirms that its publication completed. **unchanged** means no new deployment was needed. If the overall result is failed, unverified, or still awaiting deployment, ask the course team to check it; an `updated` row alone does not confirm that your changes are online. If your group has no row, or there are no publication results yet, ask the course team to check the setup.
+
+For an incorrect SVG size, export the whole 1920 × 1080 frame again. For a missing media file, upload it or correct its filename in `text.md`. Keep names and capital letters exactly the same. Commit the correction to **main**; a later refresh will try again. An invalid or incomplete update keeps the previous published entry when one exists.
+
+## Optional text and media
+
+These examples use the currently supported syntax:
+
+| Write in text.md | What a visitor can do |
+| --- | --- |
+| `*a few words*` | Read italic text. |
+| `[[the source\|https://example.org/data]]` | Open a link. Replace the example address with your source. |
+| `[[a detail\|A short explanation]]` | Click to reveal a note. |
+| `{crimson\|a key finding}` | Read those words in colour. |
+| `[[the sketch\|media/example-detail.svg]]` | Click to reveal the template's supporting image. |
+
+To add an extra image, audio clip, or video, open `media`, choose **Add file → Upload files**, and commit to **main**. If there is no `media` folder, you can upload the file beside `text.md` instead. Reference the exact path: `media/interview.mp3` for a file inside `media`, or `interview.mp3` for a file at the top level. For example, after uploading those files:
+
+```text
+[[Listen to the interview|media/interview.mp3]]
+[[Watch the recording|media/recording.mp4]]
+```
+
+Media opens when the visitor clicks its annotation; audio and video provide playback controls. Preview your own files in the website, because playback depends on their encoding. Extra images keep their own dimensions: **only the main visual must be a 1920 × 1080 SVG**. Supplementary images may be SVG, PNG, JPG/JPEG, WebP, GIF, or AVIF.
+
+Use lowercase filenames without spaces, such as `survey-photo.jpg`; letters, digits, dots, underscores, and hyphens are supported. Keep paths within your repository. A note cannot contain `|`, `[` or `]`. If you remove a media file, remove its reference from `text.md` too.
+
+File limits are 256 KiB for text, 5 MiB per SVG, 20 MiB per other media file, and 100 files / 100 MiB in total. Supported audio: MP3, M4A, WAV, OGG, AAC, FLAC. Supported video: MP4, WebM, MOV. Export SVGs as static, self-contained artwork. Source/design files and README files are not included in your published entry.
 
 The site is part of [Data Driven Design at MAInD — SUPSI](https://maind.supsi.ch/master-interaction-design/en).
