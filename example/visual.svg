@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <title>Three invented values: 20, 35 and 50</title>
+  <rect width="1920" height="1080" fill="#f7f6f2"/>
+  <rect x="305" y="635" width="360" height="220" fill="#a3cfc2"/>
+  <rect x="775" y="470" width="360" height="385" fill="#529e93"/>
+  <rect x="1245" y="305" width="360" height="550" fill="#116964"/>
+  <path d="M270 198H1715 M270 858H1715" fill="none" stroke="#202724" stroke-width="6"/>
+</svg>

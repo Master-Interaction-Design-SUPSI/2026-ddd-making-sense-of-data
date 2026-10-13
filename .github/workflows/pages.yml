@@ -3,30 +3,99 @@ name: Publish course website
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: '7,17,27,37,47,57 * * * *'
   workflow_dispatch:
+    inputs:
+      first_publication:
+        description: 'Initial rollout only: no imported publication exists yet'
+        type: boolean
+        default: false
+      retry_publication:
+        description: 'Recovery only: redeploy the exact latest recorded candidate'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   publish:
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      actions: read
+      deployments: write
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/configure-pages@v5
-      - name: Find student entries
-        run: python3 scripts/build_site.py
-      - uses: actions/upload-pages-artifact@v4
         with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check trusted publishing code
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - id: pages
+        uses: actions/configure-pages@v5
+      - name: Import groups and prepare publication
+        id: prepare
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          PAGES_URL: ${{ steps.pages.outputs.base_url }}
+          FIRST_PUBLICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.first_publication }}
+          RETRY_PUBLICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.retry_publication }}
+        run: python3 scripts/publish_site.py prepare
+      - name: Download recorded candidate for recovery
+        if: steps.prepare.outputs.retry == 'true'
+        uses: actions/download-artifact@v4
+        with:
+          name: course-pages-${{ steps.prepare.outputs.artifact_run }}-${{ steps.prepare.outputs.artifact_attempt }}
+          path: .scratch/pending-artifact
+          run-id: ${{ steps.prepare.outputs.artifact_run }}
+          github-token: ${{ github.token }}
+      - name: Validate and restore recorded candidate
+        if: steps.prepare.outputs.retry == 'true'
+        id: restore
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_site.py restore
+      - name: Upload complete candidate
+        if: steps.prepare.outputs.deploy == 'true' || steps.restore.outputs.deploy == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          name: course-pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: _site
+          retention-days: 30
+      - name: Record expected publication
+        if: steps.prepare.outputs.deploy == 'true'
+        id: record
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_site.py record
       - id: deployment
+        if: steps.record.outputs.deploy == 'true' || steps.restore.outputs.deploy == 'true'
         uses: actions/deploy-pages@v4
+        with:
+          artifact_name: course-pages-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Verify served publication
+        if: steps.record.outputs.deploy == 'true' || steps.restore.outputs.deploy == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_site.py verify
+      - name: Summarize group results
+        if: always()
+        run: python3 scripts/publish_site.py summary

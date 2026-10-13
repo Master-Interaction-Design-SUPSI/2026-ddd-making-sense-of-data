@@ -1,0 +1,25 @@
+name: Validate course entries
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Check entry validation
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Validate and build entries
+        run: python3 scripts/build_site.py

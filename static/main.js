@@ -2,7 +2,7 @@
  * Data Driven Design — client-side renderer.
  *
  * The publishing workflow discovers Entry folders and writes entries.json.
- * This script fetches that list, then each folder's text.md and visual.*,
+ * This script fetches that list, then each folder's text.md and visual.svg,
  * and renders everything in the browser.
  *
  * Folder names become each section's URL fragment.
@@ -12,7 +12,6 @@
 const IMAGE_EXTS = ["png", "jpg", "jpeg", "webp", "gif", "avif", "svg"];
 const AUDIO_EXTS = ["mp3", "m4a", "wav", "ogg", "aac", "flac"];
 const VIDEO_EXTS = ["mp4", "webm", "mov"];
-const VISUAL_EXTS = ["png", "jpg", "jpeg", "webp", "gif"];
 const DEFAULT_MARKER = "✶";
 
 const pad = (n) => String(n).padStart(2, "0");
@@ -186,16 +185,13 @@ function renderMarkdown(body) {
 /* ---------- loading ---------- */
 
 async function findVisual(folder) {
-  for (const ext of VISUAL_EXTS) {
-    const url = `${folder}/visual.${ext}`;
-    try {
-      const res = await fetch(url, { method: "HEAD" });
-      if (res.ok) return url;
-    } catch {
-      /* keep probing */
-    }
+  const url = `${folder}/visual.svg`;
+  try {
+    const res = await fetch(url, { method: "HEAD" });
+    return res.ok ? url : null;
+  } catch {
+    return null;
   }
-  return null;
 }
 
 async function loadEntry(folder) {
@@ -228,7 +224,7 @@ function renderEntry(entry) {
   if (entry.visual) {
     html +=
       `<figure class="entry-visual">` +
-      `<img src="${esc(entry.visual)}" alt="${esc(entry.title)} — visualisation">` +
+      `<img src="${esc(entry.visual)}" width="1920" height="1080" alt="${esc(entry.title)} — visualisation">` +
       `</figure>`;
   }
 
@@ -425,7 +421,7 @@ function setupInteractions() {
   const loaded = await Promise.all(folders.map(loadEntry));
   for (const entry of loaded) {
     if (entry.text === null && entry.visual === null) {
-      console.warn(`Entry "${entry.folder}" has no text.md and no visual.* — skipped.`);
+      console.warn(`Entry "${entry.folder}" has no text.md and no visual.svg — skipped.`);
     }
   }
 

@@ -1,0 +1,16 @@
+{
+  "groups": [
+    {
+      "slug": "dust",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-alpha",
+      "branch": "main",
+      "enabled": true
+    },
+    {
+      "slug": "pilot-beta",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta",
+      "branch": "main",
+      "enabled": true
+    }
+  ]
+}
