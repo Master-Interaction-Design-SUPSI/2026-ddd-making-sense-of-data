@@ -135,6 +135,30 @@ class PublicationTests(unittest.TestCase):
         self.assertIn("error", self.report()[2])
         self.assertFalse((self.output / "new").exists())
 
+    def test_text_only_group_publishes_and_recovers_after_fetch_failure(self):
+        registry = json.loads((self.root / "groups.json").read_text())
+        registry["groups"][1]["require_visual"] = False
+        (self.root / "groups.json").write_text(json.dumps(registry))
+        self.api.add("course/beta", {"text.md": b'Text without a main visual'})
+        self.bootstrap()
+        entry = decode_manifest((self.live / MANIFEST).read_bytes())["beta"]
+        self.assertFalse(entry["require_visual"])
+        self.assertEqual(set(entry["files"]), {"text.md"})
+        self.assertFalse((self.live / "beta/visual.svg").exists())
+        self.api.routes["/repos/course/beta"] = URLError("temporary outage")
+        with patch("github_content.time.sleep"):
+            self.build()
+        self.assertEqual((self.output / "beta/text.md").read_bytes(), b'Text without a main visual')
+        self.assertEqual(self.report()[1]["publication_status"], "retained")
+
+    def test_optional_visual_is_validated_when_present(self):
+        registry = json.loads((self.root / "groups.json").read_text())
+        registry["groups"][1]["require_visual"] = False
+        (self.root / "groups.json").write_text(json.dumps(registry))
+        self.api.add("course/beta", {"text.md": b'Text', "visual.svg": b'broken SVG'})
+        self.build(first=True)
+        self.assertEqual(self.report()[1]["publication_status"], "skipped")
+
     def test_removed_and_disabled_groups_are_unpublished_without_restoring_their_files(self):
         self.bootstrap()
         self.registry("beta", disabled=("beta",))

@@ -24,7 +24,7 @@ def object_sha(value):
     return value
 
 
-def validate_tree(tree, exclude=()):
+def validate_tree(tree, exclude=(), *, require_visual=True):
     nodes = tree.get("tree")
     if tree.get("truncated") is not False or not isinstance(nodes, list) or len(nodes) > MAX_TREE_ENTRIES:
         raise ImportFailure("tree_limit", "Repository listing is incomplete or exceeds 2,000 entries; reduce repository contents")
@@ -48,7 +48,8 @@ def validate_tree(tree, exclude=()):
     for name in paths:
         if any("/".join(name.split("/")[:n]) in files for n in range(1, len(name.split("/")))):
             raise ValueError(f"{name}: a parent path is a file")
-    selected = select_content_files({name: node["size"] for name, node in files.items() if name not in exclude})
+    selected = select_content_files({name: node["size"] for name, node in files.items() if name not in exclude},
+                                    require_visual=require_visual)
     return {name: files[name] for name in selected}
 
 
@@ -116,12 +117,13 @@ def validate_references(text, files):
             raise ValueError(f"text.md: {target!r} must reference an imported file inside this group")
 
 
-def validate_content(folder, files):
+def validate_content(folder, files, *, require_visual=True):
     for name in files:
         if name.endswith(".svg"):
             validate_svg_content(folder / name)
     text = (folder / "text.md").read_text(encoding="utf-8")
-    validate_visual(folder / "visual.svg")
+    if require_visual or "visual.svg" in files:
+        validate_visual(folder / "visual.svg")
     validate_references(text, files)
 
 
@@ -144,7 +146,7 @@ def import_group(group, destination, client, result):
     tree = client.json(repository + "/git/trees/" + tree_sha + "?recursive=1")
     if tree["sha"] != tree_sha:
         raise ImportFailure("invalid_response", "GitHub returned a different tree")
-    files = validate_tree(tree, group.exclude)
+    files = validate_tree(tree, group.exclude, require_visual=group.require_visual)
     result["excluded_files"] = sorted(node["path"] for node in tree["tree"]
                                       if node["path"] in group.exclude)
     with tempfile.TemporaryDirectory(prefix=".candidate-", dir=destination) as temporary:
@@ -159,7 +161,7 @@ def import_group(group, destination, client, result):
             path = candidate / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        validate_content(candidate, files)
+        validate_content(candidate, files, require_visual=group.require_visual)
         client.remaining()
         candidate.rename(destination / group.slug)
     result.update(status="imported", files=list(files))
@@ -172,6 +174,8 @@ def import_groups(groups, destination, client_factory=GitHubClient):
     for group in groups:
         result = dict(slug=group.slug, repository=group.repository, branch=group.branch,
                       commit=None, status="disabled" if not group.enabled else "failed")
+        if not group.require_visual:
+            result["require_visual"] = False
         results.append(result)
         if not group.enabled:
             continue

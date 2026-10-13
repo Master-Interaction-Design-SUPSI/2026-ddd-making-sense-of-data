@@ -43,6 +43,14 @@ class GroupContractTests(unittest.TestCase):
             with self.subTest(exclude=exclude), self.assertRaises(ValueError):
                 self.load([self.group(exclude=exclude)])
 
+    def test_visual_can_be_optional_but_text_is_always_required(self):
+        self.assertFalse(self.load([self.group(require_visual=False)])[0].require_visual)
+        with self.assertRaises(ValueError):
+            self.load([self.group(require_visual="false")])
+        self.assertEqual(select_content_files({"text.md": 1}, require_visual=False), ["text.md"])
+        with self.assertRaises(ValueError):
+            select_content_files({}, require_visual=False)
+
     def test_repository_change_preserves_slug_and_disabled_entries_are_retained(self):
         before = self.load([self.group()])[0]
         after = self.load([self.group(repository="new-owner/renamed", enabled=False, branch="draft/content")])[0]

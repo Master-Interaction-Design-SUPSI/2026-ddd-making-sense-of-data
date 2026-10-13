@@ -18,7 +18,7 @@ Public group repositories are the agreed model. The local template is in `templa
 
 Register each group once in `groups.json`. Alpha supplies `dust`, beta supplies `pilot-beta`, and `ginevraterenghi/ddd-abstract` supplies `ddd-abstract`. For future groups, replace the illustrative owner/repository below with the real public GitHub address:
 
-An optional `exclude` list omits exact optional media paths before downloads and size accounting. It cannot exclude `text.md` or `visual.svg`; text references to excluded files still fail validation. Import reports record matching `excluded_files`. The `ddd-abstract` entry excludes `media/12.mov` and `media/4.mov`, both over the 20 MiB file limit. At registration, this repository also lacks the required root `visual.svg`; it will be skipped until that file is supplied. Remove the exclusions after suitable replacements are uploaded. Exclusions leave source repository files untouched.
+An optional `exclude` list omits exact optional media paths before downloads and size accounting. It cannot exclude `text.md` or `visual.svg`; text references to excluded files still fail validation. Import reports record matching `excluded_files`. The `ddd-abstract` entry excludes `media/12.mov` and `media/4.mov`, both over the 20 MiB file limit. This entry also sets `require_visual: false` to publish without a root `visual.svg`. The flag defaults to true for other groups; any supplied SVG still passes the usual validation. Recovery snapshots preserve this flag so text-only entries can be restored after failed updates. Remove the exclusions after suitable replacements are uploaded. Exclusions leave source repository files untouched.
 
 ```json
 {

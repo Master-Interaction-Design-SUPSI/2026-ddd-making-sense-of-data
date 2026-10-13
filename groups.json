@@ -17,7 +17,8 @@
       "repository": "ginevraterenghi/ddd-abstract",
       "branch": "main",
       "enabled": true,
-      "exclude": ["media/12.mov", "media/4.mov"]
+      "exclude": ["media/12.mov", "media/4.mov"],
+      "require_visual": false
     }
   ]
 }

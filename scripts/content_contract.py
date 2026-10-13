@@ -47,7 +47,7 @@ def validate_visual(path):
             raise ValueError(f"{path}: {attribute} must be {expected} pixels or omitted")
 
 
-def select_content_files(file_sizes):
+def select_content_files(file_sizes, *, require_visual=True):
     """Return sorted allowed paths; ignore non-content files, reject bad content."""
     selected = []
     total = 0
@@ -75,6 +75,7 @@ def select_content_files(file_sizes):
         total += size
         if len(selected) > MAX_FILES or total > MAX_TOTAL_BYTES:
             raise ValueError("group content exceeds 100 files or 100 MiB")
-    if not {"text.md", "visual.svg"} <= set(selected):
-        raise ValueError("group content requires text.md and visual.svg")
+    required_files = {"text.md", "visual.svg"} if require_visual else {"text.md"}
+    if not required_files <= set(selected):
+        raise ValueError("group content requires " + " and ".join(sorted(required_files)))
     return sorted(selected)

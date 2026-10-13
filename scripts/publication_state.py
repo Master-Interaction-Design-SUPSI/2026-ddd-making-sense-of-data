@@ -46,8 +46,13 @@ def decode_manifest(payload):
         for slug, entry in groups.items():
             if len(slug) > 63 or not SLUG.fullmatch(slug) or slug in RESERVED_SLUGS:
                 raise ValueError("invalid group slug")
-            if not isinstance(entry, dict) or set(entry) != {"repository", "branch", "commit", "files"}:
+            required_keys = {"repository", "branch", "commit", "files"}
+            if (not isinstance(entry, dict) or not required_keys <= entry.keys()
+                    or entry.keys() - (required_keys | {"require_visual"})):
                 raise ValueError(f"{slug}: invalid snapshot record")
+            require_visual = entry.get("require_visual", True)
+            if type(require_visual) is not bool:
+                raise ValueError(f"{slug}: invalid require_visual")
             repository = entry["repository"]
             if not isinstance(repository, str) or not REPOSITORY.fullmatch(repository) or repository.endswith(".git"):
                 raise ValueError(f"{slug}: invalid repository")
@@ -64,7 +69,8 @@ def decode_manifest(payload):
                     raise ValueError(f"{slug}: invalid file record")
                 if not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
                     raise ValueError(f"{slug}: invalid file digest")
-            selected = select_content_files({name: record["size"] for name, record in files.items()})
+            selected = select_content_files({name: record["size"] for name, record in files.items()},
+                                            require_visual=require_visual)
             if set(selected) != set(files):
                 raise ValueError(f"{slug}: unsupported files in recovery state")
             if any(parent in files for name in files for parent in (
@@ -89,7 +95,10 @@ def snapshot(folder, result):
     for name in result["files"]:
         content = (folder / name).read_bytes()
         files[name] = {"size": len(content), "sha256": hashlib.sha256(content).hexdigest()}
-    return {key: result[key] for key in ("repository", "branch", "commit")} | {"files": files}
+    entry = {key: result[key] for key in ("repository", "branch", "commit")} | {"files": files}
+    if result.get("require_visual") is False:
+        entry["require_visual"] = False
+    return entry
 
 
 class SiteReader:
@@ -149,7 +158,7 @@ class PublishedSite(SiteReader):
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
         try:
-            validate_content(destination, entry["files"])
+            validate_content(destination, entry["files"], require_visual=entry.get("require_visual", True))
         except ValueError as error:
             raise RecoveryError(f"{slug}: published snapshot fails current content validation: {error}") from error
         return entry
