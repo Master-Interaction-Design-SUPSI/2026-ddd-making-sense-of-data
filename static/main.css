@@ -6,7 +6,7 @@
    Column map, a 10:70 split: 1 margin | 2–10 nav | 11 gutter | 12–79
    content | 80 margin. Each entry runs caption, copy, then visual below,
    all full content width.
-   Interface voice 14px/20px, weight 400; entry copy 16px/22px, justified.
+   Interface voice 14px/20px, weight 400; entry copy 16px/40px, justified.
    Two voices: Arial for content, system monospace for navigation indices.
    #1e1e1e ink on #fefefe paper, 1px rules,
    no radius, no shadows. One signal colour (#0000EE). */
@@ -206,7 +206,7 @@ main {
 
 .entry-text {
   font-size: 16px;
-  line-height: 1.375;
+  line-height: 40px;
   text-align: justify;
   hyphens: auto;
 }
@@ -270,13 +270,13 @@ main {
   border: 1px solid var(--ink);
 }
 
-/* Playback stays in the sentence; taller controls enlarge their own line. */
+/* Playback stays centred within the fixed prose leading. */
 .entry-text .inline-audio {
   display: inline-block;
   inline-size: 240px;
   max-inline-size: 100%;
   block-size: 32px;
-  vertical-align: -0.5em;
+  vertical-align: middle;
 }
 
 .inline-playback {
@@ -285,7 +285,8 @@ main {
   flex-wrap: wrap;
   max-inline-size: 100%;
   gap: 0.25em;
-  vertical-align: -0.3em;
+  vertical-align: middle;
+  line-height: normal;
   text-align: start;
 }
 
@@ -324,7 +325,7 @@ main {
   display: none;
 }
 
-/* Inline images fit within the prose leading; taller players grow their line. */
+/* Inline images fit within the prose leading. */
 .entry-text .inline-image {
   display: inline-block;
   vertical-align: -0.15em;
