@@ -42,6 +42,20 @@ test('defaults distinguish notes, bibliography and unchanged media annotations',
   assert.match(context.renderMarkdown(media.source), /src="media\/sketch.svg"/);
 });
 
+test('bibliography starts open and resource references stay links rather than players', () => {
+  for (const target of ['A written reference', 'https://example.org/data', 'media/sketch.svg',
+    'media/example-tone.mp3', 'https://youtu.be/abcdefghijk']) {
+    const html = context.renderMarkdown(`[[source|${target}|type=bibliography;color=crimson]]`);
+    assert.match(html, /annotation-bibliography annotation-style-inherit open/);
+    assert.match(html, /aria-expanded="true"/);
+    assert.doesNotMatch(html, / hidden|color:crimson|<iframe|<img|<audio|<video/);
+    if (target !== 'A written reference') assert.match(html, /<a href=/);
+  }
+  const note = context.renderMarkdown('[[note|A detail]]');
+  assert.match(note, /aria-expanded="false"/);
+  assert.match(note, / hidden>/);
+});
+
 test('explicit appearance overrides defaults and preserves legacy markers and color wrappers', () => {
   const [note] = annotations.parseAll('[[note|A detail|style=normal;color=green;type=note]]');
   assert.equal(note.style, 'normal');
@@ -80,4 +94,48 @@ test('contributor HTML stays escaped and unsafe links/media stay rejected', () =
     assert.equal(context.safeUrl(target, 'group', 'media'), null);
   }
   assert.equal(context.safeUrl('media/sketch.svg', 'group', 'media'), 'group/media/sketch.svg');
+});
+
+test('source line breaks and blank lines produce the same continuous prose', () => {
+  const expected = context.renderMarkdown('First words continue. Second thought follows.');
+  for (const separator of ['\n', '\r\n', '\n\n', '\r\n\r\n', '\n \t\n', '  \n', '\\\n']) {
+    assert.equal(context.renderMarkdown(`First words${separator}continue.${separator}Second thought follows.`), expected);
+  }
+  assert.equal(context.renderMarkdown('First\n   words'), context.renderMarkdown('First words'));
+  assert.equal(context.renderMarkdown('*First\nwords*'), context.renderMarkdown('*First words*'));
+});
+
+test('continuous prose preserves structural Markdown boundaries and code newlines', () => {
+  const html = context.renderMarkdown('First\nparagraph.\n\nSecond paragraph.\n\n### Heading\n\n- First\n  item\n- Second item\n\n> Quoted\n> words\n\n```text\nfirst\nsecond\n```\n\n    indented\n    code\n\nFinal paragraph.\n\nContinues here.');
+  assert.match(html, /<p>First paragraph\. Second paragraph\.<\/p>/);
+  assert.match(html, /<h3>Heading<\/h3>/);
+  assert.match(html, /<ul>\n<li>First item<\/li>\n<li>Second item<\/li>\n<\/ul>/);
+  assert.match(html, /<blockquote>\n<p>Quoted words<\/p>\n<\/blockquote>/);
+  assert.match(html, /<code class="language-text">first\nsecond\n<\/code>/);
+  assert.match(html, /<code>indented\ncode\n<\/code>/);
+  assert.match(html, /<p>Final paragraph\. Continues here\.<\/p>/);
+  assert.match(context.renderMarkdown('Keep `first  second` intact.'), /<code>first  second<\/code>/);
+});
+
+test('wrapped annotations, links, media and escaped HTML survive prose normalization', () => {
+  const html = context.renderMarkdown('A [[wrapped\nlabel|A wrapped\nnote|type=note]]\n\nwith [a\nlink](https://example.org/data?q=1&v=2) and\n![detail](media/example-detail.svg)\n\n[[audio|media/example-tone.mp3]]\n\n[[video|media/example-motion.mp4]]. <script>bad()</script>');
+  assert.equal((html.match(/<p>/g) || []).length, 1);
+  assert.match(html, /wrapped label<span/);
+  assert.match(html, /hidden>A wrapped note<\/span>/);
+  assert.match(html, /href="https:\/\/example.org\/data\?q=1&amp;v=2">a link<\/a>/);
+  assert.match(html, /src="media\/example-detail.svg"/);
+  assert.match(html, /src="media\/example-tone.mp3"/);
+  assert.match(html, /src="media\/example-motion.mp4"/);
+  assert.doesNotMatch(html, /<script>/);
+  assert.match(html, /&lt;script&gt;/);
+});
+
+test('LF and CRLF front matter stay outside the merged prose', () => {
+  for (const newline of ['\n', '\r\n']) {
+    const raw = '\uFEFF' + ['---', 'title: A title', 'authors: A, B', '---', '', 'First words.', '', 'Second words.'].join(newline);
+    const { meta, body } = context.parseFrontmatter(raw);
+    assert.equal(meta.title, 'A title');
+    assert.equal(meta.authors, 'A, B');
+    assert.equal(context.renderMarkdown(body), '<p>First words. Second words.</p>\n');
+  }
 });

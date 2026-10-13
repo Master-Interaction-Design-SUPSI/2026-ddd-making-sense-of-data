@@ -52,7 +52,7 @@ Before cutover, verify one student can edit and save `text.md` directly in its o
 
 To change membership, verify the new username, invite only to the correct group repository, and track acceptance. Review departing members' direct and inherited grants before removing access. Removing a student's access does not unpublish the group's work. To unpublish a group deliberately, set its registry entry to `enabled: false` through a reviewed main-repo PR, then confirm the next verified publication removes it. Do not delete `text.md` or `visual.svg` as an unpublish mechanism: an incomplete edit retains the previous published snapshot.
 
-For failed imports, students use their row's explanation to correct content; maintainers handle repository addresses, branches, rate limits, or publication failures. The READMEs distinguish `updated` selection from a **verified** publication and explain retained/skipped results. Tickets 07–09 supply bibliography, note and compound-modifier examples, inline image previews and inline playback. Revised newline behavior and final leading remain ticket 10.
+For failed imports, students use their row's explanation to correct content; maintainers handle repository addresses, branches, rate limits, or publication failures. The READMEs distinguish `updated` selection from a **verified** publication and explain retained/skipped results. Tickets 07–10 supply bibliography, note and compound-modifier examples, inline image previews, inline playback and continuous prose. Tickets 07–09 are deployed; Ticket 10 is complete locally and awaits publication.
 
 Local onboarding status (2026-10-12): both READMEs and these operating steps are prepared. The main repository was confirmed public with default branch `main`; this did not verify organization-wide permissions, student access, rulesets, or deployment. No real group roster or confirmed group-repository owner has been supplied, so no repositories or invitations were created and `groups.json` remains empty.
 
@@ -159,7 +159,7 @@ Text must decode as UTF-8. SVGs must be UTF-8 static images with no scripts, eve
 
 Unsupported files, including READMEs, HTML, JavaScript, workflows, and design sources, are ignored and never copied to the published entry. Files outside the allowed locations are ignored. Limits count selected content only; remote listing/archive limits are separate importer responsibilities. Missing required files, conflicting main visuals, or exceeded limits reject the candidate entry and retain its previous published version when available.
 
-Tests exercise registry errors, path selection, per-file/group limits, exact-commit imports, failure isolation, reference checks, and the template. The local-folder build does not apply the import contract to existing trusted entries. Ticket 07 supplies bibliography, note and compound-modifier examples; final inline-media and text-flow examples remain work for tickets 08–10.
+Tests exercise registry errors, path selection, per-file/group limits, exact-commit imports, failure isolation, reference checks, and the template. The local-folder build does not apply the import contract to existing trusted entries. Tickets 07–10 supply the complete bibliography, note, compound-modifier, inline-media and continuous-prose examples. Ticket 10 is locally verified; its deployment remains pending.
 
 API references: [Git references](https://docs.github.com/en/rest/git/refs#get-a-reference), [trees and truncation](https://docs.github.com/en/rest/git/trees#get-a-tree), and [raw blobs](https://docs.github.com/en/rest/git/blobs#get-a-blob).
 
@@ -196,6 +196,12 @@ The example and group template ship generated MP3 and H.264/AAC demonstrations. 
 Ticket 09 is local, uncommitted and not deployed; pilot repository content was not updated. Ticket 10 is next, followed by final template/onboarding and live acceptance.
 
 
-## Authoring release candidate — 2026-10-13
+## Verified authoring deployment — 2026-10-13
 
-This release includes tickets 07–09 and their generated examples. Publish through the normal workflow with both recovery options off; keep Dust and pilot-beta registered. It retains the existing SVG/raster format policy and 1920 × 1080 main visual requirement. Ticket 10 and full student-access/recovery pilot acceptance remain incomplete.
+Tickets 07–09 are merged through PR #13 and deployed at source `7ca73bd45e7a8746c97d87ec51a02afddd46710f`. Pages run 38412487212 passed normal preparation, deployment and served-state verification with both recovery options off. An independent ordinary-URL check verified all 31 files against the reviewed candidate, including Dust and beta. Live Chrome desktop, keyboard and 390px touch-emulation checks passed without JavaScript errors. Evidence: ignored `.scratch/pilot-06/2026-10-13/release-07-09-evidence/`. The maintainer bypass was explicitly authorized by the user after automatic review initially rejected its use. Ticket 10 is complete locally and awaits publication. Full student-access/recovery pilot acceptance remains open.
+
+### Prose flow
+
+Source newlines, Markdown hard breaks and blank lines between adjacent top-level prose paragraphs become spaces. Structural Markdown (headings, lists, blockquotes and code blocks) remains separate. Code newlines are preserved. LF and CRLF front matter are supported. Entry prose uses 16px type with 22px leading (previously 20px); taller inline audio/video controls enlarge their own line boxes.
+
+Bibliography references start expanded with matching `aria-expanded` state, render inline in black, and retain the label toggle. Their targets render as text or links rather than embedded media. Black overrides surrounding colors and bibliography color modifiers; notes and other annotation colors keep their existing behavior.

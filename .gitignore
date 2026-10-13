@@ -1,9 +1,5 @@
 .DS_Store
 _site/
 __pycache__/
-.scratch/group-import-report.json
-.scratch/publication-run.json
-.scratch/pending-artifact/
-.scratch/pilot-06/
-
 .scratch/
+.playwright-cli/

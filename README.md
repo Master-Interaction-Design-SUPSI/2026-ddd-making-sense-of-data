@@ -57,6 +57,8 @@ For an incorrect SVG size, export the whole 1920 × 1080 frame again. For a miss
 
 ## Optional text and media
 
+Write prose on one line or wrap it across several lines: the website turns source line breaks and blank lines between prose paragraphs into spaces, creating one continuous justified passage. Two trailing spaces or a backslash before a newline also become a space. Headings, lists, blockquotes and code blocks stay separate; code keeps its line breaks. Keep each URL and media filename intact.
+
 These examples use the supported syntax:
 
 | Write in text.md | What a visitor can do |
@@ -64,7 +66,7 @@ These examples use the supported syntax:
 | `*a few words*` | Read italic text. |
 | `[[the source\|https://example.org/data]]` | Open a link. Replace the example address with your source. |
 | `[[a detail\|A short explanation]]` | Reveal a black italic note marked with `{∗}`. |
-| `[[the source\|https://example.org/data\|type=bibliography]]` | Reveal a bibliography reference marked with `(■)`. |
+| `[[the source\|https://example.org/data\|type=bibliography]]` | Read an already-open, black inline bibliography reference marked with `(■)`. |
 | `[[a note\|More context\|type=note;color=green]]` | Reveal a green italic note with the same braces and marker. |
 | `[[a quotation\|Quoted words\|type=quote;style=italic;color=crimson]]` | Reveal a crimson italic quotation. |
 | `{crimson\|a key finding}` | Read those words in colour. |
@@ -73,7 +75,7 @@ These examples use the supported syntax:
 | `[[a tone\|media/example-tone.mp3]]` | Use inline audio controls; audio starts with Play. |
 | `[[a video\|media/example-motion.mp4]]` | See a muted inline video with Play/Pause and Sound/Mute. |
 
-The optional third field combines modifiers separated by semicolons: `type=note`, `type=bibliography` or `type=quote`; `style=italic` or `style=normal`; and `color=crimson` or another CSS color such as `#116964`. Their order does not matter. Notes are black and italic by default. An explicit color overrides a surrounding color span; otherwise a surrounding `{crimson|...}` still works. `style=normal` turns off the note's default italics. Plain prose and annotation labels also accept Markdown `*italics*`.
+The optional third field combines modifiers separated by semicolons: `type=note`, `type=bibliography` or `type=quote`; `style=italic` or `style=normal`; and `color=crimson` or another CSS color such as `#116964`. Their order does not matter. Bibliography references start open, appear inline in black (including their links), and can be closed or reopened using their label. Bibliography URLs stay links rather than embedded players. Bibliography remains black even inside colored text or with a color modifier. Notes are black and italic by default. An explicit color overrides a surrounding color span; otherwise a surrounding `{crimson|...}` still works. `style=normal` turns off the note's default italics. Plain prose and annotation labels also accept Markdown `*italics*`.
 
 Existing two-field annotations and third-field emoji markers still work. Unknown, repeated or malformed modifiers remain visible as the original text so you can correct them; they do not become styled annotations. Do not include `|`, `[` or `]` inside a field.
 
