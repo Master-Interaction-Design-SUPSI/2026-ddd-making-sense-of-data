@@ -49,6 +49,8 @@ jobs:
           node-version: '22'
       - name: Check trusted publishing code
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Check annotation and playback behavior
+        run: node --test scripts/test_annotations.js scripts/test_playback.js
       - id: pages
         uses: actions/configure-pages@v5
       - name: Import groups and prepare publication

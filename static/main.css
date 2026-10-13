@@ -118,6 +118,8 @@ body.lightbox-open {
 /* ---------- the 80-column plane ---------- */
 
 .layout {
+  position: relative;
+  z-index: 1;
   grid-column: 1 / -1;
   display: grid;
   grid-template-columns: subgrid;
@@ -268,17 +270,115 @@ main {
   border: 1px solid var(--ink);
 }
 
-/* Media in copy — markdown images and annotation resources alike — are
-   plates: full column width, a whole number of rows tall, letterboxed
-   flush left. */
-.entry-text img,
-.entry-text video {
+/* Playback stays in the sentence; taller controls enlarge their own line. */
+.entry-text .inline-audio {
+  display: inline-block;
+  inline-size: 240px;
+  max-inline-size: 100%;
+  block-size: 32px;
+  vertical-align: -0.5em;
+}
+
+.inline-playback {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  max-inline-size: 100%;
+  gap: 0.25em;
+  vertical-align: -0.3em;
+  text-align: start;
+}
+
+.inline-playback video {
   display: block;
-  width: 100%;
-  height: calc(var(--u) * 15);
+  inline-size: auto;
+  block-size: 1.5em;
+  max-inline-size: 6em;
+  aspect-ratio: auto 16 / 9;
   object-fit: contain;
-  object-position: left;
-  margin-block: var(--u);
+  background: var(--paper);
+}
+
+.playback-controls {
+  display: inline-flex;
+  gap: 0.25em;
+}
+
+.playback-controls button {
+  min-inline-size: 3em;
+  min-block-size: 24px;
+  padding: 0 0.25em;
+  border: 1px solid currentColor;
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  font-size: 0.875em;
+  cursor: pointer;
+}
+
+.playback-status {
+  font-size: 0.875em;
+}
+
+.playback-status:empty {
+  display: none;
+}
+
+/* Inline images fit the current prose row; ticket 10 will tune leading. */
+.entry-text .inline-image {
+  display: inline-block;
+  vertical-align: -0.15em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 0;
+  max-inline-size: 100%;
+  cursor: pointer;
+}
+
+.entry-text .inline-image img {
+  display: block;
+  inline-size: auto;
+  block-size: 0.9em;
+  max-inline-size: min(8em, 100%);
+  object-fit: contain;
+  margin: 0;
+}
+
+#image-preview {
+  position: fixed;
+  z-index: 0;
+  inset: calc(var(--u) * 3) 1.25vw auto 13.75vw;
+  block-size: min(50vh, 360px);
+  pointer-events: none;
+}
+
+#image-preview img {
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+  opacity: 0.12;
+}
+
+#image-preview-close {
+  position: fixed;
+  z-index: 9;
+  inset-block-end: var(--u);
+  inset-inline-end: 1.25vw;
+  min-block-size: 44px;
+  padding: 0 1ch;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+#image-preview[hidden],
+#image-preview-close[hidden] {
+  display: none;
 }
 
 /* Embedded players (YouTube, Vimeo, Giphy, …) are plates like the hero
@@ -320,6 +420,20 @@ main {
   margin-inline-start: 0.25em;
   text-decoration: none;
   display: inline-block;
+  font-style: normal;
+}
+
+.annotation-note {
+  --annotation-default: #000;
+  color: var(--annotation-color, var(--annotation-default));
+}
+
+.annotation-style-italic {
+  font-style: italic;
+}
+
+.annotation-style-normal {
+  font-style: normal;
 }
 
 .annotation.open .annotation-toggle {
@@ -361,19 +475,31 @@ main {
   content: " → ";
 }
 
-/* A text note is no dropped line: it opens inside the sentence, right
-   after its anchor, parenthesised in the annotation colour. */
-.annotation-content.annotation-note {
+.annotation-content.annotation-text {
   float: none;
   width: auto;
+  background: none;
+  color: var(--annotation-color, var(--annotation-default));
 }
 
-.annotation-content.annotation-note::before {
+.annotation-note .annotation-text::before {
+  content: " {";
+}
+
+.annotation-note .annotation-text::after {
+  content: "}";
+}
+
+.annotation-bibliography .annotation-text::before {
   content: " (";
 }
 
-.annotation-content.annotation-note::after {
+.annotation-bibliography .annotation-text::after {
   content: ")";
+}
+
+.annotation-quote .annotation-text::before {
+  content: " ";
 }
 
 /* Media annotations open as a peek between the lines, not a plate: one
@@ -381,8 +507,6 @@ main {
    the text resumes on-grid below. Natural aspect, shifted to sit centred
    under the click point (the script sets the offset). The .annotation
    prefix outranks the .entry-text plate rules wherever they appear. */
-.annotation .annotation-content img,
-.annotation .annotation-content video,
 .annotation .annotation-content iframe {
   display: block;
   width: auto;
@@ -391,23 +515,8 @@ main {
   max-width: 100%;
 }
 
-.annotation .annotation-content img {
-  cursor: zoom-in;
-}
-
 .annotation .annotation-content iframe {
   aspect-ratio: 16 / 9;
-}
-
-/* The audio player is a one-row peek — empty row, player, empty row —
-   and slides under the click point like the visual media above. Audio has
-   no intrinsic width (auto computes to 0), so it gets a fixed compact one. */
-.annotation .annotation-content audio {
-  display: block;
-  width: 300px;
-  height: var(--u);
-  margin-block: var(--u);
-  max-width: 100%;
 }
 
 @media (prefers-reduced-motion: no-preference) {
@@ -551,6 +660,10 @@ body.show-grid::after {
 
   main {
     padding: var(--u);
+  }
+
+  #image-preview {
+    inset-inline: var(--u);
   }
 
   .entry-visual {
