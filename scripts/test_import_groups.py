@@ -97,6 +97,46 @@ class ImportTests(unittest.TestCase):
         ignored = {n["sha"] for n in nodes if n["path"] not in result[0]["files"]}
         self.assertFalse(any(call.rsplit("/", 1)[-1] in ignored for call in self.api.calls))
 
+    def test_public_personal_repositories_import_across_different_owners(self):
+        groups = [Group("alpha", "alice-student/project", "main", True),
+                  Group("beta", "bob-student/project", "main", True)]
+        for group in groups:
+            self.api.add(group.repository)
+        results = self.run_import(groups)
+        self.assertEqual([result["status"] for result in results], ["imported", "imported"])
+        self.assertEqual([result["repository"] for result in results],
+                         ["alice-student/project", "bob-student/project"])
+        self.assertTrue((self.root / "imports/alpha/visual.svg").is_file())
+        self.assertTrue((self.root / "imports/beta/visual.svg").is_file())
+
+    def test_inline_playback_template_imports_and_builds_real_media(self):
+        template = Path(__file__).resolve().parent.parent / "templates/group"
+        files = {path.relative_to(template).as_posix(): path.read_bytes()
+                 for path in template.rglob("*") if path.is_file()}
+        self.api.add("course/alpha", files)
+        output = self.prepare_build([self.group()])
+        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
+            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        for name in ("text.md", "media/example-motion.mp4", "media/example-tone.mp3"):
+            self.assertEqual((output / "alpha" / name).read_bytes(), files[name])
+        self.assertFalse((output / "alpha/README.md").exists())
+
+    def test_inline_svg_aspect_ratios_and_raster_survive_import_and_build(self):
+        files = {
+            "text.md": b'Compare ![wide](media/wide.svg) and [[tall|media/tall.svg]] and ![photo](photo.png).',
+            "visual.svg": SVG,
+            "media/wide.svg": b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 240"><rect width="600" height="240"/></svg>',
+            "media/tall.svg": b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 320"><rect width="160" height="320"/></svg>',
+            "photo.png": b'raster fixture',
+        }
+        self.api.add("course/alpha", files)
+        self.assertEqual(self.run_import()[0]["status"], "imported")
+        output = self.prepare_build([self.group()])
+        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
+            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        for name, original in files.items():
+            self.assertEqual((output / "alpha" / name).read_bytes(), original)
+
     def test_one_failure_does_not_stop_other_groups_or_leave_partial_files(self):
         commit, _ = self.api.add("course/alpha", {"text.md": b'[[missing|media/absent.svg]]', "visual.svg": SVG})
         self.api.add("course/beta")
@@ -195,6 +235,16 @@ class ImportTests(unittest.TestCase):
         for target in ("../other/visual.svg", "%2e%2e/other/visual.svg", "/static/main.js", "//other.test/photo.jpg", "media/missing.svg", "javascript:alert"):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_references(f"[link]({target})", {"media/detail.svg"})
+
+    def test_typed_annotation_references_share_the_renderer_parser(self):
+        validate_references("[[detail|media/detail.svg|style=italic;color=crimson]] "
+                            "[[source|https://example.org|type=bibliography]] "
+                            "[[quote|Quoted words|type=quote;style=italic;color=crimson]]",
+                            {"media/detail.svg"})
+        for target in ("media/missing.svg", "../beta/visual.svg", "/static/main.js"):
+            with self.subTest(target=target), self.assertRaises(ValueError):
+                validate_references(f"[[detail|{target}|type=bibliography;style=italic]]",
+                                    {"media/detail.svg"})
 
     def prepare_build(self, groups):
         (self.root / "groups.json").write_text(json.dumps({"groups": [vars(g) for g in groups]}))

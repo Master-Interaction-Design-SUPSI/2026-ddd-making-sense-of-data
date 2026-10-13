@@ -68,37 +68,23 @@ function parseFrontmatter(raw) {
 
 /* ---------- extended markup ---------- */
 
-/* Annotation: [[highlighted text | resource-or-note | optional emoji marker]]
-   The middle field is a resource when it looks like an address (scheme://,
-   www., /, #, ./) or a lone filename with an extension; anything else is a
-   text note. Clicking the span reveals it: a note opens inline within the
-   sentence; media (images, audio, video, embeds) drops in on its own line
-   below; anything else becomes a link in a new tab. */
-function isResource(s) {
-  return (
-    /^([a-z][a-z0-9+.-]*:\/\/|mailto:|www\.|\/|#|\.\/)/i.test(s) ||
-    (!/\s/.test(s) && /\.[a-z0-9]{1,5}$/i.test(s))
-  );
-}
-
 function expandAnnotations(src) {
-  return src.replace(
-    /\[\[([^\][|]+)\|([^\][|]+)(?:\|([^\][|]+))?\]\]/g,
-    (_, text, middle, marker) => {
-      const target = middle.trim();
-      const resource = isResource(target);
-      const content = resource ? resourceHtml(target) : target;
-      const mark = (marker || DEFAULT_MARKER).trim() || DEFAULT_MARKER;
-      return (
-        `<span class="annotation">` +
-        `<button type="button" class="annotation-toggle" aria-expanded="false">` +
-        `${text.trim()}<span class="annotation-marker" aria-hidden="true">${esc(mark)}</span>` +
-        `</button>` +
-        `<span class="annotation-content${resource ? "" : " annotation-note"}" hidden>${content}</span>` +
-        `</span>`
-      );
-    }
-  );
+  return CourseAnnotations.replace(src, (annotation) => {
+    const { label, target, resource, type, style, color, marker } = annotation;
+    if (!annotation.valid || (color && !CSS.supports("color", color))) return annotation.source;
+    const content = resource ? resourceHtml(target) : type === "quote" ? `<q>${target}</q>` : target;
+    const mark = marker || ({ note: "∗", bibliography: "■" }[type] || DEFAULT_MARKER);
+    const glyph = type === "note" ? `&#123;${esc(mark)}&#125;` : type === "bibliography" ? `(${esc(mark)})` : esc(mark);
+    const appearance = color ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
+    return (
+      `<span class="annotation annotation-${type} annotation-style-${style}"${appearance}>` +
+      `<button type="button" class="annotation-toggle" aria-expanded="false">` +
+      `${label}<span class="annotation-marker" aria-hidden="true">${glyph}</span>` +
+      `</button>` +
+      `<span class="annotation-content${resource ? "" : " annotation-text"}" hidden>${content}</span>` +
+      `</span>`
+    );
+  });
 }
 
 /* Embedded players: a recognised share link becomes an iframe on its own
@@ -129,7 +115,8 @@ function embedHtml(url) {
     if (m) {
       return (
         `<iframe src="${esc(src(m[1], url))}" loading="lazy" ` +
-        `allow="autoplay; fullscreen; picture-in-picture" title="Embedded media"></iframe>`
+        `allow="fullscreen; picture-in-picture" title="Embedded media"></iframe>` +
+        `<a href="${esc(url)}" target="_blank" rel="noopener">Open media on provider</a>`
       );
     }
   }
@@ -247,8 +234,41 @@ function renderEntry(entry) {
     if (safe) a.setAttribute("href", safe);
     else a.removeAttribute("href");
   }
+  prepareInlineImages(textEl);
+  CoursePlayback.prepare(textEl);
 
   return section;
+}
+
+function prepareInlineImages(textEl) {
+  for (const image of textEl.querySelectorAll("img[src]")) {
+    const content = image.parentElement.matches(".annotation-content") &&
+      image.parentElement.childNodes.length === 1 ? image.parentElement : null;
+    let target;
+    if (content) {
+      target = content.parentElement.querySelector(".annotation-toggle");
+      target.querySelector(".annotation-marker")?.remove();
+      image.alt = target.textContent.trim();
+      target.classList.remove("annotation-toggle");
+      target.replaceChildren(image);
+      content.remove();
+    } else {
+      // Linked Markdown images keep their link and native activation.
+      target = image.closest("a[href]");
+      if (!target) {
+        target = document.createElement("button");
+        target.type = "button";
+        image.replaceWith(target);
+        target.append(image);
+      }
+    }
+    target.classList.add("inline-image");
+    if (target.tagName === "BUTTON") {
+      target.setAttribute("aria-label", `Preview image: ${image.alt || "supporting image"}`);
+      target.setAttribute("aria-controls", "image-preview");
+      target.setAttribute("aria-expanded", "false");
+    }
+  }
 }
 
 function buildNav(entries) {
@@ -306,10 +326,7 @@ function watchSections(entries) {
 
 /* ---------- interactions ---------- */
 
-/* Slide the peeking media along its line so its centre sits under x
-   (a viewport coordinate), clamped to the column. Images wait for their
-   intrinsic size; videos re-place once theirs arrives; iframes and audio
-   players are sized without loading and place immediately. */
+/* Centre a revealed external player under the activation point. */
 function centerAnnotationMedia(el, x) {
   const place = () => {
     const box = el.closest(".annotation-content").getBoundingClientRect();
@@ -318,14 +335,7 @@ function centerAnnotationMedia(el, x) {
     const offset = Math.max(0, Math.min(x - box.left - w / 2, box.width - w));
     el.style.marginInlineStart = `${offset}px`;
   };
-  if (el.tagName === "IMG" && !(el.complete && el.naturalWidth)) {
-    el.addEventListener("load", place, { once: true });
-    return;
-  }
   place();
-  if (el.tagName === "VIDEO" && el.readyState < 1) {
-    el.addEventListener("loadedmetadata", place, { once: true });
-  }
 }
 
 function toggleCenterX(toggle) {
@@ -335,6 +345,7 @@ function toggleCenterX(toggle) {
 }
 
 function setupInteractions() {
+  setupImagePreviews();
   const lightbox = document.getElementById("lightbox");
   const lightboxImg = lightbox.querySelector("img");
 
@@ -347,16 +358,14 @@ function setupInteractions() {
       toggle.setAttribute("aria-expanded", String(open));
       toggle.parentElement.classList.toggle("open", open);
       if (open) {
-        const media = content.querySelector("img, video, iframe, audio");
+        const media = content.querySelector("iframe");
         /* keyboard activation reports clientX 0: centre on the toggle */
         if (media) centerAnnotationMedia(media, event.clientX || toggleCenterX(toggle));
       }
       return;
     }
 
-    const zoomable = event.target.closest(
-      ".entry-visual img, .annotation-content img"
-    );
+    const zoomable = event.target.closest(".entry-visual img");
     if (zoomable) {
       lightboxImg.src = zoomable.src;
       lightbox.hidden = false;
@@ -372,7 +381,7 @@ function setupInteractions() {
 
   window.addEventListener("resize", () => {
     for (const media of document.querySelectorAll(
-      ".annotation.open .annotation-content :is(img, video, iframe, audio)"
+      ".annotation.open .annotation-content iframe"
     )) {
       const toggle = media.closest(".annotation").querySelector(".annotation-toggle");
       centerAnnotationMedia(media, toggleCenterX(toggle));
@@ -398,6 +407,83 @@ function setupInteractions() {
     lightboxImg.src = "";
     document.body.classList.remove("lightbox-open");
   }
+  CoursePlayback.setup();
+}
+
+function setupImagePreviews() {
+  const preview = document.getElementById("image-preview");
+  const image = preview.querySelector("img");
+  const dismiss = document.getElementById("image-preview-close");
+  let active = null;
+  let mode = null;
+  let previewScrollX = window.scrollX;
+  let previewScrollY = window.scrollY;
+
+  function clear() {
+    if (active?.matches("button")) active.setAttribute("aria-expanded", "false");
+    active = null;
+    mode = null;
+    preview.hidden = true;
+    dismiss.hidden = true;
+    image.removeAttribute("src");
+  }
+
+  function show(target, reason) {
+    if (target !== active) {
+      clear();
+      active = target;
+      image.src = target.querySelector("img").src;
+      preview.hidden = !(image.complete && image.naturalWidth);
+    }
+    mode = reason;
+    previewScrollX = window.scrollX;
+    previewScrollY = window.scrollY;
+    if (target.matches("button")) target.setAttribute("aria-expanded", "true");
+    dismiss.hidden = reason !== "pinned";
+  }
+
+  image.addEventListener("load", () => { if (active) preview.hidden = false; });
+  image.addEventListener("error", clear);
+  document.addEventListener("pointerover", event => {
+    const target = event.target.closest(".inline-image");
+    if (event.pointerType !== "mouse" || !target || target.contains(event.relatedTarget)) return;
+    if (target === active && mode === "pinned") return;
+    show(target, "pointer");
+  });
+  document.addEventListener("pointerout", event => {
+    if (mode === "pointer" && active?.contains(event.target) && !active.contains(event.relatedTarget)) clear();
+  });
+  document.addEventListener("focusin", event => {
+    const target = event.target.closest(".inline-image");
+    if (target?.matches(":focus-visible")) show(target, "focus");
+  });
+  document.addEventListener("focusout", event => {
+    if (event.target === dismiss && !active?.contains(event.relatedTarget)) {
+      clear();
+      return;
+    }
+    if (active?.contains(event.target) && !active.contains(event.relatedTarget) &&
+        !(mode === "pinned" && event.relatedTarget === dismiss)) clear();
+  });
+  document.addEventListener("click", event => {
+    const target = event.target.closest("button.inline-image");
+    if (target) {
+      if (active === target && mode === "pinned") clear();
+      else show(target, "pinned");
+    } else if (!event.target.closest(".inline-image")) clear();
+  });
+  dismiss.addEventListener("click", () => {
+    const previous = active;
+    clear();
+    previous?.focus({ preventScroll: true });
+    clear(); // Focus restoration must not reopen the dismissed preview.
+  });
+  document.addEventListener("keydown", event => { if (event.key === "Escape") clear(); });
+  window.addEventListener("hashchange", clear);
+  window.addEventListener("scroll", () => {
+    if (window.scrollX !== previewScrollX || window.scrollY !== previewScrollY) clear();
+  }, { passive: true });
+  window.addEventListener("blur", clear);
 }
 
 /* ---------- boot ---------- */

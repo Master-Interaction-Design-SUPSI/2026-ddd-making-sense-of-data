@@ -41,6 +41,15 @@ class GroupContractTests(unittest.TestCase):
         self.assertFalse(after.enabled)
         self.assertEqual(after.branch, "draft/content")
 
+    def test_personal_repository_owners_need_not_share_an_organization(self):
+        groups = self.load([
+            self.group(repository="alice-student/project"),
+            self.group(slug="other", repository="bob-student/project"),
+        ])
+        self.assertEqual([group.repository for group in groups], [
+            "alice-student/project", "bob-student/project",
+        ])
+
     def test_rejects_reserved_unsafe_and_duplicate_slugs(self):
         for slug in ("example", "static", "scripts", "templates", "_site", "index", "entries", "groups", "../escape", "MixedCase", "two--hyphens", "a" * 64):
             with self.subTest(slug=slug), self.assertRaises(ValueError):
@@ -118,7 +127,7 @@ class GroupContractTests(unittest.TestCase):
     def test_template_matches_contract_and_is_not_discovered_as_an_entry(self):
         template = ROOT / "templates" / "group"
         files = {path.relative_to(template).as_posix(): path.stat().st_size for path in template.rglob("*") if path.is_file()}
-        self.assertEqual(select_content_files(files), ["media/example-detail.svg", "text.md", "visual.svg"])
+        self.assertEqual(select_content_files(files), ["media/example-detail.svg", "media/example-motion.mp4", "media/example-tall.svg", "media/example-tone.mp3", "text.md", "visual.svg"])
         build_site.validate_visual(template / "visual.svg")
         text = (template / "text.md").read_text(encoding="utf-8")
         self.assertIn("invented", text)
