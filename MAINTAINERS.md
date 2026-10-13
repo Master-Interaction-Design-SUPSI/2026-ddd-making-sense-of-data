@@ -202,6 +202,6 @@ Tickets 07–09 are merged through PR #13 and deployed at source `7ca73bd45e7a87
 
 ### Prose flow
 
-Source newlines, Markdown hard breaks and blank lines between adjacent top-level prose paragraphs become spaces. Structural Markdown (headings, lists, blockquotes and code blocks) remains separate. Code newlines are preserved. LF and CRLF front matter are supported. Entry prose uses 16px type with 22px leading (previously 20px); taller inline audio/video controls enlarge their own line boxes.
+Source newlines, Markdown hard breaks and blank lines between adjacent top-level prose paragraphs become spaces. Structural Markdown (headings, lists, blockquotes and code blocks) remains separate. Code newlines are preserved. LF and CRLF front matter are supported. Entry prose uses 16px type with fixed 40px leading. Inline audio/video controls are vertically centred; video controls use their own normal leading. Controls that wrap onto multiple rows can still enlarge their line box.
 
 Bibliography references start expanded with matching `aria-expanded` state, render inline in black, and retain the label toggle. Their targets render as text or links rather than embedded media. Black overrides surrounding colors and bibliography color modifiers; notes and other annotation colors keep their existing behavior.
