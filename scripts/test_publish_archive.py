@@ -62,6 +62,9 @@ class SplitPublisherTests(unittest.TestCase):
                              GITHUB_REPOSITORY='course/site', GITHUB_TOKEN='fixture-token', PAGES_URL=self.url)
         patcher.start()
         self.addCleanup(patcher.stop)
+        # The workflow pins its producing attempt. Each fixture starts without
+        # that inherited pin; rerun tests opt into their own producing attempt.
+        os.environ.pop('EXPECTED_PRODUCER_ATTEMPT', None)
         self.serial = 0
 
     def patch(self, *args, **kwargs):
