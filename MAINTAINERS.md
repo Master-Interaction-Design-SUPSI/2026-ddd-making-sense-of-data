@@ -4,7 +4,7 @@ The main course repository owns site code, the group registry, and publishing. R
 
 GitHub Pages should use **GitHub Actions** as its publishing source. The workflow in `.github/workflows/pages.yml` imports groups and publishes after changes reach `main`, on a schedule, or on manual dispatch. Initial rollout requires the explicit bootstrap below. After configuring Pages, check the published URL and one entry.
 
-Dust has been migrated into the alpha pilot repository and registered as `dust`; beta is registered as `pilot-beta`. The registry and importing workflow were deployed through PR #12 on 2026-10-13. The public course site serves `example`, `dust` and `pilot-beta`. An imported build includes both pilot entries; an offline build contains only the local `example`. Initial bootstrap is complete; use ordinary refreshes with both recovery options off.
+The enabled publication contains the local `example` and Materialities of AI from `ginevraterenghi/ddd-abstract`, registered as `ddd-abstract`. Dust (`dust`) and the beta demonstration (`pilot-beta`) are disabled in the registry and omitted from publication; their source repositories remain available. An offline build contains only the local `example`. Initial bootstrap is complete; use ordinary refreshes with both recovery options off.
 
 The renderer treats `text.md` as data: it escapes submitted HTML and rejects unsafe link and media URL schemes. Keep those safeguards when changing the Markdown or annotation code. The vendored Marked license is at `static/vendor/LICENSE.marked.md` and is included in the published site.
 

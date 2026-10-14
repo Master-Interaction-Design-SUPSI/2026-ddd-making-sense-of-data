@@ -4,13 +4,13 @@
       "slug": "dust",
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-alpha",
       "branch": "main",
-      "enabled": true
+      "enabled": false
     },
     {
       "slug": "pilot-beta",
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta",
       "branch": "main",
-      "enabled": true
+      "enabled": false
     },
     {
       "slug": "ddd-abstract",
