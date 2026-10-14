@@ -1,95 +1,184 @@
-# Share your Data Driven Design work
+# Data Driven Design: course website
 
-Each group edits its own public GitHub repository. The main course repository collects the registered groups' text and media and publishes them together on the course website.
+Source of the [course website](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/), part of [Data Driven Design at MAInD — SUPSI](https://maind.supsi.ch/master-interaction-design/en).
 
-**Before you begin:** the course team will confirm your group's repository link, its group identifier, and the website link. These instructions apply once that setup is ready. The repository may belong to a student or to the course organization. You need only a GitHub account and a browser.
+Each group edits its own public repository. This repository imports the registered groups and publishes them together. The course team maintains it; students do not edit it.
 
-Edit your contribution in your group's repository. The course team maintains this main repository and its publishing setup. All group repositories are public, so use material intended for public sharing.
-
-The [group template](templates/group/) contains demonstration text and invented numbers. Replace them with your group's work. Keep the repository name and file locations supplied by the course team.
-
-## 1. Write your text
-
-Sign in to GitHub and open **your group's repository**. If another student owns it, accept their invitation first. The owner can edit directly and should invite the other group members with Write access. Check that the branch menu shows **main**.
-
-Open `text.md` and click the pencil icon. Replace the title, authors, and paragraphs with your own work. Keep the three dashes above and below the title and authors:
-
-```text
----
-title: Your project title
-authors: Your group members
----
-
-What question did you investigate?
-
-Explain what you found and how you worked with the data.
-```
-
-Choose **Commit changes**, select **Commit directly to the main branch**, and confirm. A commit is a saved change. You can edit the same file again whenever you need to make a correction.
-
-If GitHub offers only a fork or a proposed change, check that you accepted the invitation and opened the correct repository. Ask the course team to check your access if direct saving is unavailable. GitHub's [editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files) shows the editor.
-
-## 2. Upload your main visual
-
-Prepare a **1920 × 1080 pixel** frame or artboard and export the whole frame as SVG. Name it **visual.svg**. Renaming a PNG or JPG file to `.svg` does not convert it.
-
-At the top level of your group's repository, choose **Add file → Upload files**, select `visual.svg`, and commit directly to **main**. Uploading the same filename replaces the previous visual. Keep `text.md` and `visual.svg` together at the top level; you do not need to create a group folder inside this repository.
-
-The SVG should contain `viewBox="0 0 1920 1080"`. If it also specifies width and height, they must be 1920 and 1080 pixels. Keep only one main visual: remove any older `visual.png` or `visual.jpg` using **… → Delete file**, then commit to **main**.
-
-## 3. Check your entry
-
-After the course team has connected your repository and enabled publishing, valid changes appear automatically without content approval. The site checks for changes roughly every ten minutes, but updates can take longer. Open the website link supplied by the course team, find your title, and check your text, visual, and links.
-
-If an update does not appear, open [publication results](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml), choose the latest completed run on **main**, and find **Course publication** in its summary. Use the group identifier supplied by the course team to find your row.
-
-| Status | What it means |
+| Reader | Document |
 | --- | --- |
-| `updated` | Your new files were selected for this publication. |
-| `unchanged` | The selected version is the same as before. |
-| `retained` | The update could not be used; your previous published version was kept. Read the explanation in your row. |
-| `skipped` | This group has no usable published version yet. Read the explanation, correct the files, and save again. |
-| `disabled` | Publication for this group has been turned off by the course team. |
+| Student | This README, §1–9. The same guide is the README of every group repository. |
+| Maintainer | [Maintainer manual](MAINTAINERS.md). |
 
-A run marked **verified** confirms that its publication completed. **unchanged** means no new deployment was needed. If the overall result is failed, unverified, or still awaiting deployment, ask the course team to check it; an `updated` row alone does not confirm that your changes are online. If your group has no row, or there are no publication results yet, ask the course team to check the setup.
+**WARNING**: Group repositories are public. Upload only material cleared for publication.
 
-For an incorrect SVG size, export the whole 1920 × 1080 frame again. For a missing media file, upload it or correct its filename in `text.md`. Keep names and capital letters exactly the same. Commit the correction to **main**; a later refresh will try again. An invalid or incomplete update keeps the previous published entry when one exists.
+## 1. Prerequisites
 
-## Optional text and media
+- GitHub account and browser. Nothing to install.
+- From the course team: group repository link, group identifier (slug), website link, invitation if another student owns the repository.
+- Publication starts when the course team confirms setup.
+- Edit only your group repository, never this one.
+- Group repositories start from [`templates/group/`](templates/group/). Its text, visual and `media/example-*` files are demonstrations with invented numbers. Replace them. Delete a file only after removing its reference from `text.md`.
 
-Write prose on one line or wrap it across several lines: the website turns source line breaks and blank lines between prose paragraphs into spaces, creating one continuous justified passage. Two trailing spaces or a backslash before a newline also become a space. Headings, lists, blockquotes and code blocks stay separate; code keeps its line breaks. Keep each URL and media filename intact.
+## 2. Files
 
-These examples use the supported syntax:
+| Path | Role | Rule |
+| --- | --- | --- |
+| `text.md` | Text | Required. Front matter: title, authors. |
+| `visual.svg` | Main visual | Required unless the course team exempts your group. 1920 × 1080 SVG. |
+| `media/…` | Extra images, audio, video | Optional. Referenced from `text.md`. |
 
-| Write in text.md | What a visitor can do |
+Everything else (READMEs, design sources, HTML, scripts) is ignored and never published.
+
+## 3. Edit text
+
+1. Sign in. Open your group's repository. Accept the invitation first if another student owns it. Branch menu: **main**.
+2. Open `text.md`; click the pencil icon.
+3. Replace title, authors and paragraphs. Keep both `---` lines:
+
+   ```text
+   ---
+   title: Your project title
+   authors: Your group members
+   ---
+
+   What question did you investigate?
+
+   Explain what you found and how you worked with the data.
+   ```
+
+4. **Commit changes** → **Commit directly to the main branch** → confirm.
+
+GitHub offers only a fork or a proposed change: wrong repository, or invitation not accepted. Ask the course team to check your access. Reference: [GitHub editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files).
+
+## 4. Upload main visual
+
+1. Export the whole 1920 × 1080 px frame as SVG, named `visual.svg`. Renaming a PNG or JPG to `.svg` converts nothing.
+2. Repository root → **Add file → Upload files** → `visual.svg` → commit to **main**. The same name replaces the previous file.
+3. Required attribute: `viewBox="0 0 1920 1080"`. Width and height, if present: 1920 and 1080 px.
+4. One main visual only. Delete any `visual.png` or `visual.jpg`: **… → Delete file** → commit to **main**.
+
+`text.md` and `visual.svg` stay at the root. No group folder.
+
+## 5. Add media
+
+1. Open `media/` (or the root) → **Add file → Upload files** → commit to **main**.
+2. Reference the exact path in `text.md`:
+
+   ```text
+   [[Listen to the interview|media/interview.mp3]]
+   [[Watch the recording|media/recording.mp4]]
+   ```
+
+3. To remove a file: delete its reference, commit, then delete the file.
+
+Filenames: lowercase letters, digits, `.`, `_`, `-`. First character a letter or digit. No spaces. Example: `survey-photo.jpg`. References must match exactly, including case.
+
+| Class | Formats | Maximum |
+| --- | --- | --- |
+| Text | `text.md` | 256 KiB |
+| SVG | `.svg` | 5 MiB each |
+| Image | PNG, JPG/JPEG, WebP, GIF, AVIF | 20 MiB each |
+| Audio | MP3, M4A, WAV, OGG, AAC, FLAC | 20 MiB each |
+| Video | MP4, WebM, MOV | 20 MiB each |
+| Group | ≤ 100 files | 50 MiB total |
+
+SVG: static, self-contained. No scripts, links, animation or external files. Only the main visual must be 1920 × 1080; extra images keep their own dimensions.
+
+## 6. Check publication
+
+Valid commits publish automatically, without approval. The site refreshes every ten minutes; delivery can take longer.
+
+1. Open the website. Find your title. Check text, visual, links and media.
+2. Not updated: open [publication results](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml) → latest completed run on **main** → summary **Course publication** → row with your group identifier.
+
+| Status | Meaning |
 | --- | --- |
-| `*a few words*` | Read italic text. |
-| `[[the source\|https://example.org/data]]` | Open a link. Replace the example address with your source. |
-| `[[a detail\|A short explanation]]` | Reveal a black italic note marked with `{∗}`. |
-| `[[the source\|https://example.org/data\|type=bibliography]]` | Read an already-open, black inline bibliography reference marked with `(■)`. |
-| `[[a note\|More context\|type=note;color=green]]` | Reveal a green italic note with the same braces and marker. |
-| `[[a quotation\|Quoted words\|type=quote;style=italic;color=crimson]]` | Reveal a crimson italic quotation. |
-| `{crimson\|a key finding}` | Read those words in colour. |
-| `[[the sketch\|media/example-detail.svg]]` | See an inline image; hover, focus or tap for a foreground preview. |
-| `![A description](media/example-tall.svg)` | Show a Markdown image inline with the same preview interaction. |
-| `[[a tone\|media/example-tone.mp3]]` | Hover to play audio and move away to pause; native controls also work. |
-| `[[a video\|media/example-motion.mp4]]` | See a muted inline video without playback or sound buttons. |
+| `updated` | New version selected for this run. |
+| `unchanged` | Same version as before. |
+| `retained` | Update rejected; previous version kept. Read the explanation. |
+| `skipped` | No valid published version yet. Correct and commit again. |
+| `disabled`, `hidden`, `frozen` | Publication turned off or fixed by the course team. |
 
-The optional third field combines modifiers separated by semicolons: `type=note`, `type=bibliography` or `type=quote`; `style=italic` or `style=normal`; and `color=crimson` or another CSS color such as `#116964`. Their order does not matter. Bibliography references start open, appear inline in black as `(■ Author, year. Title)` (including their links), and can be closed or reopened using their label. Bibliography URLs stay links rather than embedded players. Bibliography remains black even inside colored text or with a color modifier. Notes start open with their marker and content together inside braces, `{✶ note text}`, are black and italic by default, and can be closed or reopened using their label. Colored questions beginning with ✶ also appear inside braces. An explicit color overrides a surrounding color span; otherwise a surrounding `{crimson|...}` still works. `style=normal` turns off the note's default italics. Plain prose and annotation labels also accept Markdown `*italics*`.
+Published = run marked **verified** or **unchanged**. `updated` alone proves nothing. Run failed, unverified or pending; no row; no runs: contact the course team.
 
-Existing two-field annotations and third-field emoji markers still work. Unknown, repeated or malformed modifiers remain visible as the original text so you can correct them; they do not become styled annotations. Do not include `|`, `[` or `]` inside a field.
+| Fault | Action |
+| --- | --- |
+| Wrong SVG size | Re-export the whole 1920 × 1080 frame. |
+| Missing media | Upload the file, or correct its path in `text.md`. Match case exactly. |
+| Rejected update | Correct; commit to **main**. The next refresh retries. The previous version stays online meanwhile. |
 
-To add an extra image, audio clip, or video, open `media`, choose **Add file → Upload files**, and commit to **main**. If there is no `media` folder, you can upload the file beside `text.md` instead. Reference the exact path: `media/interview.mp3` for a file inside `media`, or `interview.mp3` for a file at the top level. For example, after uploading those files:
+## 7. Syntax
 
-```text
-[[Listen to the interview|media/interview.mp3]]
-[[Watch the recording|media/recording.mp4]]
-```
+Prose: line breaks and blank lines between paragraphs become spaces, forming one continuous justified passage. Two trailing spaces or a trailing backslash also become a space. Headings, lists, blockquotes and code blocks stay separate; code keeps its line breaks. Never break a URL or filename across lines.
 
-Images appear as small thumbnails within the sentence, keeping their aspect ratio. Hover or keyboard-focus an image for a large, opaque preview above the text, expanding from its inline anchor. Tap or press Enter/Space to keep the preview open; tap again, choose **Close media preview**, press Escape, or tap elsewhere to dismiss. Leaving a hovered image, moving focus away, scrolling or switching entries clears the preview. A Markdown image inside a link keeps that link: hover/focus previews the image and activation follows the link. Audio and uploaded video appear directly within the sentence. Audio has native controls and can also start on hover. Uploaded videos try to start muted when at least half visible and have no playback or sound buttons. Hover or focus a video to enlarge it from its inline anchor; its preview tries to play with sound and stops when the pointer leaves. Click or tap to pin the preview; Escape or Close media preview dismisses it. Audio also tries to play while hovered and pauses when the pointer leaves. Browsers may require a click before allowing sound. If automatic playback is refused, the video stays still. Videos stop when off screen, when switching entries, while the main image is enlarged, or when the page is hidden. Reduced-motion preferences disable automatic inline video playback and preview animations. External embeds open manually from their annotation; if the player is unavailable, choose **Open media on provider**. Muted autoplay and manual controls passed in Chrome 154 on desktop and a 390px touch emulation. This is an experiment, not a promise for every browser or device. YouTube/Vimeo streaming was not verified; their manual reveal and provider links were checked with simulated provider responses. Preview your own files in the website, because playback depends on their encoding. Extra images keep their own dimensions: **only the main visual must be a 1920 × 1080 SVG**. Supplementary images may be SVG, PNG, JPG/JPEG, WebP, GIF, or AVIF.
+| Write in `text.md` | Result |
+| --- | --- |
+| `*a few words*` | Italic. |
+| `[[the source\|https://example.org/data]]` | Link. |
+| `[[a detail\|A short explanation]]` | Note: `{✶ A short explanation}`. |
+| `[[the source\|https://example.org/data\|type=bibliography]]` | Bibliography: `(■ …)`. |
+| `[[a note\|More context\|type=note;color=green]]` | Green note. |
+| `[[a quotation\|Quoted words\|type=quote;style=italic;color=crimson]]` | Crimson italic quotation. |
+| `{crimson\|a key finding}` | Colored text. |
+| `[[the sketch\|media/example-detail.svg]]` | Inline image. |
+| `![A description](media/example-tall.svg)` | Inline image (Markdown). |
+| `[[a tone\|media/example-tone.mp3]]` | Inline audio. |
+| `[[a video\|media/example-motion.mp4]]` | Inline video. |
 
-Use lowercase filenames without spaces, such as `survey-photo.jpg`; letters, digits, dots, underscores, and hyphens are supported. Keep paths within your repository. A note cannot contain `|`, `[` or `]`. If you remove a media file, remove its reference from `text.md` too.
+Annotation form: `[[label|target|modifiers]]`. Modifiers are optional, separated by `;`, in any order.
 
-File limits are 256 KiB for text, 5 MiB per SVG, 20 MiB per other media file, and 100 files / 100 MiB in total. Supported audio: MP3, M4A, WAV, OGG, AAC, FLAC. Supported video: MP4, WebM, MOV. Export SVGs as static, self-contained artwork. Source/design files and README files are not included in your published entry.
+| Modifier | Values |
+| --- | --- |
+| `type` | `note`, `bibliography`, `quote` |
+| `style` | `italic`, `normal` |
+| `color` | `crimson` or any CSS color, e.g. `#116964` |
 
-The site is part of [Data Driven Design at MAInD — SUPSI](https://maind.supsi.ch/master-interaction-design/en).
+- Note: open by default; `{✶ text}`; black italic. `style=normal` removes italic. The label toggles it.
+- Bibliography: open by default; inline, black, `(■ Author, year. Title)`. URLs stay links. Black overrides every color. The label toggles it.
+- Quote: quotation marks on reveal.
+- An explicit `color` overrides a surrounding `{color|…}` span; otherwise the span applies.
+- `{color|✶ text}` renders in braces.
+- Markdown `*italics*` works in prose and labels.
+- Two-field annotations and emoji markers in the third field still work.
+- Unknown, repeated or malformed modifiers stay visible as literal text. Correct them.
+- Never put `|`, `[` or `]` inside a field.
+
+## 8. Media behavior
+
+| Media | Behavior |
+| --- | --- |
+| Image | Inline thumbnail; aspect ratio kept. Hover or focus: large opaque preview, expanding from the thumbnail. Tap or Enter/Space: pin. Dismiss: tap again, **Close media preview**, Escape, tap elsewhere, scroll, switch entry. Linked image: hover previews, activation follows the link. |
+| Audio | Native controls. Hover plays; leaving pauses. |
+| Video | Inline, muted, no buttons. Starts when half visible. Hover or focus: enlarged preview with sound; leaving stops it. Click or tap: pin. |
+| External embed | Opens manually from its annotation. Fallback: **Open media on provider**. YouTube/Vimeo playback unverified. |
+
+- Playback stops off screen, on entry switch, while the main image is enlarged, and when the page is hidden.
+- Reduced motion: no autoplay, no preview animation.
+- Browsers may require a click before sound. Refused autoplay leaves the video still.
+- Playback depends on file encoding and browser. Check your entry on the site.
+
+## 9. Editor (preview)
+
+Use only after the course team announces it. URL: website link + `editor/`.
+
+1. **Group** → **Open last published version**. New group: **Start from template**.
+2. Edit the Markdown. Attach files with their exact destination, e.g. `media/new-photo.png`.
+3. **Check and prepare GitHub steps**. Resolve every error.
+4. Execute the generated steps in order: compare current GitHub text, upload media, commit `text.md`, delete removed files.
+5. Replacing referenced media: use a new filename.
+6. If shown, **Request publication** after all commits. Read the answer on the issue.
+
+Drafts are saved in this browser only. Restore brings back text and attachments together. Storage denied or full: the editor lists what was not saved; a text-only backup needs its media reattached or discarded. Saving unavailable: **Download text.md** before leaving.
+
+**WARNING**: A browser draft is not a commit. A completed checklist proves neither commit nor publication.
+
+## 10. Repository layout
+
+| Path | Content |
+| --- | --- |
+| `groups.json` | Registry of group repositories. |
+| `example/` | Demonstration entry. |
+| `templates/group/` | Group repository template. Copy its contents, not the folder. |
+| `editor/` | Entry editor. |
+| `static/` | Renderer, styles, content contract. |
+| `scripts/` | Build, import, publication, tests. |

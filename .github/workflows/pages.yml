@@ -5,6 +5,8 @@ on:
     branches: [main]
   schedule:
     - cron: '7,17,27,37,47,57 * * * *'
+  issues:
+    types: [opened]
   workflow_dispatch:
     inputs:
       first_publication:
@@ -15,17 +17,29 @@ on:
         description: 'Recovery only: redeploy the exact latest recorded candidate'
         type: boolean
         default: false
+      seed_archive:
+        description: 'Protected-ref pilot only: seed student-work from verified V1; do not cut over'
+        type: boolean
+        default: false
+      reconcile_seed:
+        description: 'Before cutover only: update an existing V1 seed to current verified V1; no deployment'
+        type: boolean
+        default: false
+      rebind_archive:
+        description: 'Reviewed migration only: apply the exact main-controlled archive-rebind.json plan'
+        type: boolean
+        default: false
 
 permissions:
   contents: read
 
 concurrency:
-  group: pages
+  group: ${{ github.event_name != 'issues' && 'pages' || (vars.DDD_ARCHIVE_ENABLED == 'true' && vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request') && 'pages') || format('ignored-issue-{0}', github.event.issue.number) }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main'
+    if: github.ref == 'refs/heads/main' && vars.DDD_ARCHIVE_ENABLED != 'true' && github.event_name != 'issues' && !(github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -40,6 +54,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
         with:
+          ref: main
           persist-credentials: false
       - uses: actions/setup-python@v6
         with:
@@ -50,7 +65,7 @@ jobs:
       - name: Check trusted publishing code
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Check annotation and playback behavior
-        run: node --test scripts/test_annotations.js scripts/test_playback.js
+        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
       - id: pages
         uses: actions/configure-pages@v5
       - name: Import groups and prepare publication
@@ -101,3 +116,272 @@ jobs:
       - name: Summarize group results
         if: always()
         run: python3 scripts/publish_site.py summary
+
+  pin:
+    if: github.ref == 'refs/heads/main' && (vars.DDD_ARCHIVE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))) && (github.event_name != 'issues' || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request')))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      main_commit: ${{ steps.pin.outputs.main_commit }}
+      pages_url: ${{ steps.pages.outputs.base_url }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+      - id: pin
+        name: Pin latest trusted main at execution
+        run: echo "main_commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+      - id: pages
+        uses: actions/configure-pages@v5
+
+  admission:
+    needs: pin
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: read
+      deployments: write
+    env:
+      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
+      REQUESTS_ENABLED: ${{ vars.DDD_REQUESTS_ENABLED == 'true' }}
+      SEED_ARCHIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.seed_archive }}
+      RECONCILE_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.reconcile_seed }}
+      ARCHIVE_ENABLED: ${{ vars.DDD_ARCHIVE_ENABLED == 'true' }}
+      REBIND_ARCHIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.rebind_archive }}
+    outputs:
+      metadata_sha256: ${{ steps.admit.outputs.metadata_sha256 }}
+      artifact_attempt: ${{ steps.admit.outputs.artifact_attempt }}
+      mode: ${{ steps.admit.outputs.mode }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.pin.outputs.main_commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - id: admit
+        name: Capture request cutoff and reserve eligible refresh
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py admit
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-admission-${{ github.run_id }}-${{ steps.admit.outputs.artifact_attempt }}
+          path: .scratch/v2-output
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  prepare_archive:
+    needs: [pin, admission]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    permissions:
+      contents: read
+      deployments: read
+    env:
+      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
+      PAGES_URL: ${{ needs.pin.outputs.pages_url }}
+      EXPECTED_METADATA_SHA256: ${{ needs.admission.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.admission.outputs.artifact_attempt }}
+    outputs:
+      metadata_sha256: ${{ steps.prepare.outputs.metadata_sha256 }}
+      artifact_attempt: ${{ steps.prepare.outputs.artifact_attempt }}
+      mode: ${{ steps.prepare.outputs.mode }}
+      archive: ${{ steps.prepare.outputs.archive }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.pin.outputs.main_commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify trusted publishing code
+        run: python3 -m unittest discover -s scripts -p 'test_*.py'
+      - name: Verify browser contracts and renderer lifecycle
+        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
+      - uses: actions/download-artifact@v4
+        with:
+          name: v2-admission-${{ github.run_id }}-${{ needs.admission.outputs.artifact_attempt }}
+          path: .scratch/v2-input
+      - id: prepare
+        name: Prepare candidate or durable recovery pair
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py prepare
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-prepared-${{ github.run_id }}-${{ steps.prepare.outputs.artifact_attempt }}
+          path: .scratch/v2-output
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  archive:
+    needs: [pin, prepare_archive]
+    if: needs.prepare_archive.outputs.archive == 'true' && vars.DDD_ARCHIVE_WRITES_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+      deployments: read
+    env:
+      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
+      PAGES_URL: ${{ needs.pin.outputs.pages_url }}
+      ARCHIVE_WRITES_ENABLED: ${{ vars.DDD_ARCHIVE_WRITES_ENABLED == 'true' }}
+      ARCHIVE_ENABLED: ${{ vars.DDD_ARCHIVE_ENABLED == 'true' }}
+      EXPECTED_METADATA_SHA256: ${{ needs.prepare_archive.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.prepare_archive.outputs.artifact_attempt }}
+    outputs:
+      metadata_sha256: ${{ steps.accept.outputs.metadata_sha256 }}
+      artifact_attempt: ${{ steps.accept.outputs.artifact_attempt }}
+      archive_commit: ${{ steps.accept.outputs.archive_commit }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.pin.outputs.main_commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: v2-prepared-${{ github.run_id }}-${{ needs.prepare_archive.outputs.artifact_attempt }}
+          path: .scratch/v2-input
+      - id: accept
+        name: Revalidate policy and accept by expected-parent fast-forward
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py accept
+      - uses: actions/upload-artifact@v4
+        with:
+          name: v2-accepted-${{ github.run_id }}-${{ steps.accept.outputs.artifact_attempt }}
+          path: .scratch/v2-output
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  publish_archive:
+    needs: [pin, prepare_archive, archive]
+    if: always() && needs.prepare_archive.result == 'success' && needs.prepare_archive.outputs.mode != 'seed' && needs.prepare_archive.outputs.mode != 'reconcile_seed' && needs.prepare_archive.outputs.mode != 'rebind' && (needs.prepare_archive.outputs.archive != 'true' || needs.archive.result == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      deployments: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    env:
+      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
+      PAGES_URL: ${{ needs.pin.outputs.pages_url }}
+      EXPECTED_METADATA_SHA256: ${{ needs.archive.outputs.metadata_sha256 || needs.prepare_archive.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.archive.outputs.artifact_attempt || needs.prepare_archive.outputs.artifact_attempt }}
+    outputs:
+      metadata_sha256: ${{ steps.finalize.outputs.metadata_sha256 }}
+      artifact_attempt: ${{ steps.finalize.outputs.artifact_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.pin.outputs.main_commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.archive.outputs.metadata_sha256 && format('v2-accepted-{0}-{1}', github.run_id, needs.archive.outputs.artifact_attempt) || format('v2-prepared-{0}-{1}', github.run_id, needs.prepare_archive.outputs.artifact_attempt) }}
+          path: .scratch/v2-input
+      - id: build
+        name: Build accepted pair or reconstruct exact pending release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py build
+      - uses: actions/upload-pages-artifact@v4
+        if: steps.build.outputs.deploy == 'true'
+        with:
+          name: v2-pages-${{ github.run_id }}-${{ github.run_attempt }}
+          path: _site
+          retention-days: 7
+      - id: record
+        if: steps.build.outputs.deploy == 'true'
+        name: Record attempted release separately from verification
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py record
+      - id: authorize
+        if: steps.record.outputs.deploy == 'true'
+        name: Recheck main and deployment identity before Pages mutation
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py authorize
+      - id: deployment
+        if: steps.authorize.outputs.deploy == 'true'
+        uses: actions/deploy-pages@v4
+        with:
+          artifact_name: v2-pages-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Verify served release and content probes
+        if: steps.authorize.outputs.deploy == 'true'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py verify
+      - id: finalize
+        if: always()
+        name: Export bounded truthful result for the answer job
+        run: python3 scripts/publish_archive.py finalize
+      - uses: actions/upload-artifact@v4
+        if: always() && steps.finalize.outputs.metadata_sha256 != ''
+        with:
+          name: v2-result-${{ github.run_id }}-${{ steps.finalize.outputs.artifact_attempt }}
+          path: .scratch/v2-output
+          include-hidden-files: true
+          if-no-files-found: error
+          retention-days: 7
+
+  answer:
+    needs: [pin, admission, prepare_archive, archive, publish_archive]
+    if: always() && needs.admission.result == 'success' && needs.admission.outputs.mode != 'seed' && needs.admission.outputs.mode != 'reconcile_seed' && needs.admission.outputs.mode != 'rebind' && vars.DDD_REQUESTS_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      issues: write
+    env:
+      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
+      PAGES_URL: ${{ needs.pin.outputs.pages_url }}
+      EXPECTED_METADATA_SHA256: ${{ needs.publish_archive.outputs.metadata_sha256 || needs.archive.outputs.metadata_sha256 || needs.prepare_archive.outputs.metadata_sha256 || needs.admission.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.publish_archive.outputs.artifact_attempt || needs.archive.outputs.artifact_attempt || needs.prepare_archive.outputs.artifact_attempt || needs.admission.outputs.artifact_attempt }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ needs.pin.outputs.main_commit }}
+          persist-credentials: false
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.12'
+      - uses: actions/download-artifact@v4
+        with:
+          name: ${{ needs.publish_archive.outputs.metadata_sha256 && format('v2-result-{0}-{1}', github.run_id, needs.publish_archive.outputs.artifact_attempt) || (needs.archive.outputs.metadata_sha256 && format('v2-accepted-{0}-{1}', github.run_id, needs.archive.outputs.artifact_attempt)) || (needs.prepare_archive.outputs.metadata_sha256 && format('v2-prepared-{0}-{1}', github.run_id, needs.prepare_archive.outputs.artifact_attempt)) || format('v2-admission-{0}-{1}', github.run_id, needs.admission.outputs.artifact_attempt) }}
+          path: .scratch/v2-input
+      - name: Repair one bot-owned status comment and close only verified checks
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 scripts/publish_archive.py answer

@@ -4,22 +4,24 @@ The importer must supply regular-file sizes from a single source commit and
 reject symlinks/submodules before using this manifest validator.
 """
 
+import json
 import re
 import xml.etree.ElementTree as ET
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 
 
-MEDIA_EXTENSIONS = frozenset({
-    ".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif",
-    ".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac",
-    ".mp4", ".webm", ".mov",
-})
-MAX_TEXT_BYTES = 256 * 1024
-MAX_SVG_BYTES = 5 * 1024 * 1024
-MAX_MEDIA_BYTES = 20 * 1024 * 1024
-MAX_TOTAL_BYTES = 100 * 1024 * 1024
-MAX_FILES = 100
-PATH_PART = re.compile(r"[a-z0-9][a-z0-9._-]*")
+CONTRACT = json.loads((Path(__file__).resolve().parent.parent / "static" / "contract.json").read_text())
+CONTRACT_VERSION = CONTRACT["version"]
+LIMITS = CONTRACT["limits"]
+MEDIA_EXTENSIONS = frozenset(CONTRACT["media_extensions"])
+MAX_TEXT_BYTES = LIMITS["text_bytes"]
+MAX_SVG_BYTES = LIMITS["svg_bytes"]
+MAX_MEDIA_BYTES = LIMITS["media_bytes"]
+MAX_TOTAL_BYTES = LIMITS["group_bytes"]
+LEGACY_MAX_TOTAL_BYTES = LIMITS["legacy_group_bytes"]
+MAX_SITE_BYTES = LIMITS["site_bytes"]
+MAX_FILES = LIMITS["files"]
+PATH_PART = re.compile(CONTRACT["path_component"])
 
 
 def validate_visual(path):
@@ -33,7 +35,7 @@ def validate_visual(path):
         viewbox = [float(value) for value in re.split(r"[\s,]+", svg.get("viewBox", "").strip())]
     except ValueError:
         viewbox = []
-    if viewbox != [0, 0, 1920, 1080]:
+    if viewbox != CONTRACT["visual_viewbox"]:
         raise ValueError(f'{path}: export a 1920 × 1080 canvas (viewBox="0 0 1920 1080")')
     for attribute, expected in (("width", 1920), ("height", 1080)):
         value = svg.get(attribute)
@@ -47,8 +49,9 @@ def validate_visual(path):
             raise ValueError(f"{path}: {attribute} must be {expected} pixels or omitted")
 
 
-def select_content_files(file_sizes, *, require_visual=True):
+def select_content_files(file_sizes, *, require_visual=True, recovery=False):
     """Return sorted allowed paths; ignore non-content files, reject bad content."""
+    total_limit = LEGACY_MAX_TOTAL_BYTES if recovery else MAX_TOTAL_BYTES
     selected = []
     total = 0
     for name, size in file_sizes.items():
@@ -64,6 +67,8 @@ def select_content_files(file_sizes, *, require_visual=True):
         media = path.suffix.lower() in MEDIA_EXTENSIONS and (len(parts) == 1 or parts[0] == "media")
         if not required and not media:
             continue
+        if len(name) > LIMITS["path_length"] or len(parts) > LIMITS["path_depth"]:
+            raise ValueError(f"{name}: content path too long")
         if not all(PATH_PART.fullmatch(part) for part in parts):
             raise ValueError(f"{name}: content filenames must use lowercase letters, digits, dots, hyphens or underscores")
         if type(size) is not int or size < 0:
@@ -73,8 +78,8 @@ def select_content_files(file_sizes, *, require_visual=True):
             raise ValueError(f"{name}: exceeds the {limit}-byte file limit")
         selected.append(name)
         total += size
-        if len(selected) > MAX_FILES or total > MAX_TOTAL_BYTES:
-            raise ValueError("group content exceeds 100 files or 100 MiB")
+        if len(selected) > MAX_FILES or total > total_limit:
+            raise ValueError(f"group content exceeds {MAX_FILES} files or {total_limit // (1024 * 1024)} MiB")
     required_files = {"text.md", "visual.svg"} if require_visual else {"text.md"}
     if not required_files <= set(selected):
         raise ValueError("group content requires " + " and ".join(sorted(required_files)))

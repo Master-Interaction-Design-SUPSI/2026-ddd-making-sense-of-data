@@ -51,6 +51,9 @@ class PublicationTests(unittest.TestCase):
         self.addCleanup(patcher.stop)
         (self.root / "index.html").write_text("trusted code")
         (self.root / "static").mkdir()
+        assets = Path(__file__).resolve().parent.parent
+        shutil.copytree(assets / "editor", self.root / "editor")
+        shutil.copytree(assets / "templates", self.root / "templates")
         self.registry("alpha", "beta")
         for name in ("alpha", "beta"):
             self.api.add("course/" + name)
@@ -186,6 +189,7 @@ class PublicationTests(unittest.TestCase):
                 self.assertEqual(report["groups"], [])
 
     def test_missing_or_changed_fallback_file_stops_instead_of_publishing_a_partial_group(self):
+        self.api.add("course/beta", {"text.md": b"Distinct accepted beta text", "visual.svg": SVG})
         self.bootstrap()
         original = self.bytes_at(self.output)
         self.update("beta", visual=b"invalid")

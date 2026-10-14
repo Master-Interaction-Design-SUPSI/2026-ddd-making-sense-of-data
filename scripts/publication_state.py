@@ -10,13 +10,14 @@ from urllib.error import URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import Request, build_opener
 
-from content_contract import select_content_files
+from content_contract import CONTRACT_VERSION, select_content_files
 from github_content import NoRedirect
 from group_registry import REPOSITORY, RESERVED_SLUGS, SLUG, validate_branch
 from import_groups import validate_content
 
 
 MANIFEST = "publication.json"
+SOURCE_INVENTORY = "source-inventory.json"
 MAX_MANIFEST_BYTES = 2 * 1024 * 1024
 
 
@@ -70,7 +71,7 @@ def decode_manifest(payload):
                 if not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
                     raise ValueError(f"{slug}: invalid file digest")
             selected = select_content_files({name: record["size"] for name, record in files.items()},
-                                            require_visual=require_visual)
+                                            require_visual=require_visual, recovery=True)
             if set(selected) != set(files):
                 raise ValueError(f"{slug}: unsupported files in recovery state")
             if any(parent in files for name in files for parent in (
@@ -101,6 +102,26 @@ def snapshot(folder, result):
     return entry
 
 
+def encode_source_inventory(sources, snapshots, manifest):
+    """Optional reuse hints; the v1 recovery manifest remains authoritative."""
+    groups = {}
+    for slug, entry in snapshots.items():
+        files = {}
+        for name, record in entry["files"].items():
+            content = (sources[slug] / name).read_bytes()
+            if len(content) != record["size"] or hashlib.sha256(content).hexdigest() != record["sha256"]:
+                raise RecoveryError(f"{slug}/{name}: source changed while preparing reuse inventory")
+            files[name] = {"size": len(content), "blob_sha": hashlib.sha1(
+                f"blob {len(content)}\0".encode() + content).hexdigest()}
+        groups[slug] = {key: entry[key] for key in ("repository", "branch", "commit")} | {"files": files}
+    payload = (json.dumps({"version": 1, "contract_version": CONTRACT_VERSION,
+                          "manifest_sha256": hashlib.sha256(manifest).hexdigest(), "groups": groups},
+                         sort_keys=True, indent=2) + "\n").encode()
+    if len(payload) > MAX_MANIFEST_BYTES:
+        raise RecoveryError("Source inventory exceeds the 2 MiB limit")
+    return payload
+
+
 class SiteReader:
     def __init__(self, url):
         parsed = urlsplit(url)
@@ -111,9 +132,12 @@ class SiteReader:
         self.url = url.rstrip("/") + "/"
         self.opener = build_opener(NoRedirect())
         self.deadline = time.monotonic() + 180
+        self.overall_deadline = None
+        self.metrics = {"pages_requests": 0, "pages_bytes": 0}
 
     def remaining(self):
-        remaining = self.deadline - time.monotonic()
+        deadline = min(self.deadline, self.overall_deadline) if self.overall_deadline else self.deadline
+        remaining = deadline - time.monotonic()
         if remaining <= 0:
             raise RecoveryError("Published-state recovery exceeded 180 seconds; retry publication")
         return remaining
@@ -122,6 +146,7 @@ class SiteReader:
         # No GitHub token is ever sent to the public website. Bypass stale CDN responses.
         url = self.url + quote(path, safe="/") + "?recovery=" + str(time.time_ns())
         request = Request(url, headers={"Cache-Control": "no-cache", "User-Agent": "ddd-publication-recovery"})
+        self.metrics["pages_requests"] += 1
         try:
             with self.opener.open(request, timeout=min(15, self.remaining())) as response:
                 length = response.headers.get("Content-Length")
@@ -133,6 +158,7 @@ class SiteReader:
                     chunk = response.read1(min(65536, limit + 1 - len(payload)))
                     if not chunk:
                         return bytes(payload)
+                    self.metrics["pages_bytes"] += len(chunk)
                     payload.extend(chunk)
                 raise RecoveryError(f"Published {path} exceeds its recovery byte limit")
         except (URLError, OSError, HTTPException) as error:
@@ -144,6 +170,69 @@ class PublishedSite(SiteReader):
         super().__init__(url)
         self.payload = self.read(MANIFEST, MAX_MANIFEST_BYTES)
         self.groups = decode_manifest(self.payload)
+        self.inventory = None
+        self.inventory_loaded = False
+        self.cache_directory = None
+
+    def load_inventory(self):
+        if self.inventory_loaded:
+            return
+        self.inventory_loaded = True
+        try:
+            inventory = json.loads(self.read(SOURCE_INVENTORY, MAX_MANIFEST_BYTES), object_pairs_hook=unique_keys)
+            if (not isinstance(inventory, dict) or inventory.get("version") != 1
+                    or inventory.get("contract_version") != CONTRACT_VERSION
+                    or inventory.get("manifest_sha256") != hashlib.sha256(self.payload).hexdigest()
+                    or not isinstance(inventory.get("groups"), dict)
+                    or set(inventory.get("groups", {})) != set(self.groups)):
+                return
+            for slug, group in inventory["groups"].items():
+                base = self.groups[slug]
+                if (not isinstance(group, dict) or any(group.get(key) != base[key]
+                        for key in ("repository", "branch", "commit"))
+                        or not isinstance(group.get("files"), dict) or set(group["files"]) != set(base["files"])):
+                    return
+                for name, record in group["files"].items():
+                    if (not isinstance(record, dict) or record.get("size") != base["files"][name]["size"]
+                            or not isinstance(record.get("blob_sha"), str)
+                            or not re.fullmatch(r"[0-9a-f]{40}", record["blob_sha"])):
+                        return
+            self.inventory = inventory["groups"]
+        except (RecoveryError, ValueError, TypeError, KeyError, RecursionError):
+            # Missing, stale or damaged acceleration metadata cannot become authority.
+            return
+
+    def reuse(self, slug, name, node):
+        self.load_inventory()
+        if self.inventory is None:
+            return None
+        hint = self.inventory.get(slug, {}).get("files", {}).get(name)
+        if not hint or hint["blob_sha"] != node["sha"] or hint["size"] != node["size"]:
+            return None
+        record = self.groups[slug]["files"][name]
+        try:
+            content = self.read_file(slug, name)
+        except RecoveryError:
+            return None
+        if (len(content) != record["size"] or hashlib.sha256(content).hexdigest() != record["sha256"]
+                or hashlib.sha1(f"blob {len(content)}\0".encode() + content).hexdigest() != node["sha"]):
+            return None
+        return content
+
+    def read_file(self, slug, name):
+        record = self.groups[slug]["files"][name]
+        cached = self.cache_directory / record["sha256"] if self.cache_directory else None
+        content = None
+        if cached and cached.is_file() and not cached.is_symlink() and cached.stat().st_size == record["size"]:
+            content = cached.read_bytes()
+        if content is None or hashlib.sha256(content).hexdigest() != record["sha256"]:
+            content = self.read(f"{slug}/{name}", record["size"])
+        if len(content) != record["size"] or hashlib.sha256(content).hexdigest() != record["sha256"]:
+            raise RecoveryError(f"{slug}/{name}: published bytes do not match the recovery manifest; retry publication")
+        if cached:
+            cached.parent.mkdir(parents=True, exist_ok=True)
+            cached.write_bytes(content)
+        return content
 
     def restore(self, slug, destination):
         self.deadline = time.monotonic() + 180
@@ -151,9 +240,7 @@ class PublishedSite(SiteReader):
         destination = Path(destination)
         destination.mkdir()
         for name, record in entry["files"].items():
-            content = self.read(f"{slug}/{name}", record["size"])
-            if len(content) != record["size"] or hashlib.sha256(content).hexdigest() != record["sha256"]:
-                raise RecoveryError(f"{slug}/{name}: published bytes do not match the recovery manifest; retry publication")
+            content = self.read_file(slug, name)
             path = destination / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(content)
@@ -178,6 +265,10 @@ def select_publication(results, imported, previous, retained):
             sources[slug] = imported / slug
             snapshots[slug] = snapshot(sources[slug], result)
             result["publication_status"] = "updated"
+        elif result["status"] == "unchanged":
+            sources[slug] = retained / slug
+            snapshots[slug] = previous.restore(slug, sources[slug])
+            result["publication_status"] = "unchanged"
         elif result["status"] == "disabled":
             result["publication_status"] = "disabled"
         elif previous and slug in previous.groups:

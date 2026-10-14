@@ -1,3 +1,4 @@
+import shutil
 import hashlib
 import io
 import json
@@ -7,7 +8,7 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit
+from urllib.parse import urlsplit, unquote
 
 import build_site
 from content_contract import MAX_MEDIA_BYTES
@@ -49,6 +50,13 @@ class FixtureAPI:
         url = urlsplit(request.full_url)
         path = url.path + ("?" + url.query if url.query else "")
         self.calls.append(path)
+        if url.hostname == "raw.githubusercontent.com":
+            parts = unquote(path).lstrip("/").split("/")
+            base = "/repos/" + "/".join(parts[:2])
+            commit = self.routes.get(base + "/git/commits/" + parts[2], {})
+            tree = self.routes.get(base + "/git/trees/" + commit.get("tree", {}).get("sha", "") + "?recursive=1", {})
+            node = next((node for node in tree.get("tree", []) if node["path"] == "/".join(parts[3:])), None)
+            path = base + "/git/blobs/" + node["sha"] if node else path
         if path not in self.routes:
             raise HTTPError(request.full_url, 404, "not found", {}, None)
         data = self.routes[path]
@@ -268,6 +276,9 @@ class ImportTests(unittest.TestCase):
         (self.root / "groups.json").write_text(json.dumps({"groups": [vars(g) for g in groups]}))
         (self.root / "index.html").write_text("trusted site")
         (self.root / "static").mkdir()
+        assets = Path(__file__).resolve().parent.parent
+        shutil.copytree(assets / "editor", self.root / "editor")
+        shutil.copytree(assets / "templates", self.root / "templates")
         output = self.root / "_site"
         output.mkdir()
         (output / "index.html").write_text("previous publication")
@@ -358,6 +369,39 @@ class TransportTests(unittest.TestCase):
             self.client.get("/repos/course/test", 100)
         self.assertEqual(caught.exception.code, "redirect")
         self.assertEqual(self.client.opener.open.call_count, 1)
+
+
+    def test_raw_transport_never_forwards_api_credentials(self):
+        self.client.headers["Authorization"] = "Bearer fixture-secret"
+        self.client.opener.open.return_value = Response(b'bytes')
+        self.assertEqual(self.client.raw_file("course/group", "a" * 40, "media/test.png", 5), b'bytes')
+        request = self.client.opener.open.call_args.args[0]
+        self.assertEqual(urlsplit(request.full_url).hostname, "raw.githubusercontent.com")
+        self.assertIsNone(request.get_header("Authorization"))
+        self.assertEqual(self.client.metrics["rest_requests"], 0)
+        self.assertEqual(self.client.metrics["raw_requests"], 1)
+        self.assertEqual(self.client.metrics["raw_bytes"], 5)
+
+    def test_api_headroom_defers_metadata_without_consuming_last_quota(self):
+        self.client.api_remaining = 200
+        with self.assertRaises(ImportFailure) as caught:
+            self.client.json("/repos/course/group")
+        self.assertEqual(caught.exception.code, "rate_limited")
+        self.client.opener.open.assert_not_called()
+
+    def test_full_cohort_metadata_budget_is_independent_of_file_count(self):
+        api = FixtureAPI()
+        groups = [Group(f"group-{i}", f"course/group-{i}", "main", True, require_visual=False) for i in range(15)]
+        for group in groups:
+            api.add(group.repository, {"text.md": b"Fixture", **{f"media/{i}.png": b"image" for i in range(99)}})
+        requests = 0
+        with tempfile.TemporaryDirectory() as temporary:
+            for cycle in range(6):
+                results = import_groups(groups, Path(temporary) / str(cycle), api.client)
+                self.assertTrue(all(result["status"] == "imported" for result in results))
+                requests += sum(result["transport"]["rest_requests"] for result in results)
+                self.assertEqual(sum(result["transport"]["raw_requests"] for result in results), 1500)
+        self.assertEqual(requests, 360)
 
 
 if __name__ == "__main__":

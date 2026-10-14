@@ -5,10 +5,10 @@ import re
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
-from content_contract import MEDIA_EXTENSIONS, PATH_PART, MAX_FILES
+from content_contract import MEDIA_EXTENSIONS, PATH_PART, MAX_FILES, LIMITS
 
 
-SITE_DIRECTORIES = frozenset({"static", "scripts", "_site", "templates"})
+SITE_DIRECTORIES = frozenset({"static", "scripts", "_site", "templates", "editor"})
 RESERVED_SLUGS = SITE_DIRECTORIES | {"example", "index", "entries", "groups"}
 SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 REPOSITORY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9_][A-Za-z0-9_.-]*")
@@ -22,6 +22,11 @@ class Group:
     enabled: bool
     exclude: tuple[str, ...] = ()
     require_visual: bool = True
+    state: str = None
+
+    @property
+    def publication_state(self):
+        return self.state or ('live' if self.enabled else 'hidden')
 
 
 def validate_exclusions(exclude):
@@ -59,6 +64,8 @@ def load_registry(path):
         raise ValueError("registry: expected an object containing only groups")
     if not isinstance(registry["groups"], list):
         raise ValueError("registry: groups must be a list")
+    if len(registry["groups"]) > LIMITS["groups"]:
+        raise ValueError(f"registry: at most {LIMITS['groups']} groups are supported")
     groups = []
     slugs = set()
     repositories = set()
@@ -66,9 +73,10 @@ def load_registry(path):
         label = f"registry group {index}"
         if not isinstance(entry, dict):
             raise ValueError(f"{label}: expected an object")
-        if not {"slug", "repository", "enabled"} <= entry.keys() or entry.keys() - {
-            "slug", "repository", "branch", "enabled", "exclude", "require_visual"
-        }:
+        if (not {"slug", "repository"} <= entry.keys() or not ({'enabled', 'state'} & entry.keys())
+                or entry.keys() - {
+            "slug", "repository", "branch", "enabled", "exclude", "require_visual", "state"
+        }):
             raise ValueError(f"{label}: require slug, repository, enabled; branch is optional")
         slug = entry["slug"]
         if not isinstance(slug, str) or len(slug) > 63 or not SLUG.fullmatch(slug):
@@ -80,14 +88,21 @@ def load_registry(path):
             raise ValueError(f"{label}: repository must be owner/name, without a URL or .git suffix")
         if repository.casefold() in repositories:
             raise ValueError(f"{label}: duplicate repository {repository!r}")
-        if type(entry["enabled"]) is not bool:
+        if 'enabled' in entry and type(entry["enabled"]) is not bool:
             raise ValueError(f"{label}: enabled must be true or false")
+        state = entry.get('state')
+        if ('state' in entry and state is None and 'enabled' not in entry
+                or state is not None and state not in ('live', 'frozen', 'hidden')):
+            raise ValueError(f'{label}: state must be live, frozen or hidden')
+        enabled = entry.get('enabled', state == 'live')
+        if state is not None and enabled != (state == 'live'):
+            raise ValueError(f'{label}: enabled conflicts with explicit state')
         branch = validate_branch(entry.get("branch", "main"))
         exclude = validate_exclusions(entry.get("exclude", []))
         require_visual = entry.get("require_visual", True)
         if type(require_visual) is not bool:
             raise ValueError(f"{label}: require_visual must be true or false")
-        groups.append(Group(slug, repository, branch, entry["enabled"], exclude, require_visual))
+        groups.append(Group(slug, repository, branch, enabled, exclude, require_visual, state))
         slugs.add(slug)
         repositories.add(repository.casefold())
     return groups

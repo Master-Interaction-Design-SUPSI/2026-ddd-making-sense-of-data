@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>DDD — Entry editor</title>
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body>
+  <header><h1>Entry editor</h1><a href="../">Course site ↗</a></header>
+  <main>
+    <section aria-label="Editing controls">
+      <label for="group">Group</label><select id="group" disabled></select>
+      <button id="open" disabled>Open last published version</button>
+      <button id="template" disabled>Start from template</button>
+      <p id="base"></p>
+      <p id="status" role="status">Loading editor…</p>
+      <label for="text">Entry Markdown</label>
+      <textarea id="text" spellcheck="true" disabled></textarea>
+      <div id="tools"><button data-insert="[[label|media/file.svg]]">Insert media</button><button data-insert="[[note|Your note]]">Insert note</button><button data-insert="[source](https://example.org)">Insert link</button></div>
+      <p id="save" role="status">Drafts are saved in this browser only.</p>
+      <button id="saved-download" hidden>Download saved browser text</button>
+      <button id="restore" hidden>Restore browser draft</button>
+      <button id="fallback-restore" hidden>Restore text-only backup instead</button><button id="discard" hidden>Discard browser draft</button>
+      <ul id="saved-files" aria-label="Saved attachments for reconciliation"></ul>
+      <label for="path">Attachment destination, including folders</label>
+      <input id="path" placeholder="media/new-image.png">
+      <label for="attachment">Choose a file</label><input type="file" id="attachment">
+      <button id="attach" disabled>Attach file</button>
+      <p>Use a new filename for replacements so the published text keeps working while you commit.</p>
+      <ul id="files"></ul>
+      <button id="check" disabled>Check and prepare GitHub steps</button>
+      <p id="validation" role="status"></p>
+      <ol id="steps"></ol>
+      <button id="download" disabled>Download text.md</button>
+      <button id="stale" disabled>Compare current GitHub text</button>
+      <p id="freshness"></p>
+      <details><summary>Current GitHub text for reconciliation</summary><pre id="current-text"></pre></details>
+      <p>Upload media, commit the text, then delete obsolete files. Each commit can be published independently. Refreshes are scheduled every ten minutes; publication may take longer.</p>
+    </section>
+    <section aria-label="Preview">
+      <label for="width">Preview width</label><select id="width"><option value="1280">1280 px</option><option value="390">390 px</option></select>
+      <p>Preview uses the course renderer. Local checks do not guarantee publication.</p>
+      <div class="preview-scroll"><iframe src="preview.html" title="Entry preview" id="preview"></iframe></div>
+    </section>
+  </main>
+  <script src="../static/vendor/marked.min.js"></script>
+  <script src="../static/annotations.js"></script>
+  <script src="../static/references.js"></script>
+  <script src="protocol.js"></script>
+  <script src="model.js"></script>
+  <script src="draft-store.js"></script>
+  <script src="editor.js"></script>
+</body>
+</html>

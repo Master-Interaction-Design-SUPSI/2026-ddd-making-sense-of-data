@@ -5,11 +5,12 @@ import json
 import re
 import subprocess
 import tempfile
+import time
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from urllib.parse import quote, unquote, urlsplit
+from urllib.parse import quote
 
-from content_contract import select_content_files, validate_visual
+from content_contract import CONTRACT, select_content_files, validate_visual
 from github_content import GitHubClient, ImportFailure
 
 
@@ -87,34 +88,16 @@ def validate_svg_style(value, name):
 
 
 def validate_references(text, files):
+    payload = json.dumps({"text": text, "files": list(files), "schemes": CONTRACT["reference_schemes"]})
     try:
-        checked = subprocess.run(["node", str(LINK_CHECKER)], input=text, text=True,
-                                 capture_output=True, timeout=10, check=True)
+        subprocess.run(["node", str(LINK_CHECKER), "--validate"], input=payload, text=True,
+                       capture_output=True, timeout=10, check=True)
     except subprocess.TimeoutExpired as error:
         raise ValueError("text.md: link validation exceeded 10 seconds; simplify the text") from error
     except subprocess.CalledProcessError as error:
+        if error.returncode == 2 and error.stderr:
+            raise ValueError("text.md: " + error.stderr.strip()) from error
         raise RuntimeError("Text validator failed; check the local Node/Markdown setup") from error
-    try:
-        references = json.loads(checked.stdout)
-    except ValueError as error:
-        raise RuntimeError("Text validator returned invalid JSON") from error
-    if not isinstance(references, list):
-        raise RuntimeError("Text validator did not return a reference list")
-    for target in references:
-        if not isinstance(target, str) or any(ord(c) < 32 or ord(c) == 127 for c in target) or "\\" in target:
-            raise ValueError("text.md: invalid link or media reference")
-        parsed = urlsplit(target)
-        if parsed.scheme:
-            if parsed.scheme.lower() not in {"https", "http", "mailto"}:
-                raise ValueError(f"text.md: unsupported URL scheme in {target!r}")
-            continue
-        if target.startswith("#"):
-            continue
-        name = unquote(parsed.path)
-        if name.startswith("./"):
-            name = name[2:]
-        if parsed.netloc or name.startswith("/") or "\\" in name or any(p in {"", ".", ".."} for p in name.split("/")) or name not in files:
-            raise ValueError(f"text.md: {target!r} must reference an imported file inside this group")
 
 
 def validate_content(folder, files, *, require_visual=True):
@@ -127,7 +110,7 @@ def validate_content(folder, files, *, require_visual=True):
     validate_references(text, files)
 
 
-def import_group(group, destination, client, result):
+def import_group(group, destination, client, result, *, previous=None, allow_unchanged=False):
     repository = "/repos/" + quote(group.repository, safe="/")
     metadata = client.json(repository)
     if metadata.get("private") is not False or metadata.get("visibility") != "public":
@@ -143,16 +126,34 @@ def import_group(group, destination, client, result):
     if commit_data["sha"] != commit:
         raise ImportFailure("invalid_response", "GitHub returned a different commit")
     tree_sha = object_sha(commit_data["tree"]["sha"])
+    result['tree'] = tree_sha
     tree = client.json(repository + "/git/trees/" + tree_sha + "?recursive=1")
     if tree["sha"] != tree_sha:
         raise ImportFailure("invalid_response", "GitHub returned a different tree")
     files = validate_tree(tree, group.exclude, require_visual=group.require_visual)
     result["excluded_files"] = sorted(node["path"] for node in tree["tree"]
                                       if node["path"] in group.exclude)
+    result['excluded_blobs'] = {name: next((node.get('sha') for node in tree['tree']
+        if node['path'] == name and node.get('type') == 'blob'
+        and isinstance(node.get('sha'), str) and re.fullmatch(r'[0-9a-f]{40}', node['sha'])), None)
+        for name in group.exclude}
+    base = previous.groups.get(group.slug) if previous else None
+    same_identity = (base and base["repository"] == group.repository and base["branch"] == group.branch)
+    if (allow_unchanged and same_identity and base["commit"] == commit
+            and base.get("require_visual", True) == group.require_visual
+            and (not hasattr(previous, 'can_skip') or previous.can_skip(group, files))
+            and {name: node["size"] for name, node in files.items()}
+            == {name: record["size"] for name, record in base["files"].items()}):
+        result.update(status="unchanged", files=list(files))
+        return
     with tempfile.TemporaryDirectory(prefix=".candidate-", dir=destination) as temporary:
         candidate = Path(temporary)
         for name, node in files.items():
-            data = client.get(repository + "/git/blobs/" + node["sha"], node["size"], raw=True)
+            data = previous.reuse(group.slug, name, node) if same_identity else None
+            if data is None:
+                data = client.raw_file(group.repository, commit, name, node["size"])
+            else:
+                result["reused_bytes"] = result.get("reused_bytes", 0) + len(data)
             digest = hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
             if len(data) != node["size"] or digest != node["sha"]:
                 raise ImportFailure("invalid_blob", f"{name}: downloaded bytes do not match the source commit")
@@ -167,10 +168,12 @@ def import_group(group, destination, client, result):
     result.update(status="imported", files=list(files))
 
 
-def import_groups(groups, destination, client_factory=GitHubClient):
+def import_groups(groups, destination, client_factory=GitHubClient, *, previous=None, allow_unchanged=False):
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
     results = []
+    deadline = time.monotonic() + 15 * 60
+    api_budget = {"requests": 0, "maximum": 100, "remaining": None}
     for group in groups:
         result = dict(slug=group.slug, repository=group.repository, branch=group.branch,
                       commit=None, status="disabled" if not group.enabled else "failed")
@@ -183,7 +186,16 @@ def import_groups(groups, destination, client_factory=GitHubClient):
             target = destination / group.slug
             if target.exists() or target.is_symlink():
                 raise ValueError(f"{group.slug}: staging destination already exists; use a fresh directory")
-            import_group(group, destination, client_factory(), result)
+            started = time.monotonic()
+            client = client_factory()
+            client.api_budget = api_budget
+            client.deadline = min(client.deadline, deadline)
+            if previous:
+                previous.deadline = client.deadline
+            try:
+                import_group(group, destination, client, result, previous=previous, allow_unchanged=allow_unchanged)
+            finally:
+                result["transport"] = {**client.metrics, "elapsed_seconds": round(time.monotonic() - started, 3)}
         except ImportFailure as error:
             result.update(error_code=error.code, error=str(error))
         except (ValueError, ET.ParseError) as error:

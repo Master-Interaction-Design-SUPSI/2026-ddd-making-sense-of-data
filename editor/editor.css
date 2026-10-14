@@ -1,0 +1,20 @@
+:root { color-scheme: light; font-family: system-ui, sans-serif; color: oklch(20% 0 0); background: oklch(98% 0 0); accent-color: oklch(45% .07 170); }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 1rem; }
+header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; }
+h1 { margin-block: .5rem 1rem; font-size: 1.5rem; }
+main { display: grid; grid-template-columns: minmax(18rem, 1fr) minmax(0, 2fr); gap: 2rem; }
+section { min-inline-size: 0; }
+label { display: block; margin-block: 1rem .4rem; }
+input, select, textarea, button { font: inherit; max-inline-size: 100%; }
+input, select, textarea { padding: .5rem; }
+textarea { inline-size: 100%; min-block-size: 45dvh; font-family: ui-monospace, monospace; font-size: .9rem; line-height: 1.5; }
+button { padding: .5rem .75rem; margin-block: .3rem; cursor: pointer; }
+button:disabled { cursor: default; }
+:focus-visible { outline: 3px solid oklch(45% .07 170); outline-offset: 3px; }
+p, li { line-height: 1.5; overflow-wrap: anywhere; }
+pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+.preview-scroll { overflow: auto; max-inline-size: 100%; border: 1px solid oklch(75% 0 0); }
+iframe { display: block; inline-size: 1280px; block-size: 80dvh; border: 0; }
+[hidden] { display: none !important; }
+@media (width < 800px) { main { grid-template-columns: minmax(0, 1fr); } }

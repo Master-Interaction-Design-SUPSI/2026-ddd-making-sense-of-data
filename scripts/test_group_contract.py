@@ -34,6 +34,18 @@ class GroupContractTests(unittest.TestCase):
         self.assertEqual(group.branch, "main")
         self.assertTrue(group.enabled)
 
+    def test_explicit_states_migrate_enabled_without_ambiguous_source_reads(self):
+        for state in ('live', 'frozen', 'hidden'):
+            entry = self.group(state=state)
+            entry.pop('enabled')
+            group = self.load([entry])[0]
+            self.assertEqual(group.publication_state, state)
+            self.assertEqual(group.enabled, state == 'live')
+        self.assertEqual(self.load([self.group(enabled=False)])[0].publication_state, 'hidden')
+        for state in ('unknown', True, ['live']):
+            with self.assertRaises(ValueError): self.load([self.group(state=state)])
+        with self.assertRaises(ValueError): self.load([self.group(state='frozen', enabled=True)])
+
     def test_optional_media_exclusions(self):
         group = self.load([self.group(exclude=["media/12.mov"])])[0]
         self.assertEqual(group.exclude, ("media/12.mov",))
@@ -135,7 +147,7 @@ class GroupContractTests(unittest.TestCase):
         self.assertEqual(len(select_content_files(files)), 100)
         with self.assertRaisesRegex(ValueError, "100 files"):
             select_content_files({**files, "media/extra.png": 1})
-        with self.assertRaisesRegex(ValueError, "100 MiB"):
+        with self.assertRaisesRegex(ValueError, "50 MiB"):
             select_content_files({"text.md": 1, "visual.svg": 1, **{f"{n}.mp4": MAX_MEDIA_BYTES for n in range(5)}})
         for size in (-1, True, "10"):
             with self.subTest(size=size), self.assertRaisesRegex(ValueError, "invalid file size"):

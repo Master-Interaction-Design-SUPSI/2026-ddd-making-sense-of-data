@@ -159,3 +159,18 @@ test('ended and unavailable media remain paused with a usable retry control', as
   assert.match(state.status, /Could not load/);
   assert.equal(state.playing, false);
 });
+
+test('disposing a controller cancels pending play and prevents remounting removed media', async () => {
+  const video = new Video();
+  const pending = deferred();
+  video.playAction = () => pending.promise;
+  const controller = createVideoController(video, () => {});
+  controller.setActive(true);
+  controller.dispose();
+  pending.resolve();
+  await settle();
+  assert.equal(video.paused, true);
+  controller.setActive(true);
+  controller.toggle();
+  assert.equal(video.attempts.length, 1);
+});
