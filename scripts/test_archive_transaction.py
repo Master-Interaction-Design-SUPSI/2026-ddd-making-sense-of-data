@@ -96,6 +96,39 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(report['transport']['archive_read_bytes'], 0)
         self.assertGreater(report['transport']['rest_requests'], 0)
 
+    def test_idle_allows_hidden_legacy_snapshot_when_live_snapshot_is_current_v2(self):
+        self.prepare()
+        current = ArchiveSnapshot(self.candidate, 'b' * 40)
+        mixed = self.fixture.workspace / 'mixed-archive'
+        mixed.mkdir()
+        groups = copy.deepcopy(current.groups)
+        groups['beta'] = copy.deepcopy(self.previous.groups['beta'])
+        groups['beta']['state'] = 'hidden'
+        (mixed / 'publication.json').write_bytes(encode_archive(groups))
+        shutil.copytree(self.candidate / 'alpha', mixed / 'alpha')
+        shutil.copytree(self.snapshot / 'beta', mixed / 'beta')
+        self.previous = ArchiveSnapshot(mixed, 'c' * 40)
+        registry = [self.registry[0], replace(self.registry[1], enabled=False, state='hidden')]
+        destination = self.fixture.workspace / 'mixed-idle'
+        with patch.object(archive_transaction, 'projected_site', side_effect=AssertionError('idle must not project')), \
+                patch.object(build_site, 'build_archive', side_effect=AssertionError('idle must not build')):
+            report = self.prepare(registry, unchanged=True, idle=True, destination=destination)
+        self.assertTrue(report['idle'])
+        self.assertFalse(destination.exists())
+        self.assertEqual(report['transport']['archive_read_bytes'], 0)
+        self.assertEqual([row['publication_status'] for row in report['groups']], ['unchanged', 'hidden'])
+        self.assertIsNone(report['groups'][1]['selected_source'])
+
+    def test_live_v1_snapshot_still_runs_current_policy_validation_before_idle_can_be_considered(self):
+        destination = self.fixture.workspace / 'v1-revalidated'
+        report = self.prepare(unchanged=True, idle=True, destination=destination)
+        candidate = ArchiveSnapshot(destination, self.previous.commit)
+        self.assertFalse(report['idle'])
+        self.assertEqual([row['status'] for row in report['groups']], ['imported', 'imported'])
+        for entry in candidate.groups.values():
+            self.assertEqual(entry['snapshot']['contract_version'], 2)
+            self.assertIsNotNone(entry['snapshot']['tree'])
+
     def test_state_change_disables_idle_and_frozen_snapshot_is_retained(self):
         self.prepare()
         self.previous = ArchiveSnapshot(self.candidate, 'b' * 40)
