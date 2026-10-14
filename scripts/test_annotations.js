@@ -52,8 +52,9 @@ test('bibliography starts open and resource references stay links rather than pl
     if (target !== 'A written reference') assert.match(html, /<a href=/);
   }
   const note = context.renderMarkdown('[[note|A detail]]');
-  assert.match(note, /aria-expanded="false"/);
-  assert.match(note, / hidden>/);
+  assert.match(note, /annotation-note annotation-style-italic open/);
+  assert.match(note, /aria-expanded="true"/);
+  assert.doesNotMatch(note, / hidden>/);
 });
 
 test('explicit appearance overrides defaults and preserves legacy markers and color wrappers', () => {
@@ -121,7 +122,7 @@ test('wrapped annotations, links, media and escaped HTML survive prose normaliza
   const html = context.renderMarkdown('A [[wrapped\nlabel|A wrapped\nnote|type=note]]\n\nwith [a\nlink](https://example.org/data?q=1&v=2) and\n![detail](media/example-detail.svg)\n\n[[audio|media/example-tone.mp3]]\n\n[[video|media/example-motion.mp4]]. <script>bad()</script>');
   assert.equal((html.match(/<p>/g) || []).length, 1);
   assert.match(html, /wrapped label<span/);
-  assert.match(html, /hidden>A wrapped note<\/span>/);
+  assert.match(html, /annotation-content annotation-text">A wrapped note<\/span>/);
   assert.match(html, /href="https:\/\/example.org\/data\?q=1&amp;v=2">a link<\/a>/);
   assert.match(html, /src="media\/example-detail.svg"/);
   assert.match(html, /src="media\/example-tone.mp3"/);

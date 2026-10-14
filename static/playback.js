@@ -35,7 +35,7 @@
         if (request !== generation) return;
         pending = false;
         if (automatic) autoplayBlocked = true;
-        status = error?.name === "NotAllowedError" ? "Press Play to start." : "Could not play this video.";
+        status = error?.name === "NotAllowedError" ? "Automatic playback is unavailable." : "Could not play this video.";
       }
       update();
     }
@@ -96,20 +96,10 @@
       wrapper.className = "inline-playback";
       media.replaceWith(wrapper);
       wrapper.append(media);
-      const controls = document.createElement("span");
-      controls.className = "playback-controls";
-      for (const [action, text] of [["play", "Play"], ["sound", "Sound"]]) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.dataset.action = action;
-        button.textContent = text;
-        button.setAttribute("aria-label", `${text}: ${name}`);
-        controls.append(button);
-      }
       const status = document.createElement("span");
       status.className = "playback-status";
       status.setAttribute("role", "status");
-      wrapper.append(controls, status);
+      wrapper.append(status);
     }
     // External players are only loaded when their annotation is revealed.
     for (const player of textEl.querySelectorAll("iframe[src]")) {
@@ -123,21 +113,10 @@
     const allowAutoplay = !matchMedia("(prefers-reduced-motion: reduce)").matches;
     for (const wrapper of document.querySelectorAll(".inline-playback")) {
       const video = wrapper.querySelector("video");
-      const play = wrapper.querySelector('[data-action="play"]');
-      const sound = wrapper.querySelector('[data-action="sound"]');
-      const name = video.getAttribute("aria-label");
       const controller = createVideoController(video, state => {
-        const action = state.playing || state.pending ? "Pause" : "Play";
-        play.textContent = action;
-        play.setAttribute("aria-label", `${action}: ${name}`);
-        sound.textContent = state.muted ? "Sound" : "Mute";
-        sound.setAttribute("aria-label", `${state.muted ? "Enable sound" : "Mute"}: ${name}`);
-        sound.setAttribute("aria-pressed", String(!state.muted));
         wrapper.querySelector(".playback-status").textContent = state.status;
       }, allowAutoplay);
       videos.set(video, controller);
-      play.addEventListener("click", () => { controller.setActive(isActive(video)); controller.toggle(); });
-      sound.addEventListener("click", controller.toggleSound);
     }
     const media = [...document.querySelectorAll(".entry-text audio, .entry-text video, .entry-text iframe[data-player-src]")];
 

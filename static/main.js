@@ -73,6 +73,7 @@ function expandAnnotations(src) {
     const { label, target, resource, type, style, color, marker } = annotation;
     if (!annotation.valid || (color && !CSS.supports("color", color))) return annotation.source;
     const bibliography = type === "bibliography";
+    const open = bibliography || type === "note";
     let content = target;
     if (resource) content = bibliography ? linkHtml(target) : resourceHtml(target);
     else if (type === "quote") content = `<q>${target}</q>`;
@@ -80,11 +81,11 @@ function expandAnnotations(src) {
     const glyph = type === "note" ? `&#123;${esc(mark)}&#125;` : type === "bibliography" ? `(${esc(mark)})` : esc(mark);
     const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
     return (
-      `<span class="annotation annotation-${type} annotation-style-${style}${bibliography ? " open" : ""}"${appearance}>` +
-      `<button type="button" class="annotation-toggle" aria-expanded="${bibliography}">` +
+      `<span class="annotation annotation-${type} annotation-style-${style}${open ? " open" : ""}"${appearance}>` +
+      `<button type="button" class="annotation-toggle" aria-expanded="${open}">` +
       `${label}<span class="annotation-marker" aria-hidden="true">${glyph}</span>` +
       `</button>` +
-      `<span class="annotation-content${resource ? "" : " annotation-text"}"${bibliography ? "" : " hidden"}>${content}</span>` +
+      `<span class="annotation-content${resource ? "" : " annotation-text"}"${open ? "" : " hidden"}>${content}</span>` +
       `</span>`
     );
   });

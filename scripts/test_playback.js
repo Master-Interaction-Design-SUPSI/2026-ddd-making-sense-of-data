@@ -40,7 +40,7 @@ test('visibility starts muted playback and leaving visibility pauses it', async 
   assert.equal(video.paused, true);
 });
 
-test('refused autoplay exposes Play, avoids retry loops and permits manual playback', async () => {
+test('refused autoplay reports its status, avoids retry loops and permits controller playback', async () => {
   const video = new Video();
   let state;
   video.playAction = () => Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' }));
@@ -49,7 +49,7 @@ test('refused autoplay exposes Play, avoids retry loops and permits manual playb
   await settle();
   assert.equal(state.playing, false);
   assert.equal(state.pending, false);
-  assert.match(state.status, /Press Play/);
+  assert.match(state.status, /Automatic playback is unavailable/);
   controller.setActive(false);
   controller.setActive(true);
   assert.equal(video.attempts.length, 1);
