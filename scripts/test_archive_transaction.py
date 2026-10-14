@@ -33,9 +33,10 @@ class TransactionTests(unittest.TestCase):
         self.previous = ArchiveSnapshot(self.snapshot, 'a' * 40)
         self.candidate = self.fixture.workspace / 'candidate'
 
-    def prepare(self, registry=None, unchanged=False):
-        return archive_transaction.prepare_archive(registry or self.registry, self.previous, self.candidate,
-            client_factory=self.fixture.api.client, allow_unchanged=unchanged)
+    def prepare(self, registry=None, unchanged=False, idle=False, destination=None):
+        destination = destination or self.candidate
+        return archive_transaction.prepare_archive(registry or self.registry, self.previous, destination,
+            client_factory=self.fixture.api.client, allow_unchanged=unchanged, allow_idle=idle)
 
     def test_valid_update_and_failed_source_retain_accepted_bytes_without_pages(self):
         self.fixture.update('alpha', b'new alpha')
@@ -77,6 +78,47 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(report['transport']['raw_requests'], 0)
         self.assertEqual([row['publication_status'] for row in report['groups']], ['unchanged', 'unchanged'])
         self.assertEqual((second / 'publication.json').read_bytes(), self.previous.payload)
+
+    def test_idle_current_v2_checks_source_metadata_without_building_or_reading_archive_blobs(self):
+        self.prepare()
+        self.previous = ArchiveSnapshot(self.candidate, 'b' * 40)
+        destination = self.fixture.workspace / 'idle'
+        with patch.object(archive_transaction, 'projected_site', side_effect=AssertionError('idle must not project')), \
+                patch.object(build_site, 'build_archive', side_effect=AssertionError('idle must not build')):
+            report = self.prepare(unchanged=True, idle=True, destination=destination)
+        self.assertTrue(report['idle'])
+        self.assertFalse(destination.exists())
+        self.assertEqual(report['manifest_sha256'], hashlib.sha256(self.previous.payload).hexdigest())
+        self.assertEqual([row['publication_status'] for row in report['groups']], ['unchanged', 'unchanged'])
+        self.assertEqual([row['selected_source']['repository'] for row in report['groups']],
+                         ['course/alpha', 'course/beta'])
+        self.assertEqual(report['transport']['raw_requests'], 0)
+        self.assertEqual(report['transport']['archive_read_bytes'], 0)
+        self.assertGreater(report['transport']['rest_requests'], 0)
+
+    def test_state_change_disables_idle_and_frozen_snapshot_is_retained(self):
+        self.prepare()
+        self.previous = ArchiveSnapshot(self.candidate, 'b' * 40)
+        destination = self.fixture.workspace / 'state-change'
+        registry = [replace(self.registry[0], enabled=False, state='frozen'), self.registry[1]]
+        report = self.prepare(registry, unchanged=True, idle=True, destination=destination)
+        candidate = ArchiveSnapshot(destination, self.previous.commit)
+        self.assertFalse(report['idle'])
+        self.assertEqual(report['groups'][0]['publication_status'], 'frozen')
+        self.assertEqual(candidate.groups['alpha']['snapshot'], self.previous.groups['alpha']['snapshot'])
+
+    def test_failed_live_source_check_disables_idle_and_retains_accepted_bytes(self):
+        self.prepare()
+        self.previous = ArchiveSnapshot(self.candidate, 'b' * 40)
+        self.fixture.update('alpha', b'bad live update', b'broken SVG')
+        destination = self.fixture.workspace / 'failed-source'
+        report = self.prepare(unchanged=True, idle=True, destination=destination)
+        candidate = ArchiveSnapshot(destination, self.previous.commit)
+        self.assertFalse(report['idle'])
+        alpha = next(row for row in report['groups'] if row['slug'] == 'alpha')
+        self.assertEqual(alpha['publication_status'], 'retained')
+        for name in self.previous.groups['alpha']['snapshot']['files']:
+            self.assertEqual(candidate.read_file('alpha', name), self.previous.read_file('alpha', name))
 
     def test_writer_checks_identity_and_hidden_snapshots_beyond_transfer_integrity(self):
         registry = [replace(self.registry[0], enabled=False, state='hidden'), self.registry[1]]

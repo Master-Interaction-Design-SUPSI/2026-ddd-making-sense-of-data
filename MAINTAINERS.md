@@ -13,7 +13,7 @@ Scope: course site, registry, import, publication, editor, archive. Revision: 20
 | Published | `example` (local); `ddd-abstract` from `ginevraterenghi/ddd-abstract` `3a8f717`, 19 files, 22,466,039 B. |
 | Hidden | `dust` (`2026-ddd-pilot-alpha`), `pilot-beta` (`2026-ddd-pilot-beta`). Sources intact. |
 | V2 | Branch `v2`: release and archive cutover authorized on 2026-10-14. Switches remain off until protected refs, verified V1 capture and seed comparison pass. |
-| Settings | Issues disabled. `main` unprotected: ruleset removed (maintainer-confirmed); `protected: false` (read-only check, 2026-10-14). |
+| Settings | Issues disabled. V2 rulesets require PRs and the Actions `validate` check on `main`; `main` and `student-work` reject deletion/non-fast-forward updates. No bypass actors. |
 | Checkpoint | `.scratch/tickets/2026-10-14_ddd_editor-v2_handoff.md`; scope `…_plan_final.md`; rationale `…_review.md`. Local, Git-ignored. |
 
 The maintainer authorized the V2 commit, deployment and archive cutover on 2026-10-14. Local tests alone do not establish live acceptance.
@@ -363,7 +363,7 @@ Acceptance, ordinary student account (never an admin session): commit to own `te
 
 ### 11.4 Course repository
 
-Review every PR to `main`, including the full **Files changed** list. No ruleset exists: review is unenforced. Required: `validate` as required check (not set); `github-pages` environment restricted to `main`. PR validation is offline, read-only, fixture-based.
+Review every PR to `main`, including the full **Files changed** list. The active V2 ruleset requires a PR and the GitHub Actions `validate` check, with an up-to-date branch and resolved review threads. Approval count is zero; no bypass actors are configured. `main` and `student-work` reject deletion and non-fast-forward updates. The `github-pages` environment is restricted to `main`. PR validation is offline, read-only, fixture-based.
 
 ## 12. Recovery
 
@@ -427,13 +427,13 @@ Review `candidate/` and `rebind.json`. Include the exact spec as `.github/archiv
 Set intended visible groups to `frozen` through the reviewed registry change; leave hidden groups hidden. Publish and verify that frozen release first. In a clean checkout of its exact code commit/tree:
 
 ```sh
-python3 scripts/archive_freeze.py prepare --release <verified-v2-release.json> --archive-snapshot <verified-archive-directory> --archive-commit <full-archive-sha> --main-commit <full-main-sha> --main-tree <full-main-tree-sha> --out <new-freeze-record.json>
-python3 scripts/archive_freeze.py reproduce --record <freeze-record.json> --archive-snapshot <verified-archive-directory> --archive-commit <full-archive-sha> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
-python3 scripts/archive_freeze.py create-local-tag --repository <isolated-archive.git> --record <freeze-record.json>
-python3 scripts/archive_freeze.py verify-local-tag --repository <isolated-archive.git>
+python3 scripts/archive_freeze.py prepare --release <verified-v2-release.json> --repository <isolated-archive.git> --archive-commit <full-archive-sha> --main-commit <full-main-sha> --main-tree <full-main-tree-sha> --out <new-freeze-record.json>
+python3 scripts/archive_freeze.py reproduce --record <freeze-record.json> --repository <isolated-archive.git> --archive-commit <full-archive-sha> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
+python3 scripts/archive_freeze.py create-local-tag --repository <isolated-archive.git> --record <freeze-record.json> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
+python3 scripts/archive_freeze.py verify-local-tag --repository <isolated-archive.git> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
 ```
 
-The annotated `final-2026` tag identifies the exact archive commit and the matching main commit/tree, both manifest digests and site digest. Local creation refuses an existing tag; reproduction reads no student repositories, Pages or media caches. Tag publication/protection requires the reviewed authorized release procedure and live acceptance. The tag covers included archived bytes, not excluded originals or external services.
+The annotated `final-2026` tag identifies the exact archive commit and the matching main commit/tree, both manifest digests and site digest. Every command checks the clean code checkout; archive bytes are materialized from the pinned local Git commit. Tag verification reproduces the full release and rejects altered annotation digests/code pins. Local creation refuses an existing tag; reproduction reads no student repositories, Pages or media caches. Tag publication/protection requires the reviewed authorized release procedure and live acceptance. The tag covers included archived bytes, not excluded originals or external services.
 
 ### 12.6 Unpublishing and history requests
 
@@ -478,7 +478,7 @@ Dependency order:
 1. Review controller and workflow security against real Actions semantics: effective permissions, `main` pin, rerun artifact admission, concurrency, answers.
 2. Seed reuse is implemented: private temporary cache outside candidate authority, hash-checked reads, cleanup on success/failure and aggregate seed Pages metrics. Tests prove one download per distinct blob and corrupt-cache refetching.
 3. Controller API metrics now accumulate per command through sealed reports/build state, including prepare, accept, build, record, authorize and verify. Tests use fresh clients and check repeated checkpoints/nested authorization. Remaining: `archive_transfer_bytes` measures `.git/objects`, a proxy; measure near-limit cohorts, history growth, low quota, global deadline, writer transfer costs and cheaper idle exit.
-4. Migration: stale-seed reconciliation, V1 capture, shadow comparison, cutover. V1 rollback preserving V2 archive. Freeze tag and offline reproduction. Takedown procedure. Rebind migration.
+4. Migration tooling now includes stale-seed reconciliation with durable authority, full original V1 artifact capture/verification, byte-level seed comparison, reviewed exact-parent rebind and local freeze-tag/full-pair reproduction. Takedown/history instructions are documented. Remaining: actual compatible V1 artifact capture, reviewed cutover, rollback deployment controller/workflow and live rehearsal, protected tag publication and live rebind rehearsal.
 5. Chrome fidelity. Lifecycle, security, inventory and capacity matrix. Safari media. Keyboard and touch. Deployment races.
 6. Recheck live baseline read-only. Propose `main`, `student-work` and tag protections. Prove Actions actor policy in a disposable pilot before enabling writes.
 7. Two ordinary student-account pilots: edit, upload, delete, request. Source-loss, offline and rollback rehearsals. Enable Issues, label, UI policy and switches only on authorization. Hourly schedule only after pilot acceptance.

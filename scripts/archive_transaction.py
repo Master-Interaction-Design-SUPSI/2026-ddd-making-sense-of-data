@@ -70,7 +70,8 @@ def projected_site(folder):
     return identity | {'site_bytes': size}
 
 
-def prepare_archive(registry, previous, destination, *, client_factory=GitHubClient, allow_unchanged=False):
+def prepare_archive(registry, previous, destination, *, client_factory=GitHubClient, allow_unchanged=False,
+                    allow_idle=False):
     """Validate live updates, preserve every accepted snapshot, then check site budget."""
     destination = Path(destination)
     if destination.exists() or destination.is_symlink():
@@ -83,9 +84,35 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
         live_registry = [replace(group, enabled=group.publication_state == 'live') for group in registry]
         results = import_groups(live_registry, imported, client_factory=client_factory, previous=base,
                                 allow_unchanged=allow_unchanged)
+        by_slug = {result['slug']: result for result in results}
+        idle_eligible = (allow_idle
+            and encode_archive(groups) == previous.payload
+            and all(group.publication_state != 'live' or (
+                groups[group.slug]['snapshot']
+                and groups[group.slug]['snapshot']['contract_version'] == CONTRACT_VERSION
+                and groups[group.slug]['snapshot']['tree'] is not None) for group in registry)
+            and len(by_slug) == len(registry)
+            and all(by_slug.get(group.slug, {}).get('status') ==
+                    ('unchanged' if group.publication_state == 'live' else 'disabled')
+                    for group in registry))
+        if idle_eligible:
+            for result in results:
+                entry = groups[result['slug']]
+                state = entry['state']
+                result['publication_status'] = (state if state != 'live' and entry['snapshot'] else
+                    'hidden' if state == 'hidden' else 'skipped' if state != 'live' else 'unchanged')
+                selected = accepted_v1(entry)
+                result['selected_source'] = ({key: selected[key] for key in ('repository', 'branch', 'commit')}
+                                             if selected and state != 'hidden' else None)
+            removed = [{'slug': slug, 'reason': 'Registry row removed; archived snapshot retained as hidden'}
+                       for slug in previous.groups if slug not in {group.slug for group in registry}]
+            return {'groups': results, 'removed_groups': removed, 'expected_parent': previous.commit,
+                    'manifest_sha256': hashlib.sha256(previous.payload).hexdigest(),
+                    'projected_site': None, 'idle': True, 'transport': base.metrics | {
+                        key: sum(result.get('transport', {}).get(key, 0) for result in results)
+                        for key in ('rest_requests', 'raw_requests', 'rest_bytes', 'raw_bytes')}}
         staged = root / 'snapshot'
         staged.mkdir()
-        by_slug = {result['slug']: result for result in results}
         for slug, entry in groups.items():
             result = by_slug.get(slug)
             state = entry['state']
@@ -125,7 +152,7 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
                for slug in previous.groups if slug not in {group.slug for group in registry}]
     return {'groups': results, 'removed_groups': removed, 'expected_parent': previous.commit,
             'manifest_sha256': hashlib.sha256((destination / MANIFEST).read_bytes()).hexdigest(),
-            'projected_site': site, 'transport': base.metrics | {
+            'projected_site': site, 'idle': False, 'transport': base.metrics | {
                 key: sum(result.get('transport', {}).get(key, 0) for result in results)
                 for key in ('rest_requests', 'raw_requests', 'rest_bytes', 'raw_bytes')}}
 

@@ -339,6 +339,18 @@ class SplitPublisherTests(unittest.TestCase):
         controller.answer(self.api, result, checksum, self.records)
         self.assertEqual(self.api.issues[1]['state'], 'closed')
 
+    def test_idle_verified_pair_does_not_rebuild_site_on_a_clean_runner(self):
+        self.seed()
+        self.publish()
+        shutil.rmtree(self.fixture.output)
+        os.environ['GITHUB_RUN_ID'] = '67'
+        with patch.object(archive_transaction, 'projected_site', side_effect=AssertionError('idle must not build')):
+            result, checksum = self.publish()
+        _, _, report = controller.load(result, checksum, {'result'})
+        self.assertEqual(controller.state()['data']['mode'], 'unchanged')
+        self.assertEqual(report['transport']['import']['archive_read_bytes'], 0)
+        self.assertFalse(self.fixture.output.exists())
+
     def test_acceptance_survives_missing_build_record_before_first_cutover(self):
         self.seed()
         prepared, digest = self.preparation()

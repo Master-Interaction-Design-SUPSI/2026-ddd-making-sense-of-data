@@ -17,6 +17,7 @@ from pathlib import Path
 import archive_git
 import archive_release
 import archive_rebind
+import publish_site as legacy_publication
 import build_site
 from archive_state import ArchiveSnapshot, MAX_TRANSFER_BYTES, encode_archive, reconcile_v1_seed, seed_v1, unpack_snapshot
 from archive_transaction import admit_candidate, pack_snapshot, prepare_archive
@@ -411,11 +412,20 @@ def prepare(records, url, admission, checksum, destination):
                 return seal(destination, 'prepared', data, files)
             result = prepare_archive(registry(), previous, root / 'candidate',
                                      allow_unchanged=bool(latest and latest['payload']['version'] == 2
-                                         and latest['payload']['main_commit'] == context['main_commit']))
+                                         and latest['payload']['main_commit'] == context['main_commit']),
+                                     allow_idle=bool(verified and verified['payload']['version'] == 2
+                                         and verified['payload']['main_commit'] == context['main_commit']
+                                         and verified['payload']['main_tree'] == context['main_tree']
+                                         and verified['payload']['archive_commit'] == previous.commit
+                                         and legacy_publication.worktree_clean()))
             report['groups'] = result['groups']
             report['removed_groups'] = result['removed_groups']
             report['transport']['import'] = result['transport']
             data['source_checked'] = True
+            if result.get('idle'):
+                data.update(mode='unchanged', archive_commit=previous.commit)
+                files['report.json'] = encode(report)
+                return seal(destination, 'prepared', data, files)
             snapshot = ArchiveSnapshot(root / 'candidate', previous.commit)
             if (snapshot.payload == previous.payload and latest and latest['payload']['version'] == 2
                     and latest['payload']['main_commit'] == context['main_commit']
