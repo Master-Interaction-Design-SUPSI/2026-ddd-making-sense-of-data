@@ -333,22 +333,27 @@ main {
 
 #image-preview {
   position: fixed;
-  z-index: 0;
-  inset: calc(var(--u) * 3) 1.25vw auto 13.75vw;
-  block-size: min(50vh, 360px);
+  z-index: 20;
   pointer-events: none;
+  background: var(--paper);
 }
 
-#image-preview img {
+#image-preview img,
+#image-preview video {
+  display: block;
   inline-size: 100%;
   block-size: 100%;
   object-fit: contain;
-  opacity: 0.12;
+  opacity: 1;
+}
+
+#image-preview [hidden] {
+  display: none;
 }
 
 #image-preview-close {
   position: fixed;
-  z-index: 9;
+  z-index: 21;
   inset-block-end: var(--u);
   inset-inline-end: 1.25vw;
   min-block-size: 44px;
@@ -401,7 +406,7 @@ main {
 }
 
 .annotation-marker {
-  margin-inline-start: 0.25em;
+  margin-inline-start: 0;
   text-decoration: none;
   display: inline-block;
   font-style: normal;
@@ -466,14 +471,6 @@ main {
   color: var(--annotation-color, var(--annotation-default));
 }
 
-.annotation-note .annotation-text::before {
-  content: " {";
-}
-
-.annotation-note .annotation-text::after {
-  content: "}";
-}
-
 .annotation-bibliography {
   --annotation-default: #000;
   --annotation-color: #000;
@@ -485,14 +482,6 @@ main {
   width: auto;
   background: none;
   color: #000;
-}
-
-.annotation-bibliography .annotation-content::before {
-  content: " (";
-}
-
-.annotation-bibliography .annotation-content::after {
-  content: ")";
 }
 
 .annotation-quote .annotation-text::before {
@@ -659,10 +648,6 @@ body.show-grid::after {
     padding: var(--u);
   }
 
-  #image-preview {
-    inset-inline: var(--u);
-  }
-
   .entry-visual {
     height: round(down, calc((100vw - 2 * var(--u)) * 9 / 16), var(--u));
   }
@@ -670,4 +655,13 @@ body.show-grid::after {
   .entry-text iframe {
     height: round(down, calc((100vw - 2 * var(--u)) * 9 / 16), var(--u));
   }
+}
+
+.inline-playback:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
+.annotation-bibliography .annotation-content a::before {
+  content: none;
 }

@@ -11,9 +11,9 @@ You can add a [[short note|For a real entry, explain where your numbers came fro
 
 Replace this example with your group's own question, evidence and visual. Use the same filenames shown in this folder.
 
-Compare this wide detail ![Invented value 35](media/example-detail.svg) with this [[tall transparent detail|media/example-tall.svg]] inside a sentence. Hover or focus an image to preview it in the background; tap to open and tap again or choose Close image preview to dismiss.
+Compare this wide detail ![Invented value 35](media/example-detail.svg) with this [[tall transparent detail|media/example-tall.svg]] inside a sentence. Hover or focus an image to preview it in the background; tap to open and tap again or choose Close media preview to dismiss.
 
-Listen to a [[five-second demonstration tone|media/example-tone.mp3]] or watch the [[generated test pattern|media/example-motion.mp4]] within this sentence. The tone needs Play; the video tries to start muted when visible. Use Play/Pause and Sound/Mute to control it. These are generated demonstrations, not research evidence.
+Listen to a [[five-second demonstration tone|media/example-tone.mp3]] or watch the [[generated test pattern|media/example-motion.mp4]] within this sentence. The tone needs Play; the video tries to start muted when visible. Hover the video to enlarge it with sound, then move away to stop the preview. Hover the audio to play it; move away to pause. These are generated demonstrations, not research evidence.
 
 This sentence is wrapped in the source
 but continues on the same justified passage.

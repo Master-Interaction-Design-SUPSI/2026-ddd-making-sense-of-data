@@ -211,3 +211,7 @@ Bibliography references start expanded with matching `aria-expanded` state, rend
 ### Default note visibility and inline video controls
 
 Notes start expanded with matching `aria-expanded` state and retain their label toggle. Inline uploaded videos have no Play/Pause or Sound/Mute buttons; muted visibility-based playback and inactivity handling remain. Reduced motion and refused autoplay leave videos still. Audio keeps its native controls.
+
+### Annotation punctuation and anchored media previews
+
+Notes enclose their marker and content in braces; colored ✶ questions are also enclosed. Bibliography uses `(■ Author, year. Title)`. Image and video previews expand from their inline anchor, fit the viewport, and render opaque above the text. Video previews try playback with sound on hover and stop on pointer exit; inline audio also plays on hover and pauses on exit. Browser audio policies may require a click first. Escape, navigation, scrolling, resize, focus loss and page hiding dismiss previews.

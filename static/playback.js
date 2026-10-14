@@ -94,6 +94,11 @@
       media.playsInline = true;
       const wrapper = document.createElement("span");
       wrapper.className = "inline-playback";
+      wrapper.tabIndex = 0;
+      wrapper.setAttribute("role", "button");
+      wrapper.setAttribute("aria-label", `Preview video: ${name}`);
+      wrapper.setAttribute("aria-controls", "image-preview");
+      wrapper.setAttribute("aria-expanded", "false");
       media.replaceWith(wrapper);
       wrapper.append(media);
       const status = document.createElement("span");
@@ -120,6 +125,23 @@
     }
     const media = [...document.querySelectorAll(".entry-text audio, .entry-text video, .entry-text iframe[data-player-src]")];
 
+    const hoveredAudio = new Set();
+    document.addEventListener("pointerover", async event => {
+      const audio = event.target.closest(".inline-audio");
+      if (event.pointerType !== "mouse" || !audio || audio.contains(event.relatedTarget) || !isActive(audio)) return;
+      hoveredAudio.add(audio);
+      try {
+        await audio.play();
+        if (!hoveredAudio.has(audio) || !isActive(audio)) audio.pause();
+      } catch {
+        hoveredAudio.delete(audio);
+      }
+    });
+    document.addEventListener("pointerout", event => {
+      const audio = event.target.closest(".inline-audio");
+      if (audio && !audio.contains(event.relatedTarget) && hoveredAudio.delete(audio)) audio.pause();
+    });
+
     function isActive(element) {
       if (document.hidden || !document.getElementById("lightbox").hidden || element.closest("[hidden]")) return false;
       const rect = element.getBoundingClientRect();
@@ -141,6 +163,7 @@
     }
 
     function stopAll() {
+      hoveredAudio.clear();
       for (const element of media) {
         if (videos.has(element)) videos.get(element).setActive(false);
         else if (element.tagName === "AUDIO") element.pause();

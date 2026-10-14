@@ -77,16 +77,17 @@ function expandAnnotations(src) {
     let content = target;
     if (resource) content = bibliography ? linkHtml(target) : resourceHtml(target);
     else if (type === "quote") content = `<q>${target}</q>`;
-    const mark = marker || ({ note: "∗", bibliography: "■" }[type] || DEFAULT_MARKER);
-    const glyph = type === "note" ? `&#123;${esc(mark)}&#125;` : type === "bibliography" ? `(${esc(mark)})` : esc(mark);
+    const mark = marker || ({ note: DEFAULT_MARKER, bibliography: "■" }[type] || DEFAULT_MARKER);
+    const glyph = `<span class="annotation-marker" aria-hidden="true">${esc(mark)}</span>`;
     const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
+    const heading = bibliography ? `(${glyph} ${label}` : type === "note" ? label : `${label}${glyph}`;
+    if (bibliography) content = `. ${content}`;
+    if (type === "note") content = ` &#123;${glyph} ${content}&#125;`;
     return (
       `<span class="annotation annotation-${type} annotation-style-${style}${open ? " open" : ""}"${appearance}>` +
-      `<button type="button" class="annotation-toggle" aria-expanded="${open}">` +
-      `${label}<span class="annotation-marker" aria-hidden="true">${glyph}</span>` +
-      `</button>` +
+      `<button type="button" class="annotation-toggle" aria-expanded="${open}">${heading}</button>` +
       `<span class="annotation-content${resource ? "" : " annotation-text"}"${open ? "" : " hidden"}>${content}</span>` +
-      `</span>`
+      `${bibliography ? ")" : ""}</span>`
     );
   });
 }
@@ -162,7 +163,8 @@ function expandColours(src) {
     const next = out.replace(COLOUR_RE, (_, colour, text) => {
       const value = colour.trim();
       if (!CSS.supports("color", value)) return text;
-      return `<span class="tinted" style="color:${value};--annotation-color:${value}">${text}</span>`;
+      const content = /^\*?✶\s/.test(text.trim()) ? `&#123;${text}&#125;` : text;
+      return `<span class="tinted" style="color:${value};--annotation-color:${value}">${content}</span>`;
     });
     if (next === out) break;
     out = next;
@@ -441,6 +443,8 @@ function setupInteractions() {
 function setupImagePreviews() {
   const preview = document.getElementById("image-preview");
   const image = preview.querySelector("img");
+  const video = preview.querySelector("video");
+  let animation;
   const dismiss = document.getElementById("image-preview-close");
   let active = null;
   let mode = null;
@@ -448,41 +452,97 @@ function setupImagePreviews() {
   let previewScrollY = window.scrollY;
 
   function clear() {
-    if (active?.matches("button")) active.setAttribute("aria-expanded", "false");
+    if (active?.matches("button, .inline-playback")) active.setAttribute("aria-expanded", "false");
     active = null;
     mode = null;
     preview.hidden = true;
     dismiss.hidden = true;
+    animation?.cancel();
     image.removeAttribute("src");
+    video.pause();
+    video.removeAttribute("src");
+    video.load();
+  }
+
+  function reveal(media) {
+    if (!active) return;
+    const source = active.querySelector("img, video");
+    const width = media.naturalWidth || media.videoWidth;
+    const height = media.naturalHeight || media.videoHeight;
+    if (!width || !height) return;
+    const anchor = source.getBoundingClientRect();
+    const scale = Math.min((innerWidth - 32) / width, (innerHeight - 80) / height);
+    const w = width * scale;
+    const h = height * scale;
+    const x = anchor.left + anchor.width / 2;
+    const y = anchor.top + anchor.height / 2;
+    const left = Math.max(16, Math.min(x - w / 2, innerWidth - w - 16));
+    const top = Math.max(48, Math.min(y - h / 2, innerHeight - h - 16));
+    Object.assign(preview.style, {
+      width: `${w}px`, height: `${h}px`, left: `${left}px`, top: `${top}px`,
+      transformOrigin: `${x - left}px ${y - top}px`,
+    });
+    preview.hidden = false;
+    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      animation?.cancel();
+      animation = preview.animate([
+        { transform: `scale(${anchor.width / w}, ${anchor.height / h})` },
+        { transform: "scale(1)" },
+      ], { duration: 180, easing: "ease-out" });
+    }
+  }
+
+  async function playPreview() {
+    const target = active;
+    try {
+      await video.play();
+      if (!active || video.hidden) video.pause();
+    } catch {
+      // A hover cannot override a browser's audio activation policy.
+      if (active === target) target.querySelector(".playback-status").textContent = "Click the video to enable sound.";
+    }
   }
 
   function show(target, reason) {
     if (target !== active) {
       clear();
       active = target;
-      image.src = target.querySelector("img").src;
-      preview.hidden = !(image.complete && image.naturalWidth);
+      const source = target.querySelector("img, video");
+      image.hidden = source.tagName !== "IMG";
+      video.hidden = source.tagName !== "VIDEO";
+      if (source.tagName === "IMG") {
+        image.src = source.src;
+        if (image.complete && image.naturalWidth) reveal(image);
+      } else {
+        video.src = source.src;
+        video.currentTime = source.currentTime;
+        video.muted = false;
+        playPreview();
+      }
     }
+    if (reason === "pinned" && !video.hidden && video.paused) playPreview();
     mode = reason;
     previewScrollX = window.scrollX;
     previewScrollY = window.scrollY;
-    if (target.matches("button")) target.setAttribute("aria-expanded", "true");
+    if (target.matches("button, .inline-playback")) target.setAttribute("aria-expanded", "true");
     dismiss.hidden = reason !== "pinned";
   }
 
-  image.addEventListener("load", () => { if (active) preview.hidden = false; });
+  image.addEventListener("load", () => { if (active && !image.hidden) reveal(image); });
+  video.addEventListener("loadedmetadata", () => { if (active && !video.hidden) reveal(video); });
+  video.addEventListener("error", clear);
   image.addEventListener("error", clear);
   document.addEventListener("pointerover", event => {
-    const target = event.target.closest(".inline-image");
+    const target = event.target.closest(".inline-image, .inline-playback");
     if (event.pointerType !== "mouse" || !target || target.contains(event.relatedTarget)) return;
     if (target === active && mode === "pinned") return;
     show(target, "pointer");
   });
   document.addEventListener("pointerout", event => {
-    if (mode === "pointer" && active?.contains(event.target) && !active.contains(event.relatedTarget)) clear();
+    if ((mode === "pointer" || !video.hidden) && active?.contains(event.target) && !active.contains(event.relatedTarget)) clear();
   });
   document.addEventListener("focusin", event => {
-    const target = event.target.closest(".inline-image");
+    const target = event.target.closest(".inline-image, .inline-playback");
     if (target?.matches(":focus-visible")) show(target, "focus");
   });
   document.addEventListener("focusout", event => {
@@ -494,11 +554,11 @@ function setupImagePreviews() {
         !(mode === "pinned" && event.relatedTarget === dismiss)) clear();
   });
   document.addEventListener("click", event => {
-    const target = event.target.closest("button.inline-image");
+    const target = event.target.closest("button.inline-image, .inline-playback");
     if (target) {
       if (active === target && mode === "pinned") clear();
       else show(target, "pinned");
-    } else if (!event.target.closest(".inline-image")) clear();
+    } else if (!event.target.closest(".inline-image, .inline-playback")) clear();
   });
   dismiss.addEventListener("click", () => {
     const previous = active;
@@ -512,6 +572,14 @@ function setupImagePreviews() {
     if (window.scrollX !== previewScrollX || window.scrollY !== previewScrollY) clear();
   }, { passive: true });
   window.addEventListener("blur", clear);
+  window.addEventListener("resize", clear);
+  document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
+  document.addEventListener("keydown", event => {
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".inline-playback")) {
+      event.preventDefault();
+      event.target.click();
+    }
+  });
 }
 
 /* ---------- boot ---------- */

@@ -37,8 +37,8 @@ test('defaults distinguish notes, bibliography and unchanged media annotations',
   assert.equal(bibliography.resource, true);
   assert.equal(media.type, 'resource');
   assert.equal(media.style, 'inherit');
-  assert.match(context.renderMarkdown(note.source), /(?:\{|&#123;)∗(?:\}|&#125;)/);
-  assert.match(context.renderMarkdown(bibliography.source), /\(■\)/);
+  assert.match(context.renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
+  assert.match(context.renderMarkdown(bibliography.source), /\(<span class="annotation-marker" aria-hidden="true">■<\/span> source/);
   assert.match(context.renderMarkdown(media.source), /src="media\/sketch.svg"/);
 });
 
@@ -62,8 +62,8 @@ test('explicit appearance overrides defaults and preserves legacy markers and co
   assert.equal(note.style, 'normal');
   assert.equal(note.color, 'green');
   assert.match(context.renderMarkdown(note.source), /annotation-note annotation-style-normal/);
-  assert.match(context.renderMarkdown(note.source), /(?:\{|&#123;)∗(?:\}|&#125;)/);
-  assert.match(context.renderMarkdown('[[note|A detail|💡]]'), /(?:\{|&#123;)💡(?:\}|&#125;)/);
+  assert.match(context.renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
+  assert.match(context.renderMarkdown('[[note|A detail|💡]]'), /&#123;<span class="annotation-marker" aria-hidden="true">💡<\/span> A detail&#125;/);
   const nested = context.renderMarkdown('{crimson|[[note|A detail|color=green]]}');
   assert.match(nested, /class="tinted" style="color:crimson/);
   assert.match(nested, /annotation-note[^>]+color:green;--annotation-color:green/);
@@ -121,8 +121,8 @@ test('continuous prose preserves structural Markdown boundaries and code newline
 test('wrapped annotations, links, media and escaped HTML survive prose normalization', () => {
   const html = context.renderMarkdown('A [[wrapped\nlabel|A wrapped\nnote|type=note]]\n\nwith [a\nlink](https://example.org/data?q=1&v=2) and\n![detail](media/example-detail.svg)\n\n[[audio|media/example-tone.mp3]]\n\n[[video|media/example-motion.mp4]]. <script>bad()</script>');
   assert.equal((html.match(/<p>/g) || []).length, 1);
-  assert.match(html, /wrapped label<span/);
-  assert.match(html, /annotation-content annotation-text">A wrapped note<\/span>/);
+  assert.match(html, /wrapped label<\/button>/);
+  assert.match(html, /A wrapped note&#125;<\/span>/);
   assert.match(html, /href="https:\/\/example.org\/data\?q=1&amp;v=2">a link<\/a>/);
   assert.match(html, /src="media\/example-detail.svg"/);
   assert.match(html, /src="media\/example-tone.mp3"/);
@@ -139,4 +139,16 @@ test('LF and CRLF front matter stay outside the merged prose', () => {
     assert.equal(meta.authors, 'A, B');
     assert.equal(context.renderMarkdown(body), '<p>First words. Second words.</p>\n');
   }
+});
+
+
+test('reference punctuation surrounds marker, author and title together', () => {
+  const html = context.renderMarkdown('[[Parikka, 2015|A geology of media|type=bibliography]]');
+  const text = html.replace(/<[^>]*>/g, '').trim();
+  assert.equal(text, '(■ Parikka, 2015. A geology of media)');
+});
+
+test('colored starred questions are enclosed in braces', () => {
+  const html = context.renderMarkdown('{crimson|*✶ Where and how is AI computation performed?*}');
+  assert.match(html, /&#123;<em>✶ Where and how is AI computation performed\?<\/em>&#125;/);
 });
