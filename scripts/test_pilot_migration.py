@@ -38,6 +38,9 @@ class PilotMigrationTests(unittest.TestCase):
         self.backup.mkdir()
         shutil.copy2(COURSE_ROOT / "index.html", self.root / "index.html")
         shutil.copytree(COURSE_ROOT / "static", self.root / "static")
+        assets = Path(__file__).resolve().parent.parent
+        shutil.copytree(assets / "editor", self.root / "editor")
+        shutil.copytree(assets / "templates", self.root / "templates")
         self.registry()
         self.api = FixtureAPI()
         for module, attribute, value in (

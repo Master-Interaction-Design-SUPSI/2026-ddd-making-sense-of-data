@@ -1,0 +1,18 @@
+name: Request publication
+description: Check the committed work for a registered course group.
+title: "Publication request"
+labels: [publication-request]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Commit your media and text, then delete obsolete files before requesting publication.
+        This request checks configured course groups. Read the result here; submitting it does not publish your browser draft.
+  - type: input
+    id: group
+    attributes:
+      label: Group
+      description: Your registered group slug, as shown in the course editor.
+      placeholder: ddd-abstract
+    validations:
+      required: true

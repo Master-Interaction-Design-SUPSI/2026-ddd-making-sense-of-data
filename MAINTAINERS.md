@@ -1,217 +1,504 @@
-# Maintaining the course site
+# Maintainer manual
 
-The main course repository owns site code, the group registry, and publishing. Review every pull request to its `main` branch, including the full **Files changed** list. Students save routine content changes directly in their own group repositories; those changes pass import validation without editorial approval. Keep review and validation requirements on the main course repository.
+Scope: course site, registry, import, publication, editor, archive. Revision: 2026-10-14.
 
-GitHub Pages should use **GitHub Actions** as its publishing source. The workflow in `.github/workflows/pages.yml` imports groups and publishes after changes reach `main`, on a schedule, or on manual dispatch. Initial rollout requires the explicit bootstrap below. After configuring Pages, check the published URL and one entry.
+**WARNING**: irreversible loss of student content or published state.
+**CAUTION**: stalled publication or wrong release.
 
-The enabled publication contains the local `example` and Materialities of AI from `ginevraterenghi/ddd-abstract`, registered as `ddd-abstract`. Dust (`dust`) and the beta demonstration (`pilot-beta`) are disabled in the registry and omitted from publication; their source repositories remain available. An offline build contains only the local `example`. Initial bootstrap is complete; use ordinary refreshes with both recovery options off.
+## 1. Status
 
-The renderer treats `text.md` as data: it escapes submitted HTML and rejects unsafe link and media URL schemes. Keep those safeguards when changing the Markdown or annotation code. The vendored Marked license is at `static/vendor/LICENSE.marked.md` and is included in the published site.
+| Item | State |
+| --- | --- |
+| Production | `main` `9190958`; V1 publisher. Pages run `38525824509`; release metadata matches deployment record. |
+| Published | `example` (local); `ddd-abstract` from `ginevraterenghi/ddd-abstract` `3a8f717`, 19 files, 22,466,039 B. |
+| Hidden | `dust` (`2026-ddd-pilot-alpha`), `pilot-beta` (`2026-ddd-pilot-beta`). Sources intact. |
+| V2 | Branch `v2`: release and archive cutover authorized on 2026-10-14. Switches remain off until protected refs, verified V1 capture and seed comparison pass. |
+| Settings | Issues disabled. V2 rulesets require PRs and the Actions `validate` check on `main`; `main` and `student-work` reject deletion/non-fast-forward updates. No bypass actors. |
+| Checkpoint | `.scratch/tickets/2026-10-14_ddd_editor-v2_handoff.md`; scope `…_plan_final.md`; rationale `…_review.md`. Local, Git-ignored. |
 
-Main visuals must be named `visual.svg`, with `viewBox="0 0 1920 1080"`. Optional width/height attributes must be 1920/1080 in pixels. The build parses the SVG and rejects other `visual.*` files or incorrect dimensions before replacing `_site`. Incomplete entries are warned about and skipped. Extra media referenced in `text.md` can use other formats.
+The maintainer authorized the V2 commit, deployment and archive cutover on 2026-10-14. Local tests alone do not establish live acceptance.
 
-The **Validate course entries** workflow runs tests and the build on pull requests. Review its result before merging; the publishing build repeats entry validation. To enforce this at merge time too, add its `validate` job as a required check in the repository ruleset. Run `python3 -m unittest discover -s scripts -p 'test_*.py'` and `python3 scripts/build_site.py` locally. Keep SVGs in image elements for the page and lightbox.
+## 2. Terms
 
-## Public group repositories: template and registry
+| Term | Meaning |
+| --- | --- |
+| Group | Student team; owns one public repository. |
+| Slug | Permanent group identifier: entry folder, URL fragment, archive path. |
+| Registry | `groups.json`. Sole list of groups. |
+| Source | Group repository at one exact commit. |
+| Snapshot | Complete selected file set of one group, with sizes and digests. |
+| Candidate | Built `_site`, not yet served. |
+| Release | Identity of one built site: code commit, archive commit (V2), manifest and site digests. |
+| Archive | Orphan branch `student-work` in the course repository. Durable copy of accepted snapshots. V2 only. |
+| Accepted | Candidate committed to `student-work`. |
+| Attempted | Deployment record names the release. |
+| Verified | Served site matches the release. The only state meaning "published". |
+| Seed | One-time creation of `student-work` from the verified V1 release. |
+| Cutover | Transfer of publication authority from V1 to V2. |
+| Request | Issue labelled `publication-request`, asking for a refresh. |
 
-Public group repositories are the agreed model. The local template is in `templates/group/`; copy its **contents** to the root of each future group repository. It contains a browser-only README, demonstration text and main SVG, and an optional example in `media/`. Do not copy the parent `templates` folder. Use the provisioning steps below for real groups; do not register the demonstration as a real group.
+## 3. Architecture
 
-Register each group once in `groups.json`. Alpha supplies `dust`, beta supplies `pilot-beta`, and `ginevraterenghi/ddd-abstract` supplies `ddd-abstract`. For future groups, replace the illustrative owner/repository below with the real public GitHub address:
+### 3.1 Authority
 
-An optional `exclude` list omits exact optional media paths before downloads and size accounting. It cannot exclude `text.md` or `visual.svg`; text references to excluded files still fail validation. Import reports record matching `excluded_files`. The `ddd-abstract` entry excludes `media/12.mov` and `media/4.mov`, both over the 20 MiB file limit. This entry also sets `require_visual: false` to publish without a root `visual.svg`. The flag defaults to true for other groups; any supplied SVG still passes the usual validation. Recovery snapshots preserve this flag so text-only entries can be restored after failed updates. Remove the exclusions after suitable replacements are uploaded. Exclusions leave source repository files untouched.
+| Datum | V1 (production) | V2 (gated) |
+| --- | --- | --- |
+| Code, registry | `main` | `main` |
+| New student content | Group repository | Group repository |
+| Last-good content | Served `publication.json` and files | `student-work` |
+| Expected release | Deployment record, task `course-publication`, environment `course-publication-check` | Same record; `Main-Commit:` trailer on archive commit |
+| Exact retry | Artifact `course-pages-<run>-<attempt>`, 30 days | Reconstruction from `main` + `student-work` pair |
 
-```json
-{
-  "groups": [
-    {
-      "slug": "city-water",
-      "repository": "course-account/city-water",
-      "branch": "main",
-      "enabled": true
-    }
-  ]
-}
+### 3.2 Files
+
+| Path | Function |
+| --- | --- |
+| `groups.json` | Registry. |
+| `static/contract.json` | Content contract v2; read by Python and editor. |
+| `static/main.js`, `bootstrap.js`, `playback.js` | Renderer, production bootstrap, media lifecycle. |
+| `static/annotations.js`, `references.js` | Annotation parser; sole reference collector (browser, Node, Python). |
+| `editor/` | Editor. Static; no compilation. |
+| `scripts/build_site.py` | Build `_site`. Offline by default. |
+| `scripts/import_groups.py`, `github_content.py` | Import; GitHub transport. |
+| `scripts/content_contract.py`, `check_content_links.js` | File selection; reference check. |
+| `scripts/publish_site.py`, `publication_state.py`, `deployment_records.py` | V1 controller; served-state recovery; deployment records. |
+| `scripts/publish_archive.py` | V2 controller: `admit prepare accept build record authorize verify finalize answer`. |
+| `scripts/archive_state.py`, `archive_transaction.py`, `archive_git.py`, `archive_release.py` | Archive manifest; candidate transaction; Git transport and writer; release identity. |
+| `scripts/publication_requests.py` | Request capture and answers. |
+| `.github/workflows/pages.yml` | Publication: V1 job and V2 jobs. |
+| `.github/workflows/validate.yml` | PR gate. Offline. |
+| `.github/ISSUE_TEMPLATE/` | Request form; blank issues off. |
+| `.github/publishing.json` | Editor request policy. |
+| `templates/group/` | Group repository template. |
+
+## 4. Registry: `groups.json`
+
+| Field | Rule |
+| --- | --- |
+| `slug` | `[a-z0-9]+(-[a-z0-9]+)*`, ≤ 63 chars. Permanent. Reserved: `example static scripts _site templates editor index entries groups`. Must not collide with a local folder. |
+| `repository` | `owner/name`; no URL, no `.git`; unique, case-insensitive; public. Redirects rejected. |
+| `branch` | Default `main`. Valid Git ref name. |
+| `state` | `live`, `frozen` or `hidden`. Legacy `enabled`: `true` = `live`, `false` = `hidden`. Conflict rejected. V1 rejects `frozen`. |
+| `exclude` | Exact optional media paths, dropped before download and size accounting. Cannot drop `text.md` or `visual.svg`. A referenced excluded file fails validation. Reported as `excluded_files`. |
+| `require_visual` | Default `true`. `false` permits absent `visual.svg`; a present one is still validated. |
+
+Maximum 15 groups. Unknown fields rejected. Validation is offline; the importer checks visibility.
+
+Current exclusions: `ddd-abstract` drops `media/12.mov` and `media/4.mov` (each > 20 MiB). Remove when replacements exist. Exclusion never alters the source repository.
+
+## 5. Content contract
+
+Source: `static/contract.json` (v2). Python constants are adapters.
+
+| Class | Paths | Limit |
+| --- | --- | --- |
+| Text | Root `text.md`, UTF-8, title/authors front matter. Required. | 256 KiB |
+| Main visual | Root `visual.svg`; `viewBox="0 0 1920 1080"`; optional width/height = 1920/1080 px. Other root `visual.*` rejects the entry. | 5 MiB |
+| Image | `.svg .png .jpg .jpeg .webp .gif .avif` | SVG 5 MiB; others 20 MiB |
+| Audio | `.mp3 .m4a .wav .ogg .aac .flac` | 20 MiB |
+| Video | `.mp4 .webm .mov` | 20 MiB |
+| Group | ≤ 100 selected files | 50 MiB admission; 100 MiB legacy V1 recovery |
+| Site | Whole candidate | 900 MiB (943,718,400 B) |
+
+Paths:
+
+- Media at root or under `media/`, subfolders allowed.
+- Component pattern `[a-z0-9][a-z0-9._-]*`. Case-sensitive. Separator `/`.
+- ≤ 512 bytes, ≤ 16 components.
+- Rejected: absolute paths, `.`/`..`, empty segments, backslashes, control characters, Git LFS pointers.
+- A bad name on eligible media rejects the update.
+- Other files (READMEs, HTML, JavaScript, workflows, design sources) are ignored and never published.
+
+SVG: static UTF-8. Rejected: scripts, event handlers, foreign markup, links, animation, entities, processing instructions, external resources. Permitted: local paint references; embedded PNG/JPEG/WebP data images.
+
+References: Markdown links and images, including reference syntax, and annotation targets must resolve to selected files. `./media/x.svg` and local fragments pass. Missing, ignored, excluded or cross-group targets reject the update. `http`, `https`, `mailto` pass unfetched; other schemes reject.
+
+Rejected update: previous snapshot retained. No previous snapshot: group skipped. Audio/video codecs are not validated; browser check required.
+
+## 6. Renderer
+
+Invariants:
+
+- `text.md` is data. Contributor HTML is escaped. Unsafe link and media schemes are rejected.
+- SVG loads only through `<img>`.
+- Marked is vendored; `static/vendor/LICENSE.marked.md` ships with the site.
+
+| Element | Behavior |
+| --- | --- |
+| Annotation | `[[label\|target\|type=…;style=…;color=…]]`. Keys in any order. Duplicate or unknown key, or bad value: literal text. Two-field legacy form valid. |
+| Note | Expanded by default. Marker and content in braces. Black italic; `style=normal` removes italic. |
+| Bibliography | Expanded by default. `(■ Author, year. Title)`. Black; overrides surrounding and modifier colors. Target as text or link, never embedded. |
+| Quote | Native quotation marks on reveal. |
+| Inline image | Thumbnail. Hover/focus preview anchored to the thumbnail, opaque, fitted to viewport. Tap/Enter/Space pins. |
+| Inline video | No buttons. Muted autoplay when half-visible, page visible, lightbox closed. Hover preview plays with sound. Reduced motion or refused autoplay: still. |
+| Inline audio | Native controls. Hover plays; exit pauses. Browser policy may require a first click. |
+| External embed | Manual. Loads on reveal; unloads on inactivity; provider link shown. |
+| Dismissal | Escape, outside activation, scroll, resize, navigation, focus loss, page hide. |
+| Prose | Newlines and blank lines between adjacent paragraphs become spaces. Headings, lists, quotes, code stay separate. 16 px type, 40 px leading. |
+| Main visual | Image element; lightbox. Escape closes lightbox before playback refresh. |
+
+## 7. Editor
+
+URL: `<site>/editor/`. Build outputs:
+
+| File | Content |
+| --- | --- |
+| `editor/preview.html` | Production shell; only bootstrap and asset paths substituted. |
+| `editor/groups.json` | Public registry fields, `editable` (= `live`), contract version, request policy. |
+| `editor/template/`, `template.json` | Template files with SHA-256. |
+
+Open: last published snapshot (default; hash-checked against served `publication.json`) or template (new group). Non-`live` groups are read-only.
+
+Drafts:
+
+- IndexedDB schema 2. Revision compare-and-swap; digest-addressed shared blobs; discard tombstones.
+- Quota failure keeps the previous complete draft. Saves serialized; switching awaits save; restored assets hash-checked.
+- Concurrent tab: conflict; explicit restore or discard.
+- Storage denied: localStorage text-only fallback; missing media listed. Old backups kept until explicit migration.
+- Label: "Saved in this browser only."
+
+Hand-off, generated per draft, not atomic:
+
+1. Review current `text.md` on GitHub. Stale-text comparison warns; equality is not proof of freshness.
+2. Upload new media; commit. Replace referenced media under a new name.
+3. Paste text into `text.md`; commit.
+4. Delete removed files.
+5. Submit request (if enabled) or read the run summary.
+
+Intermediate totals are checked. A valid intermediate commit can publish.
+
+Preview: same-origin iframe; layout isolation, not a sandbox. Protocol v1, types `hello ready render ack error`; window, origin, schema, slug, path, size and revision checked. Only editor-owned object URLs bypass scheme checks; `blob:` and `data:` in text are rejected.
+
+Editor success = local checks passed. It does not prove commit or publication. Importer-only checks: visibility, tree completeness, Git object types, blob integrity, SVG security.
+
+## 8. Import
+
+Per group, per run:
+
+1. Four metadata REST calls: repository, ref, commit, tree. Tree ≤ 2,000 entries, untruncated.
+2. Select files; apply exclusions, path rules, limits. Reject symlinks, submodules, collisions.
+3. Reuse verified bytes; download the rest from `raw.githubusercontent.com/<owner>/<repo>/<commit>/<path>` without credentials.
+4. Verify Git blob SHA and size; validate content.
+
+Bounds: 15 s socket timeout; 3 attempts; 180 s per group; 15 min per run. JSON ≤ 2 MiB. REST defers at ≤ 200 remaining quota. No REST-blob fallback. No checkout; group code never runs.
+
+Early exit: all inputs equal the verified release → `unchanged`, without full Pages recovery.
+
+Report: `.scratch/group-import-report.json` or `--report`.
+
+| Field | Values |
+| --- | --- |
+| `status` | `imported`, `failed`, `disabled` |
+| `publication_status` | `updated`, `retained`, `skipped`, `disabled` |
+| `selected_source` | Repository, branch, commit actually published; may differ from attempt. |
+| `build_status` | `prepared`, `failed`. Prepared ≠ published. |
+
+Requirements: Python 3.9+, Node. No packages. Optional `GITHUB_TOKEN` raises API quota; never sent to raw or Pages hosts.
+
+## 9. Publication: V1 (production)
+
+Workflow **Publish course website**, job `publish`. Active while `DDD_ARCHIVE_ENABLED` ≠ `true`.
+
+| Trigger | Effect |
+| --- | --- |
+| Push to `main` | Refresh. |
+| Schedule `7,17,27,37,47,57 * * * *` | Refresh. GitHub may delay or drop runs. |
+| **Run workflow → main**, inputs off | Refresh. |
+| `retry_publication` | Redeploy exact recorded candidate. |
+| `first_publication` | Initial rollout. Done 2026-10-13. |
+
+Sequence: tests → import → recover failed groups from served site → build → upload → record → deploy → verify → summary.
+
+- One concurrency group `pages`; `cancel-in-progress: false`.
+- Queued runs recheck `main` before prepare and before record.
+- Unchanged snapshots and source tree: no deployment. Code or registry change: deployment.
+- Served `publication.json`: per group repository, branch, commit, files, sizes, SHA-256. Fallback source.
+- `release.json`: run, source commit and tree, site digest, manifest digest.
+- Deployment record written before deploy. It is an expectation, never content.
+- Verify: release marker and manifest, cache-busted; ≤ 12 attempts, 10 s apart.
+- Unverified record blocks later runs. Intentional.
+- Recovery reads: canonical HTTPS URL; no redirects; no token; 15 s socket, 180 s per group; manifest pinned by digest. Any mismatch stops the build.
+- Failed group: its complete served snapshot is restored and revalidated. Old and new files never mix.
+- Permissions: contents read, actions read, deployments write, pages write, id-token write. No contents write.
+- Run summary: per group status, selected and attempted revisions, errors.
+
+**WARNING**: Never select `first_publication` to bypass a recovery error. It declares that no prior content exists.
+
+**WARNING**: Never deploy an offline build over an imported publication. It lacks `publication.json`.
+
+**CAUTION**: Schedules stop after 60 days without repository activity. Restore: **Actions → Publish course website → Enable workflow**, then **Run workflow → main**.
+
+Local builds:
+
+```sh
+python3 scripts/build_site.py                      # offline; local entries only
+python3 scripts/build_site.py --import-groups \
+  --published-url https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/
+python3 scripts/build_site.py --import-groups --first-publication   # disposable preview only
 ```
 
-The slug is the permanent entry folder and URL fragment. Keep it when changing the repository address. Slugs use lowercase letters, digits, and single hyphens, up to 63 characters. `example`, `static`, `scripts`, `_site`, `templates`, `index`, `entries`, and `groups` are reserved. Repository addresses use `owner/name`, without a URL or `.git`; they must be unique ignoring case. `enabled` must be a JSON boolean. `branch` defaults to `main`; supported names use letters, digits, dots, underscores, hyphens, and slash-separated components, without Git's invalid dot/lock components. Unknown fields and invalid disabled entries are rejected too.
+## 10. Publication: V2 (gated, not deployed)
 
-The build validates the registry before replacing `_site`. The normal local build remains offline; the publishing workflow uses imports. Both READMEs describe the group-repository workflow and explicitly require the course team to confirm setup before students use it. Do not hand out the new workflow until repository access and publishing have been checked. Registered slugs must not collide with existing local paths: migrate those entries explicitly rather than overwriting them. With imports enabled, disabled groups make no requests and are omitted from the new build. The importer checks public visibility against GitHub; the local registry validator makes no network requests.
+### 10.1 Switches
 
-## Set up each group's access
-
-Personal student repositories are supported: the importer accepts any public GitHub `owner/repository`, including groups owned by different students. There is no course-organization restriction. A student creates their public group repository using the template, invites their teammates with Write access, and supplies its URL and branch to the course team. Register it as `student-username/project-name`; the course workflow reads it without collaborator access or a student token. Keep each student's owner-controlled permissions separate from access to the main course repository and other course groups. Private repositories are unsupported. If a student renames or transfers a repository, update the registered address while keeping its slug.
-
-Keep the actual roster outside this public checkout in a private maintainer-controlled location. For each group, record its agreed name, stable slug, repository address, students' verified GitHub usernames/profile URLs, invitation sent/accepted status, effective access check, and pilot result. Ask students to confirm the exact account they use; a display name alone is insufficient. The public `groups.json` contains repository configuration only, never the roster or invitation tracking.
-
-1. Confirm the repository owner and real group-to-username mapping. Create one **public**, initially empty repository per group. Upload only the **contents** of `templates/group/` to its root: README, text, main visual, and media. Use `main` as the default branch. The student owner retains administration of a personal repository; retain course-team administration for course-owned repositories. No group repository needs Pages hosting or publishing secrets.
-2. The group repository owner uses **Settings → Collaborators and teams** (or **Collaborators** for a personal repository) to add the verified teammates with **Write** access. When permitted, outside collaborators provide repository-specific access without adding organization membership. Track acceptance privately; an invitation is not working access. If a student is already an organization member, check their existing permissions rather than assuming an outside-collaborator invitation removes inherited access. See [GitHub's outside-collaborator guidance](https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-outside-collaborators/adding-outside-collaborators-to-repositories-in-your-organization).
-3. Check **organization Settings → Member privileges → Base permissions**, team grants (including parent teams), direct grants, and custom roles for all students. Organization-wide Write, Maintain, or Admin defeats group isolation even when repository invitations look correct. Base permissions do not apply to outside collaborators, and lowering a direct repository grant does not cancel a higher inherited grant. Record the actual effective permissions. Changing organization-wide defaults affects other projects; identify that impact before changing them. See [GitHub's base-permission rules](https://docs.github.com/en/organizations/managing-user-access-to-your-organizations-repositories/managing-repository-roles/setting-base-permissions-for-an-organization).
-4. Check repository and organization rulesets/branch protections affecting the **group's** `main`. Group members must be able to save directly without mandatory PRs or approval. Keep the **main course repository's** protections: maintainer review, required `validate` check, and Pages deployment restricted to `main`. A read-only inspection is not proof of student access; verify the intended UI with an ordinary student account during the pilot.
-5. Register the real repository in `groups.json`, initially with `enabled: false` while access and content are being prepared. Use its stable slug and actual branch. Change to `enabled: true` through a reviewed main-repository PR when the group is ready; the demonstration becomes public on the course site if enabled before replacement. Validate with `python3 scripts/build_site.py` before merging. Keep the slug when a repository address changes.
-6. Give each group its repository link, stable group identifier, website link, and the [publication results link](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml). Confirm that an ordinary student can open a completed run and read the **Course publication** summary. The public main repository provides read access; students need no write access there to read feedback. See [viewing workflow runs](https://docs.github.com/en/actions/how-tos/monitor-workflows/view-workflow-run-history).
-
-Before cutover, verify one student can edit and save `text.md` directly in its own group repo and sees the update after publication. Verify the effective permission is below Write in every other group's repository and the main course repo. Test using an ordinary account, not a maintainer's admin session. Record any existing main-repo student grants that must be removed; carry out that removal during ticket 06 after the group access and pilot are verified.
-
-To change membership, verify the new username, invite only to the correct group repository, and track acceptance. Review departing members' direct and inherited grants before removing access. Removing a student's access does not unpublish the group's work. To unpublish a group deliberately, set its registry entry to `enabled: false` through a reviewed main-repo PR, then confirm the next verified publication removes it. Do not delete `text.md` or `visual.svg` as an unpublish mechanism: an incomplete edit retains the previous published snapshot.
-
-For failed imports, students use their row's explanation to correct content; maintainers handle repository addresses, branches, rate limits, or publication failures. The READMEs distinguish `updated` selection from a **verified** publication and explain retained/skipped results. Tickets 07–10 supply bibliography, note and compound-modifier examples, inline image previews, inline playback and continuous prose. Tickets 07–09 are deployed; Ticket 10 is complete locally and awaits publication.
-
-Local onboarding status (2026-10-12): both READMEs and these operating steps are prepared. The main repository was confirmed public with default branch `main`; this did not verify organization-wide permissions, student access, rulesets, or deployment. No real group roster or confirmed group-repository owner has been supplied, so no repositories or invitations were created and `groups.json` remains empty.
-
-## Pilot and migration
-
-Read-only inventory on 2026-10-12 found **example and dust** on the deployed site, matching remote source commit `027c2e31fe3ccaff61a561360e035ba6c3095687`. Pages uses Actions; both publication markers return 404, so imported publication has not been bootstrapped. There are no open PRs, but two of the six content branches have an unmerged commit: one changes `dust/text.md`, the other adds its missing `bolivia-dust-01.png`. Resolve these with the author before choosing migration content.
-
-Checksum-verified copies of all 24 source files and 20 served files, plus the two unmerged files, are held locally in ignored `.scratch/pilot-06/2026-10-12/`. `inventory.json` records paths, sizes and SHA-256 digests; `unmerged-inventory.json` records separate branch revisions. Make a durable maintainer-controlled copy before cutover; ignored local files are not a remote backup. No production source has been removed.
-
-Keep **dust → dust → #dust** when assigning its group repository. Its 12 current files total 14,894,076 bytes. Import is blocked by `visual.png` (1920 × 1080), uppercase characters in `aaa_ID-1.mp4` and `aaa_ID-unknown.mp3`, and the missing image reference. Obtain a compatible SVG and agree any filename/reference changes while preserving originals. Verify existing relative media links and any old public media URLs. The demonstration `example` stays local and reserved.
-
-The live main ruleset requires one approval and dismisses stale approvals, with maintainer bypasses; it currently has **no required status check**. Classic branch protection is absent, but the ruleset protects `main`. Organization base permission is Read. The collaborator inventory reports 17 Read, four Maintain and three Admin grants, and one team has Maintain access. These counts do not identify students or prove group isolation; map the roster and inspect inherited grants before changing access.
-
-Run the disposable rehearsal with `python3 -m unittest discover -s scripts -p 'test_pilot_migration.py'`. It uses shipped template/site content with simulated GitHub and served-site transports. It verifies unchanged entry/media paths, collision protection, clean-run broken-upload retention alongside a valid update, correction, fetch failure, deliberate removal, preserved sources, and restoration of every original site byte. It does not exercise scheduling, real permissions, browser editing or deployed media behavior.
-
-For the live pilot and cutover:
-
-1. Preserve a fresh source/deployed snapshot and outstanding branches, reconcile them with this checkout, and confirm two real public pilot repositories and ordinary student accounts. Keep the roster private. Prepare content and accepted access using the setup steps above; retain existing access until replacement access is demonstrated.
-2. Compare migrated files, references and stable slugs in a disposable preview before retiring main-repo source folders. Even a disabled registered slug collides with a local source folder: stage source retirement and registry activation together in the reviewed migration change. Keep original content outside discovered root folders until deployment is verified.
-3. Deploy the reviewed workflow and complete its explicit first-publication bootstrap. Exercise student browser edits/uploads, isolated broken SVG, correction, temporary fetch failure and incomplete edits. Record run links, commits, selected versus verified results and entry URLs. Test scheduled/manual refresh and exact-candidate retry. Removing a pilot's registry entry must remove its published files on a verified refresh.
-4. Finish tickets 07–10 and verify their README examples, annotations, main visual/lightbox, inline previews, playback fallback and text flow on the deployed desktop/mobile site. Verify ordinary students can save only in their own repo and read publication feedback. Add the main repository's required `validate` check. Complete access cutover after these checks pass.
-
-Before the first imported publication, rollback can restore the preserved legacy workflow, renderer and content through a reviewed main-repo change; preserve newer student work separately and verify original URLs. After bootstrap, use the exact-candidate retry below for failed/cancelled publication. For a planned return to local sources, stage registry removal and restored, current-contract-compatible source folders together, preserving newer group edits first, and publish through the verified workflow. Direct upload of the old offline snapshot bypasses deployment expectations and is not this procedure. Full legacy-workflow rollback after bootstrap still requires a separately reviewed recovery change and live rehearsal.
-
-Pilot status: local rehearsal, real GitHub imports, live bootstrap, ordinary refresh and deployed Dust media checks passed; student-account checks, final authoring behavior, deployed failure recovery/rollback and access cutover remain pending. Archive temporary repositories only after live acceptance, deliberate unpublishing, and preservation of content and run evidence.
-
-Sample repositories created on 2026-10-13 at the maintainer's request:
-
-- [2026-ddd-pilot-alpha](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-alpha)
-- [2026-ddd-pilot-beta](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta)
-
-Both are public, use `main`, and were initialized with the four files from `templates/group/`. No students were invited. The first isolated pilot used slugs `pilot-alpha` and `pilot-beta`; its checkout, repository clones and evidence are in ignored `.scratch/pilot-06/2026-10-13/`. Alpha now contains Dust under registry slug `dust`, as described below. The course registry was deployed through PR #12; the live verification below supersedes the initial local-only status. On 2026-10-13, all 70 Python tests, the offline build, JavaScript syntax and whitespace checks passed; all 46 previously preserved source, served and unmerged files still matched their recorded sizes and SHA-256 digests.
-
-The real-repository pilot passed six stages: initial imports, a valid alpha update alongside beta's malformed SVG on a clean build, corrected SVG, missing-text retention, deliberate beta removal, and restoration of both original group snapshots. The importer fetched real GitHub commits and blobs; recovery used a separate local simulated served filesystem. Both remote repositories were restored to the original template bytes using new commits, preserving the experiment history. Detailed reports and selected source revisions are in `repository-pilot-results.json` within that pilot folder. This verifies real repository imports, not browser-only student editing, GitHub Actions scheduling, Pages deployment, student permission isolation or deployed rollback.
-
-For the subsequent Dust migration, the maintainer authorized replacing alpha's demonstration and no longer requires the old main-repository Dust location or media URLs to be preserved. The published text was kept, with `aaa_ID-1.mp4` and `aaa_ID-unknown.mp3` renamed to lowercase and their references updated. The missing `bolivia-dust-01.png` was copied from its saved branch revision; the separate unmerged text revision was not merged. The original PNG artwork is embedded byte-for-byte in a static `visual.svg` with a 1920 × 1080 canvas; this is an SVG container, not vectorized artwork. No raster `visual.*` file remains in the group repository. The 13 migrated content files pass the importer contract; migration digests and source provenance are in `dust-migration/migration.json` in the pilot folder. Keep `dust` as the registry slug. The updated local preview is at `http://127.0.0.1:8766/#dust`; beta remains the template control. Source snapshots are still available for reference, but preserving the original course-repository Dust folder is no longer a rollout requirement.
-
-The real GitHub importer selected alpha commit `3fca3f8879e483f6bee0b1342e7b2f8111afb5d4`; every imported Dust file matched its migration digest. The local browser check passed the main image's 1920 × 1080 dimensions, lightbox opening/Escape dismissal, the restored first dust-trace image, muted audio and video playback, and no horizontal overflow at a 390-pixel viewport. Browser procedure and import report are in the same `dust-migration/` evidence folder. All 70 Python tests, offline build, JavaScript syntax and whitespace checks pass. These results were first checked locally; live Pages verification is recorded below. Student-account access remains unverified.
-
-## Import and preview group content
-
-Run `python3 scripts/build_site.py --import-groups --published-url https://YOUR-CANONICAL-SITE-ROOT/` to fetch enabled groups and build `_site`, using the last deployed site for recovery. Use the full project path when applicable. For the first import publication or a disposable preview only, use `--first-publication` instead of `--published-url`. Python 3.9+ and Node are required; link extraction uses the site's existing vendored Markdown parser, without installing packages. An optional `GITHUB_TOKEN` in the main build environment can raise API rate limits; students need no tokens, and non-public repositories are rejected even if the token could access them. No GitHub CLI login is needed.
-
-Each branch is resolved once to its exact commit. The importer reads that commit's complete tree, then downloads only allowed blobs and checks their Git hashes and byte sizes. It rejects truncated listings, listings over 2,000 entries, paths over 512 characters/16 components, symlinks, submodules, and collisions. Unsupported files are never downloaded. It never checks out a group repository or executes its workflows, scripts, or install commands. Repository redirects are rejected; update the registry to the canonical address after a rename.
-
-Downloads use fresh temporary directories outside the source tree. Each request has a maximum 15-second socket timeout, at most three attempts with short backoff for transient failures, and a 180-second budget per group checked between reads/requests. JSON responses are limited to 2 MiB and blob responses to the size already validated in the tree. The importer does not unpack archives. Fetched files enter `_site` only after validation, and temporary directories are removed after the build.
-
-Results go to `.scratch/group-import-report.json` (ignored by Git), or the path passed with `--report`. Each group records its repository, branch, attempted commit when available, import status (`imported`, `failed`, or `disabled`), and an actionable error when needed. `publication_status` records `updated`, `retained`, `skipped`, or `disabled`; `selected_source` identifies the repository, branch, and commit actually selected, which can differ from a failed attempt. The overall `build_status` is `prepared` or `failed`, with an error for failed builds. Prepared content is a deployment candidate, not evidence of publication. Trusted build/tool failures still stop the command.
-
-The default `python3 scripts/build_site.py` remains offline, so PR validation does not depend on remote student content. Automatic refresh is wired in `.github/workflows/pages.yml`; it becomes active after these changes reach `main` and the initial publication succeeds. The unit suite uses two controlled repository fixtures; no real group repos are added by tests.
-
-## Retain each group's published content
-
-Imported builds include `publication.json` beside `entries.json`. It records every selected group's source repository, branch, commit, exact file list, byte sizes, and SHA-256 digests. The durable recovery source is **the deployed site itself**: its manifest and group files survive clean CI runners without depending on an expiring Actions cache or artifact. The manifest travels in the same Pages artifact as its content. No build step writes a separate successful-publication record, so an undeployed candidate cannot become fallback state. This follows the existing [Pages artifact deployment model](https://github.com/actions/deploy-pages).
-
-When a group update fails validation or fetching, the build restores that group's complete deployed snapshot into a fresh temporary folder, verifies every file, and rechecks the content contract. New and old files are never combined. A subsequent valid update replaces the entire snapshot. A group with no prior published record is skipped with an error; removing or disabling its registry entry removes its files and manifest record from the next publication. Stable slugs identify published work even if a repository address or branch changes; a retained result preserves the original source provenance.
-
-Recovery requires the canonical HTTPS URL; redirects are rejected. No GitHub token is sent to the site. Requests have a 15-second socket timeout, a 180-second budget per restored group, and manifest/file byte limits. Requests ask caches for fresh data and include a unique query. The manifest is read again after selection; a concurrent change, missing manifest/file, corrupt metadata, mismatching digest, or unsafe recovered content stops the whole build. Check the URL or restore the missing deployed state and retry. **Never substitute `--first-publication` for a recovery error:** that option explicitly declares there is no prior imported content to preserve.
-
-For the initial rollout, first verify that no previously published imported groups need recovery, then build once with `--first-publication` and deploy the complete `_site`. Subsequent builds must use `--published-url`. Existing local entries require the explicit migration in ticket 06; they are not silently adopted as imported snapshots. The Pages workflow now uses imports for every new candidate, serializes build through deployment, and verifies the served manifest against a separate GitHub deployment record before allowing the next build. Its recovery option redeploys the exact previously imported candidate. These changes are deployed; initial bootstrap and an ordinary refresh passed on 2026-10-13. Fresh-read requests and digest checks detect inconsistent CDN responses; they do not guarantee freshness of a coherent older deployment. Do not deploy an offline preview over a site that already publishes imported groups, because that preview contains no recovery manifest.
-
-All site files are assembled before replacing local `_site`; validation, recovery, parser, and copy failures preserve the previous local output. Deployment remains one complete site artifact. Tests simulate the deployed filesystem independently of build directories, including a failed deployment followed by a clean runner. Live bootstrap and manifest/file verification passed on 2026-10-13. Failure recovery and rollback still need the remaining ticket 06 pilot checks.
-
-## Automatic publishing and recovery
-
-After rollout, **Actions → Publish course website → Run workflow → main** requests an immediate refresh. Leave both recovery options off for ordinary use. Open the run summary for each group's `updated`, `unchanged`, `retained`, `skipped`, or `disabled` status, selected source revision, attempted revision, and errors. A prepared candidate is only published when the final served-publication check succeeds.
-
-The schedule runs at minutes 7, 17, 27, 37, 47, and 57 of each hour. GitHub can delay or drop scheduled runs; this is not a ten-minute delivery guarantee. Public-repository schedules are disabled after 60 days without repository activity, even if students continue editing separate group repos. If refreshes stop, open this workflow in Actions, choose **Enable workflow** if offered, then **Run workflow** on `main` and inspect the result. See [GitHub's schedule rules](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
-
-For **initial rollout**, set Pages to GitHub Actions and protect the `github-pages` environment so only `main` can deploy. Add the `validate` PR job as a required check in the main ruleset. After merging the implementation, run the publishing workflow on `main` with **first_publication** selected once. This is only for a site with no previously imported publication: the check requires no course publication record and HTTP 404 for both `publication.json` and `release.json`. Network errors, existing state, and redirects stop the run. Routine pushes/schedules before bootstrap stop with an actionable message. Do not use bootstrap to repair recovery errors.
-
-Publication uses one concurrency group with cancellation disabled across preparation, upload, deployment, and verification. Old queued runs check their checkout against current `main` before preparation and again before recording a deployment. Unchanged selected snapshots and an unchanged source tree skip deployment; changes to site code or the registry still trigger it. Imports still validate current group content on each refresh. Existing main-repo local entries are preserved until ticket 06 migrates them.
-
-Each candidate carries `release.json`: the originating run, source commit/tree, complete site digest, and recovery-manifest digest. Immediately before deployment, the workflow records this expectation using [GitHub Deployments](https://docs.github.com/en/rest/deployments/deployments) under task `course-publication`, environment `course-publication-check`. It never treats this record as published group content. The deployed site's `publication.json` and files remain the only fallback source. This small independent record lets subsequent runs reject a coherent but outdated CDN response; neither artifact expiry nor a failed run silently resets that expectation.
-
-The post-deploy check reads the release marker and manifest with cache-busting requests, checks them against the recorded candidate, then marks verification successful. The next normal refresh repeats that check before reading fallback content and pins the manifest digest during the build. Verification makes at most 12 attempts, waiting ten seconds between attempts; each read remains bounded. A cancelled run or failed verification can leave a pending expectation and block later publishing intentionally.
-
-For **failed or cancelled deployment recovery**:
-
-1. Wait until the earlier publishing run has stopped. If deployment finished and only CDN propagation was slow, try an ordinary **Run workflow** first: it can verify the expected publication and continue.
-2. If the candidate was never served, choose **Run workflow → main**, select **retry_publication**, and leave **first_publication** off. This downloads the original run attempt's `course-pages-<run>-<attempt>` artifact, safely extracts regular files, and verifies every file against the recorded complete-site digest before redeploying it. It runs no code from the artifact and does not import newer student edits during the retry.
-3. Check that the summary says **verified**, then run an ordinary refresh to pick up newer work. The retry may temporarily restore older site code as well as content because it restores the entire recorded candidate.
-
-Candidate artifacts are retained for 30 days, subject to repository retention limits. Normal publishing and fallback do not depend on them. If the candidate artifact expired or was deleted, retry stops: restore the exact recorded candidate from a separately preserved copy under maintainer supervision. Do not delete publication records, use bootstrap, or deploy an offline preview to force past the check. A permanent loss of that candidate needs a separately reviewed recovery procedure.
-
-Only the trusted publishing job receives repository read access, Actions artifact read access, deployment-record write access, Pages write access, and an OIDC token. It has no repository-content write permission. Students hold no publication tokens; imported repositories are never executed. Pull-request validation stays offline with read-only contents permission and controlled fixtures. The workflow adds no roster, invitations, or group repositories. Ticket 05 documents their setup; actual provisioning still needs the real group roster and confirmed owner.
-
-## Content contract for the importer
-
-The contract is implemented in `scripts/content_contract.py`. It selects files from a relative-path → byte-size manifest. `scripts/import_groups.py` obtains sizes and regular-file types from one resolved commit and validates the downloaded bytes. The selector alone is not a downloader or a file-content security scanner.
-
-| Content | Allowed paths and limits |
+| Switch | Effect when set |
 | --- | --- |
-| Text | Root `text.md`, UTF-8, at most 256 KiB; retain the existing title/authors front matter. |
-| Main visual | Root `visual.svg`, at most 5 MiB; existing SVG parse and 1920 × 1080 canvas checks still apply. Other root `visual.*` files reject the entry. |
-| Extra images | `.svg`, `.png`, `.jpg`, `.jpeg`, `.webp`, `.gif`, `.avif`; SVGs at most 5 MiB, other images at most 20 MiB. |
-| Audio | `.mp3`, `.m4a`, `.wav`, `.ogg`, `.aac`, `.flac`; at most 20 MiB each. |
-| Video | `.mp4`, `.webm`, `.mov`; at most 20 MiB each. |
-| Whole entry | At most 100 selected files and 100 MiB combined, including text and main visual. |
+| Variable `DDD_ARCHIVE_ENABLED=true` | V2 jobs replace the V1 job. |
+| Variable `DDD_ARCHIVE_WRITES_ENABLED=true` | Job `archive` may push `student-work`. |
+| Variable `DDD_REQUESTS_ENABLED=true` | Issue requests admitted; job `answer` runs. Stop switch for requests. |
+| `.github/publishing.json` `requests_enabled` | Editor shows the request step. UI only. |
+| Dispatch input `seed_archive` | Seed `student-work` from verified V1. No deployment; no cutover. |
+| Dispatch input `reconcile_seed` | Advance an existing V1 seed to current verified V1, retaining disappeared snapshots hidden. Archive publishing must still be disabled. |
+| Dispatch input `rebind_archive` | Apply the exact reviewed `.github/archive-rebind.json` plan after V2 cutover. No import or deployment in that dispatch. |
 
-Extra media may sit at the root or under `media/` (including subfolders). Every media path component must start with a lowercase letter or digit; remaining characters may also include dots, underscores, and hyphens. Paths are case-sensitive, relative to the group root, and use `/`. Absolute paths, `.`/`..` segments, empty segments, backslashes, and control characters are rejected. A bad filename on otherwise eligible media rejects the update. The importer checks Markdown links/images (including reference syntax) and current annotation resources against the selected files. `./media/file.svg` and local fragment links are supported; a link to an ignored/missing file or another group's path rejects the update. External HTTP(S) and mailto links remain links and are not fetched. Unknown URL schemes are rejected.
+**CAUTION**: Disabling the issue form does not block API-created issues. Use `DDD_REQUESTS_ENABLED`.
 
-Text must decode as UTF-8. SVGs must be UTF-8 static images with no scripts, event handlers, foreign markup, links, animation, document entities, processing instructions, or external resources. Local paint references and embedded PNG/JPEG/WebP data images are supported; re-export as a static self-contained SVG if rejected. Main-visual dimensions are checked as before. Git LFS pointer files are rejected; upload actual media. Audio/video bytes are preserved, but codec compatibility still needs a browser check.
+### 10.2 Jobs
 
-Unsupported files, including READMEs, HTML, JavaScript, workflows, and design sources, are ignored and never copied to the published entry. Files outside the allowed locations are ignored. Limits count selected content only; remote listing/archive limits are separate importer responsibilities. Missing required files, conflicting main visuals, or exceeded limits reject the candidate entry and retain its previous published version when available.
+| Job | Permissions | Function |
+| --- | --- | --- |
+| `pin` | contents read, pages read | Pin latest `main` at execution. |
+| `admission` | contents read, issues read, deployments write | Choose mode; capture request batch at cutoff; reserve cooldown. |
+| `prepare_archive` | contents read, deployments read | Run tests; read archive; import; emit candidate or recovery pair. |
+| `archive` | contents write, deployments read | Revalidate registry, parent and verified release; expected-parent fast-forward of `student-work`. |
+| `publish_archive` | contents read, deployments write, pages write, id-token write | Build, record, authorize, deploy, verify, finalize. |
+| `answer` | contents read, issues write | One bot comment per request; close where final. |
 
-Tests exercise registry errors, path selection, per-file/group limits, exact-commit imports, failure isolation, reference checks, and the template. The local-folder build does not apply the import contract to existing trusted entries. Tickets 07–10 supply the complete bibliography, note, compound-modifier, inline-media and continuous-prose examples. Ticket 10 is locally verified; its deployment remains pending.
+All checkouts at the pinned commit, `persist-credentials: false`. Imported content never runs.
 
-API references: [Git references](https://docs.github.com/en/rest/git/refs#get-a-reference), [trees and truncation](https://docs.github.com/en/rest/git/trees#get-a-tree), and [raw blobs](https://docs.github.com/en/rest/git/blobs#get-a-blob).
+Artifacts: `v2-{admission,prepared,accepted,result}-<run>-<attempt>`, `v2-pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `batch.json`, `report.json`, optional `candidate.tar`, `seed-manifest.json`. Extra members and links rejected. Reports ≤ 8 MiB; metadata and seed manifest ≤ 2 MiB. `EXPECTED_PRODUCER_ATTEMPT` admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
 
-## Live pilot publication — 2026-10-13
+### 10.3 Modes
 
-[PR #12](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/pull/12) passed GitHub validation and was merged using the existing maintainer bypass, without changing repository rules. [Initial publication](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/runs/38375728267) deployed source commit `a18de135270860bc57c012fedd85f9f4a9ec8a67` and passed served-state verification. The push-triggered run before explicit bootstrap stopped at the intended initial-publication prerequisite.
+| Mode | Condition | Action |
+| --- | --- | --- |
+| `seed` | Dispatch `seed_archive` | Requires verified V1 release. Captures served bytes. Rejects groups > 50 MiB. Refuses if `student-work` exists. 20 min total, 180 s per group. No deployment. |
+| `reconcile_seed` | Explicit dispatch, archive publishing disabled | Rechecks current verified V1 in prepare/writer. Updates a parent marked `v1-seed`; retains disappeared snapshots hidden. No deployment or answer. |
+| `rebind` | Explicit dispatch, reviewed exact-parent plan, verified V2 | Preserves old identity/content under a deterministic hidden retired slug; new active identity starts without a fabricated snapshot. No deployment or answer. |
+| `refresh` | Eligible event | Import live groups → accept → build → deploy → verify. |
+| `unchanged` | Archive, `main` and site digest equal verified release | No write, no deployment. |
+| `pending` | Accepted archive ahead of release, same `main` | Build accepted pair; no import. |
+| `retry` | Latest attempt unverified, same code | Reconstruct pair from refs; redeploy. |
+| `repair` | Latest attempt already served | Record verification; no deployment. |
+| `deferred` | Requests off, issue ineligible, cooldown, or quota ≤ 200 | No work. Requests stay open. |
+| `invalid` | Malformed Group field | No import. Answer; close. |
+| `superseded` | `main` moved | Stop. No answer. |
 
-The public site now serves [Dust](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/#dust) from alpha and [the beta control](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/#pilot-beta). All 16 imported group files matched the served manifest digests. Live browser checks passed the 1920 × 1080 main visual, lightbox opening/Escape dismissal, restored dust-trace image, muted audio/video playback and a 390-pixel viewport without horizontal overflow. An [ordinary post-bootstrap refresh](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/runs/38375997452) passed and correctly reported `unchanged` for both groups. Evidence is in ignored `.scratch/pilot-06/2026-10-13/deployed-verification.json`.
+### 10.4 Archive
 
-To test an update, edit `text.md` in the relevant group repository and commit directly to `main`, then wait for a scheduled refresh or run **Publish course website** manually on the main course repository with both recovery options off. Check the latest run summary and reload the entry. Do not select first publication again. Actual ordinary-student access, scheduled delivery, isolated live invalid-upload recovery, exact-candidate retry/rollback and final tickets 07–10 acceptance remain pending.
+- Orphan branch `student-work`. Layout `<slug>/…` plus manifest v2 `publication.json` (≤ 8 MiB; V1 manifests ≤ 2 MiB).
+- Manifest records per group: state, repository, branch, source commit and tree, contract version, registry settings, files (size, SHA-256, Git blob SHA), excluded paths and blob IDs when observed. Unknown IDs stay explicit unknowns.
+- Commit only on content, provenance or state change. Expected parent; no force; sole writable ref `student-work`. Push credentials ephemeral, GitHub-only.
+- Commit trailer `Archive-Authority: v1-seed` or `v2` establishes the publishing authority. Transition to V2 creates a child even with an unchanged content tree. Seed reconciliation cannot move authority back to V1. Missing/ambiguous markers require explicit inspection; they are not guessed from snapshot schema. Protection against branch deletion/non-fast-forward remains a required live invariant.
+- Read: pinned shallow fetch into an isolated bare repository; `git ls-tree -r -z -l --full-tree` preflight (regular blobs, unique paths, exact inventory); then bounded expansion and hash/content validation. Transfer cap: 900 MiB + 8 MiB + 16 MiB.
+- Pages receives visible groups only. The archive manifest never enters `_site`. Hidden = absent from Pages, readable in the public archive.
 
-## Annotation types and modifiers
+| State | Source read | Pages | Archive bytes |
+| --- | --- | --- | --- |
+| `live` | Yes, one commit per run | Latest accepted; retained on failure | Kept |
+| `frozen` | No | Pinned snapshot | Kept; snapshot required |
+| `hidden` | No | Absent | Kept if present |
 
-Ticket 07 adds `[[label|target|type=quote;style=italic;color=crimson]]`. The third field accepts independent `type`, `style` and `color` keys in any order; duplicate/unknown keys, unsupported values and malformed fields remain readable literal text. Notes default to black italic text and `{∗}`; bibliography uses `(■)`; quotations use native quote punctuation when revealed. Explicit inner colors override outer color spans; otherwise legacy spans are inherited. Explicit `style=normal` overrides the note's italic default; other types inherit surrounding Markdown emphasis unless given a style. Legacy two-field annotations and custom emoji markers remain supported. URL/media resolution and contributor-HTML escaping still run after rendering.
+- Removed registry row: archive entry kept as hidden. Bytes never deleted.
+- Routine slug rebinds are rejected. An explicit reviewed migration preserves the previous identity and snapshot under a hidden `retired-…` slug, then installs the new registry identity without a snapshot. The subsequent normal publication imports that repository. Local preparation and independent writer admission are implemented; the live rehearsal is pending.
+- Unreachable source: last accepted snapshot kept.
 
-`static/annotations.js` shares annotation parsing between the browser and `scripts/check_content_links.js`, so typed bibliography URLs and media paths are validated without including modifier text. Run `node --test scripts/test_annotations.js` alongside the Python suite; both PR validation and publication execute these checks. The template and local example contain copyable syntax.
+### 10.5 Release
 
+Identity v2: `main` commit, archive commit, tree, manifest and site digests. Site digest excludes `release.json`.
 
-## Inline image previews — local implementation, 2026-10-13
+- Archive write fails: no deployment.
+- Deployment fails: archive kept; next run retries the pair before any new import.
+- `authorize` rechecks `main` and latest attempt before the Pages mutation.
+- Newer archive or release authority blocks rollback.
+- Verification: release, manifest, one changed-text probe, one changed-media probe. Sampling, not a full hash of served bytes.
+- API budgets: deployment transport 40 calls per client; issue transport 60. Ambiguous writes never retried automatically.
 
-Ticket 08 now renders Markdown images and image annotations as thumbnails in prose, with a faint background preview on hover or keyboard focus. Tap/Enter/Space pins the preview; tap again, Close image preview, Escape, outside activation, scroll or entry navigation dismisses it. Linked Markdown images keep their native link activation. The main visual keeps its separate 1920 × 1080 SVG validation and lightbox.
+### 10.6 Requests
 
-Supplementary images keep their aspect ratio and existing SVG/raster support. A broader SVG-only policy remains unresolved; do not remove raster support or migrate photos on that assumption. The example and group template include wide and transparent tall SVGs. Ticket 10 must revisit the current 0.9em inline height and baseline alongside ticket 09 playback controls.
+- Form `.github/ISSUE_TEMPLATE/publish.yml`; label `publication-request`; field **Group** (slug).
+- Trigger `issues: opened`. Unlabelled or ineligible issues run in concurrency `ignored-issue-<n>`; they cannot displace publication.
+- Capture at cutoff: ≤ 6 requests, ≤ 3 pages of 100. Body ≤ 8 KiB, hashed. Later, edited, closed, unlabelled and overflow requests wait for the next run.
+- Issue-triggered refresh ≥ 10 min apart. Reservation: deployment task `course-refresh`, environment `course-refresh-cooldown`, written before import. Push, schedule and dispatch exempt.
+- A request refreshes all live groups. Issue text never reaches shell, refs or paths.
+- One bot comment per issue, marker `<!-- ddd-publication-request:v1 -->`. Reruns update it and repair failed closes.
 
-Local verification: 74 Python tests, six Node annotation tests, build/syntax/actionlint/whitespace gates, Chrome desktop/keyboard checks and 390px touch emulation passed, including imported relative SVG/raster paths and ticket 07 browser regressions. Evidence is in ignored `.scratch/pilot-06/2026-10-13/ticket-08/results.json`. Physical-phone and live student-permission acceptance remain pending. Ticket 08 is local, uncommitted and not deployed; the pilot repositories were not updated with its examples.
+| Outcome | Issue |
+| --- | --- |
+| Verified; group `updated` or `unchanged` | Published revision stated; closed. |
+| Invalid content | Correction stated; closed. |
+| Group `hidden`, `frozen` or disabled; invalid Group field | Policy stated; closed. |
+| Transient source failure; deferred | Open. |
+| Build, archive, deploy or verify failure | Failed stage stated; open. |
+| Superseded | No answer. |
 
+Schedule stays at ten minutes until the request pilot passes; then hourly, off the hour (e.g. `17 * * * *`).
 
-## Inline playback — local implementation, 2026-10-13
+## 11. Groups and access
 
-Ticket 09 adds `static/playback.js`, inline native audio and uploaded video with Play/Pause and Sound/Mute. Audio starts manually. Half-visible videos try muted playsinline playback while the page is visible and the main-image lightbox is closed. User pause, ended/refused playback and reduced motion suppress automatic starts. Unmuted media need Play after inactivity. Viewport exit, navigation, document hiding and pagehide stop media; page restoration refreshes activity. External embeds stay manual, defer loading until reveal, unload on inactivity and offer the provider link. Playback listeners follow existing interactions so Escape closes the lightbox before activity refreshes.
+### 11.1 Roster
 
-The example and group template ship generated MP3 and H.264/AAC demonstrations. Both READMEs describe tested behavior and limits. Passed: 75 Python tests, 15 Node tests, build/syntax/actionlint/whitespace gates, desktop and 390px touch emulation, simulated autoplay refusal with real manual fallback, imported media, portrait Dust video sizing and ticket 07–08 regressions. Provider streaming and physical phones remain unverified. Evidence: ignored `.scratch/pilot-06/2026-10-13/ticket-09/results.json`.
+Keep outside this repository, maintainer-controlled. Per group: name, slug, repository, verified GitHub usernames, invitation state, effective access, pilot result. A display name is insufficient; students confirm the exact account. `groups.json` holds configuration only.
 
-Ticket 09 is local, uncommitted and not deployed; pilot repository content was not updated. Ticket 10 is next, followed by final template/onboarding and live acceptance.
+### 11.2 Provisioning
 
+1. Confirm owner and username mapping.
+2. Create one public repository, default branch `main`. Copy the **contents** of `templates/group/` to its root. No Pages, secrets or workflows. Personal repositories accepted; private rejected.
+3. Owner adds teammates with **Write** (**Settings → Collaborators and teams**). Track acceptance; an invitation is not access.
+4. Audit effective permissions: organization base permission, team grants including parent teams, direct grants, custom roles. Organization-wide Write, Maintain or Admin breaks isolation. A lower direct grant does not cancel a higher inherited one. Changing organization defaults affects other projects; assess first. Record results.
+5. Check rulesets on the group's `main`: direct commits, no mandatory PR or approval.
+6. Register as `hidden` through a reviewed PR; `python3 scripts/build_site.py` must pass. Switch to `live` by reviewed PR when ready.
+7. Hand over: repository link, slug, site link, editor link, [publication results](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml). Confirm an ordinary account can read a run's **Course publication** summary.
 
-## Verified authoring deployment — 2026-10-13
+**WARNING**: A `live` group still holding template content publishes it.
 
-Tickets 07–09 are merged through PR #13 and deployed at source `7ca73bd45e7a8746c97d87ec51a02afddd46710f`. Pages run 38412487212 passed normal preparation, deployment and served-state verification with both recovery options off. An independent ordinary-URL check verified all 31 files against the reviewed candidate, including Dust and beta. Live Chrome desktop, keyboard and 390px touch-emulation checks passed without JavaScript errors. Evidence: ignored `.scratch/pilot-06/2026-10-13/release-07-09-evidence/`. The maintainer bypass was explicitly authorized by the user after automatic review initially rejected its use. Ticket 10 is complete locally and awaits publication. Full student-access/recovery pilot acceptance remains open.
+Acceptance, ordinary student account (never an admin session): commit to own `text.md`; see it published; effective permission below Write in every other group repository and in the course repository.
 
-### Prose flow
+### 11.3 Changes
 
-Source newlines, Markdown hard breaks and blank lines between adjacent top-level prose paragraphs become spaces. Structural Markdown (headings, lists, blockquotes and code blocks) remains separate. Code newlines are preserved. LF and CRLF front matter are supported. Entry prose uses 16px type with fixed 40px leading. Inline audio/video controls are vertically centred; video controls use their own normal leading. Controls that wrap onto multiple rows can still enlarge their line box.
+- Rename, transfer or branch change: keep the public slug and use the explicit rebind procedure below. A routine registry edit alone is rejected by V2.
+- Membership: verify username; invite to the correct repository only. Review direct and inherited grants of departing members. Removing access does not unpublish.
+- Unpublish: set `hidden` by reviewed PR; confirm the next verified release omits the entry. Never delete `text.md` or `visual.svg` to unpublish: an incomplete update retains the previous snapshot.
+- Failed import: students correct content from the run summary; maintainers correct address, branch, quota and publication faults.
 
-Bibliography references start expanded with matching `aria-expanded` state, render inline in black, and retain the label toggle. Their targets render as text or links rather than embedded media. Black overrides surrounding colors and bibliography color modifiers; notes and other annotation colors keep their existing behavior.
+### 11.4 Course repository
 
-### Default note visibility and inline video controls
+Review every PR to `main`, including the full **Files changed** list. The active V2 ruleset requires a PR and the GitHub Actions `validate` check, with an up-to-date branch and resolved review threads. Approval count is zero; no bypass actors are configured. `main` and `student-work` reject deletion and non-fast-forward updates. The `github-pages` environment is restricted to `main`. PR validation is offline, read-only, fixture-based.
 
-Notes start expanded with matching `aria-expanded` state and retain their label toggle. Inline uploaded videos have no Play/Pause or Sound/Mute buttons; muted visibility-based playback and inactivity handling remain. Reduced motion and refused autoplay leave videos still. Audio keeps its native controls.
+## 12. Recovery
 
-### Annotation punctuation and anchored media previews
+### 12.1 V1: failed or cancelled deployment
 
-Notes enclose their marker and content in braces; colored ✶ questions are also enclosed. Bibliography uses `(■ Author, year. Title)`. Image and video previews expand from their inline anchor, fit the viewport, and render opaque above the text. Video previews try playback with sound on hover and stop on pointer exit; inline audio also plays on hover and pauses on exit. Browser audio policies may require a click first. Escape, navigation, scrolling, resize, focus loss and page hiding dismiss previews.
+1. Wait until the run stops.
+2. Run an ordinary refresh. If the release was served late, it verifies and continues.
+3. Never served: **Run workflow → main**, `retry_publication` on, `first_publication` off. The run downloads `course-pages-<run>-<attempt>`, verifies it against the record and redeploys. No imports; older code may return with it.
+4. Confirm summary **verified**. Run an ordinary refresh.
+
+Artifact expired (30 days): restore the exact candidate from a preserved copy under supervision.
+
+**WARNING**: Never delete deployment records, rerun bootstrap or deploy an offline preview to clear a pending record.
+
+V1 retry refuses a recorded V2 release.
+
+### 12.2 V2
+
+- Pending or unverified release: next run selects `retry` or `repair`. No manual action.
+- Seed: dispatch `seed_archive` only after protected refs exist (§14, item 6), with archive publishing disabled. If V1 advances, dispatch `reconcile_seed` (not `seed_archive`) before cutover. It creates a normal child, verifies current V1 again in the writer, and retains disappeared snapshots hidden. A failed/unverified latest V1 attempt must be recovered first. Cutover still rejects a stale seed. Seed/reconciliation inputs cannot be combined or used after archive mode is enabled.
+- Shadow or recovery build:
+
+  ```sh
+  python3 scripts/build_site.py --archive-snapshot <verified-folder> --archive-commit <full-sha>
+  ```
+
+  Uses code and registry from the current checkout; check out the recorded `main` commit for exact reproduction. No import, no Pages read, no publication. Does not prove the folder's origin.
+
+### 12.3 Original V1 recovery artifact and shadow comparison
+
+Retain the original complete Pages artifact for the currently verified V1 release and its matching code commit/tree. A build from newer editor code is not that artifact. The following local commands verify the full artifact digest, manifest and every file, then preserve a self-contained recovery bundle:
+
+```sh
+python3 scripts/publication_recovery.py capture-v1 --site <original-v1-site> --release <verified-v1-release.json> --out <new-capture-directory>
+python3 scripts/publication_recovery.py verify-capture --capture <capture-directory> --expected-release <verified-v1-release.json>
+python3 scripts/publication_recovery.py compare-seed --capture <capture-directory> --archive-snapshot <verified-seed-directory> --archive-commit <full-seed-sha>
+```
+
+`compare-seed` checks the visible inventory and every included byte, enumerates intended archive metadata/schema additions and exits nonzero on mismatch. It does not demand equal whole-site hashes across the renderer/schema change. Capture verifies consistency with the supplied release; obtain verified/live release authority independently through deployment records and served checks. Retain the capture across Actions artifact expiry.
+
+Stage a rollback locally with the current V2 archive head recorded:
+
+```sh
+python3 scripts/publication_recovery.py stage-rollback --capture <capture-directory> --expected-release <verified-v1-release.json> --archive-commit <current-student-work-sha> --out <new-rollback-directory>
+```
+
+The staged `site/` is byte-identical to the original V1 artifact. `rollback-plan.json` records its code/release pins and archive head to preserve. Staging does not deploy or change refs. The reviewed rollback deployment must pause ordinary publishing, verify that archive head before/after, deploy these exact V1 bytes with their matching V1 recovery code/manifest, record the visible rollback point, and prove served verification. Do not feed manifest v2 to a V1 decoder. Deployment workflow/rehearsal is still pending; restoring only old `main` is insufficient.
+
+### 12.4 Explicit identity rebind
+
+Recover pending publication first. Read the exact current archive commit and old group identity. Prepare using the proposed trusted registry, which changes only the intended group identity/settings (unrelated state changes may be included):
+
+```sh
+python3 scripts/archive_rebind.py prepare --archive-snapshot <verified-parent-directory> --archive-commit <full-parent-sha> --registry <proposed-groups.json> --slug <group> --old-repository <old-owner/repository> --old-branch <old-branch> --out <new-rebind-directory>
+```
+
+Review `candidate/` and `rebind.json`. Include the exact spec as `.github/archive-rebind.json` alongside the proposed registry in a reviewed course-code change. The spec pins the archive parent, old/new identities and deterministic retired slug. With V2 enabled and writes authorized, dispatch `rebind_archive` alone. Both prepare and writer derive the whole expected archive independently from the pinned parent, reviewed spec and registry; retained bytes cannot be replaced. No source read or Pages deployment occurs. Run a normal refresh afterward to accept/publish the new repository; remove the one-time spec in the follow-up review. If the parent advances first, regenerate and review the spec rather than changing its SHA by hand.
+
+### 12.5 Freeze and offline reproduction
+
+Set intended visible groups to `frozen` through the reviewed registry change; leave hidden groups hidden. Publish and verify that frozen release first. In a clean checkout of its exact code commit/tree:
+
+```sh
+python3 scripts/archive_freeze.py prepare --release <verified-v2-release.json> --repository <isolated-archive.git> --archive-commit <full-archive-sha> --main-commit <full-main-sha> --main-tree <full-main-tree-sha> --out <new-freeze-record.json>
+python3 scripts/archive_freeze.py reproduce --record <freeze-record.json> --repository <isolated-archive.git> --archive-commit <full-archive-sha> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
+python3 scripts/archive_freeze.py create-local-tag --repository <isolated-archive.git> --record <freeze-record.json> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
+python3 scripts/archive_freeze.py verify-local-tag --repository <isolated-archive.git> --main-commit <full-main-sha> --main-tree <full-main-tree-sha>
+```
+
+The annotated `final-2026` tag identifies the exact archive commit and the matching main commit/tree, both manifest digests and site digest. Every command checks the clean code checkout; archive bytes are materialized from the pinned local Git commit. Tag verification reproduces the full release and rejects altered annotation digests/code pins. Local creation refuses an existing tag; reproduction reads no student repositories, Pages or media caches. Tag publication/protection requires the reviewed authorized release procedure and live acceptance. The tag covers included archived bytes, not excluded originals or external services.
+
+### 12.6 Unpublishing and history requests
+
+For ordinary unpublishing, set the group to `hidden` through review, publish and verify both its absent entry and absent served content paths. The public archive still retains its bytes.
+
+For a requested history purge, first stop publication and archive writes using their maintainer switches. Inventory the affected paths/blob identities across `student-work`, all freeze tags, Actions artifacts, preserved recovery bundles and the served site. Read-only `git rev-list --objects` and the Actions artifact inventory establish the copies under repository control. Prepare the exact refs/artifacts to change, preserved unaffected release pairs, rollback copies and re-verification steps for specific approval. After an authorized rewrite, rebuild only from the reviewed remaining state, verify the new archive and served inventories, and record which copies were removed. No history rewrite or deletion is automatic. Public clones/caches and excluded originals remain outside that operation.
+
+Remaining live work: actual V1 rollback deployment, protected freeze-tag publication, rebind rehearsal and specifically authorized history operations.
+
+## 13. Verification
+
+```sh
+python3 -m unittest discover -s scripts -p 'test_*.py'
+node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
+python3 scripts/build_site.py
+actionlint .github/workflows/pages.yml .github/workflows/validate.yml
+git diff --check
+```
+
+- Browser: `scripts/check_editor_browser.js`, `check_editor_fallback.js`, `check_editor_fidelity.js`, in Chrome and WebKit. Rebuild `_site` first.
+- Migration rehearsal: `python3 -m unittest discover -s scripts -p 'test_pilot_migration.py'`. Simulated transports only.
+- CI: `validate.yml` runs unit, Node and offline build on PRs. Publication reruns tests before import.
+
+Last local results (2026-10-14):
+
+| Check | Result |
+| --- | --- |
+| Python | 185 passed in 126.607 s for the release. `/tmp/ddd-v2-release-python.log`. |
+| Node | 34 passed. |
+| Chrome fidelity | Inconsistent: one exact pass at 1280/390 px; other runs differ at 23 native-audio-edge pixels at 1280. Equal computed layout. Foreground delay did not fix it and was reverted. No tolerance or masking added. |
+| WebKit fidelity | Current script passed exact layout/pixels at 1280 and 390 px. `/tmp/ddd-v2-webkit-fidelity.log`. |
+| Browser lifecycle/storage | Chrome and WebKit passed reload with media, failed-save switch, repeated renders, 390 px overflow, CAS, quota rollback and shared blobs. `/tmp/ddd-v2-{chrome,webkit}-browser.log`. |
+| Denied storage | Chrome and WebKit passed text fallback, quota retry, coexisting draft preservation, explicit migration and missing-attachment discard. `/tmp/ddd-v2-{chrome,webkit}-fallback.log`. |
+| Build/workflow/whitespace | Offline build, actionlint 1.7.7 and `git diff --check` passed. |
+
+Limits of evidence: fixtures and local bare repositories. Unproven: Actions identity and permissions, repository protections, Pages and issue behavior, Safari media, keyboard/touch on devices, cohort timing and bandwidth.
+
+## 14. Open work
+
+Dependency order:
+
+1. Review controller and workflow security against real Actions semantics: effective permissions, `main` pin, rerun artifact admission, concurrency, answers.
+2. Seed reuse is implemented: private temporary cache outside candidate authority, hash-checked reads, cleanup on success/failure and aggregate seed Pages metrics. Tests prove one download per distinct blob and corrupt-cache refetching.
+3. Controller API metrics now accumulate per command through sealed reports/build state, including prepare, accept, build, record, authorize and verify. Tests use fresh clients and check repeated checkpoints/nested authorization. Remaining: `archive_transfer_bytes` measures `.git/objects`, a proxy; measure near-limit cohorts, history growth, low quota, global deadline, writer transfer costs and cheaper idle exit.
+4. Migration tooling now includes stale-seed reconciliation with durable authority, full original V1 artifact capture/verification, byte-level seed comparison, reviewed exact-parent rebind and local freeze-tag/full-pair reproduction. Takedown/history instructions are documented. Remaining: actual compatible V1 artifact capture, reviewed cutover, rollback deployment controller/workflow and live rehearsal, protected tag publication and live rebind rehearsal.
+5. Chrome fidelity. Lifecycle, security, inventory and capacity matrix. Safari media. Keyboard and touch. Deployment races.
+6. Recheck live baseline read-only. Propose `main`, `student-work` and tag protections. Prove Actions actor policy in a disposable pilot before enabling writes.
+7. Two ordinary student-account pilots: edit, upload, delete, request. Source-loss, offline and rollback rehearsals. Enable Issues, label, UI policy and switches only on authorization. Hourly schedule only after pilot acceptance.
+8. Reconcile documentation; final checks; release and settings proposal.
+
+Carried from V1: required `validate` check; access cutover (remove student grants on the course repository after pilot); student-account checks; live failure recovery and rollback.
+
+## 15. Record
+
+| Date | Event | Evidence |
+| --- | --- | --- |
+| 2026-10-12 | Inventory: `example` and `dust` served from `027c2e3`. 24 source, 20 served, 2 unmerged files saved with digests. | `.scratch/pilot-06/2026-10-12/` |
+| 2026-10-12 | `main` ruleset: 1 approval, stale dismissal, maintainer bypass, no required check. Organization base Read; 17 Read, 4 Maintain, 3 Admin grants; 1 team Maintain. Ruleset since removed. | — |
+| 2026-10-13 | [`2026-ddd-pilot-alpha`](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-alpha), [`2026-ddd-pilot-beta`](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta) created: public, `main`, template. No students invited. | — |
+| 2026-10-13 | Repository pilot, 6 stages passed: import, isolated bad SVG, correction, missing-text retention, removal, restoration. | `.scratch/pilot-06/2026-10-13/repository-pilot-results.json` |
+| 2026-10-13 | Dust migrated to alpha `3fca3f8`: 13 files; media renamed lowercase; PNG embedded in SVG container. | `…/2026-10-13/dust-migration/` |
+| 2026-10-13 | PR #12 merged (maintainer bypass). Bootstrap run `38375728267` verified `a18de13`; refresh `38375997452` `unchanged`; 16 files matched. | `…/2026-10-13/deployed-verification.json` |
+| 2026-10-13 | PR #13 (tickets 07–09): run `38412487212` verified `7ca73bd`; 31 files matched. Bypass authorized by maintainer. | `…/2026-10-13/release-07-09-evidence/` |
+| 2026-10-13 | PRs #14–#16: continuous prose, inline bibliography, uniform leading, `ddd-abstract` without visual. | Git history |
+| 2026-10-14 | PRs #17–#18, `9190958`: notes open, video buttons removed, publication reduced to `example` and `ddd-abstract`. Served by run `38525824509`. | Git history |
+| 2026-10-14 | Issues disabled. `main` ruleset removed (maintainer-confirmed); `main` unprotected. V2 checkpoint on `v2`; paused. | Handoff |
+
+`.scratch/` is local and Git-ignored, not a backup. Copy evidence to maintainer-controlled storage before cutover.

@@ -1,5 +1,8 @@
 ((root) => {
   function createVideoController(video, render, allowAutoplay = true) {
+    const listeners = new AbortController();
+    const listen = (type, handler) => video.addEventListener(type, handler, { signal: listeners.signal });
+    let disposed = false;
     let active = false;
     let userPaused = false;
     let autoplayBlocked = !allowAutoplay;
@@ -17,7 +20,7 @@
     }
 
     async function start(automatic) {
-      if (!active || pending) return;
+      if (disposed || !active || pending) return;
       const request = ++generation;
       pending = true;
       status = "";
@@ -41,13 +44,14 @@
     }
 
     function setActive(next) {
-      if (active === next) return;
+      if (disposed || active === next) return;
       active = next;
       if (!active) pause();
       else if (!userPaused && !autoplayBlocked && video.muted && !video.ended) start(true);
     }
 
     function toggle() {
+      if (disposed) return;
       if (!video.paused || pending) {
         userPaused = true;
         pause();
@@ -57,20 +61,24 @@
       }
     }
 
-    video.addEventListener("play", () => {
+    listen("play", () => {
       if (!active) video.pause();
       update();
     });
-    video.addEventListener("pause", update);
-    video.addEventListener("volumechange", update);
-    video.addEventListener("ended", () => { userPaused = true; update(); });
-    video.addEventListener("error", () => {
+    listen("pause", update);
+    listen("volumechange", update);
+    listen("ended", () => { userPaused = true; update(); });
+    listen("error", () => {
       autoplayBlocked = true;
       status = "Could not load this video.";
       pause();
     });
     update();
-    return { setActive, toggle, toggleSound: () => { video.muted = !video.muted; update(); } };
+    return {
+      setActive, toggle,
+      toggleSound: () => { if (!disposed) { video.muted = !video.muted; update(); } },
+      dispose: () => { active = false; disposed = true; pause(); listeners.abort(); },
+    };
   }
 
   function prepare(textEl) {
@@ -113,22 +121,39 @@
     }
   }
 
+  let mounted;
   function setup() {
+    if (mounted) return mounted;
     const videos = new Map();
+    let media = [];
+    let observer;
     const allowAutoplay = !matchMedia("(prefers-reduced-motion: reduce)").matches;
-    for (const wrapper of document.querySelectorAll(".inline-playback")) {
-      const video = wrapper.querySelector("video");
-      const controller = createVideoController(video, state => {
-        wrapper.querySelector(".playback-status").textContent = state.status;
-      }, allowAutoplay);
-      videos.set(video, controller);
+    function mount() {
+      dispose();
+      for (const wrapper of document.querySelectorAll(".inline-playback")) {
+        const video = wrapper.querySelector("video");
+        videos.set(video, createVideoController(video, state => {
+          wrapper.querySelector(".playback-status").textContent = state.status;
+        }, allowAutoplay));
+      }
+      media = [...document.querySelectorAll(".entry-text audio, .entry-text video, .entry-text iframe[data-player-src]")];
+      observer = new IntersectionObserver(refresh, { threshold: [0, 0.5, 1], rootMargin: "-40px 0px 0px" });
+      media.forEach(element => observer.observe(element));
+      refresh();
     }
-    const media = [...document.querySelectorAll(".entry-text audio, .entry-text video, .entry-text iframe[data-player-src]")];
+
+    function dispose() {
+      stopAll();
+      observer?.disconnect();
+      videos.forEach(controller => controller.dispose());
+      videos.clear();
+      media = [];
+    }
 
     const hoveredAudio = new Set();
     document.addEventListener("pointerover", async event => {
       const audio = event.target.closest(".inline-audio");
-      if (event.pointerType !== "mouse" || !audio || audio.contains(event.relatedTarget) || !isActive(audio)) return;
+      if (event.pointerType !== "mouse" || !audio || !media.includes(audio) || audio.contains(event.relatedTarget) || !isActive(audio)) return;
       hoveredAudio.add(audio);
       try {
         await audio.play();
@@ -171,15 +196,14 @@
       }
     }
 
-    const observer = new IntersectionObserver(refresh, { threshold: [0, 0.5, 1], rootMargin: "-40px 0px 0px" });
-    media.forEach(element => observer.observe(element));
     document.addEventListener("visibilitychange", () => { if (document.hidden) stopAll(); else refresh(); });
     window.addEventListener("hashchange", stopAll);
     window.addEventListener("pagehide", stopAll);
     window.addEventListener("pageshow", refresh);
     document.addEventListener("click", () => queueMicrotask(refresh));
     document.addEventListener("keydown", event => { if (event.key === "Escape") queueMicrotask(refresh); });
-    refresh();
+    mounted = { mount, dispose };
+    return mounted;
   }
 
   const api = { createVideoController, prepare, setup };

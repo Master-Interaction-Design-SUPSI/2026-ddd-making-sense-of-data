@@ -30,8 +30,19 @@ function resolveUrl(url, folder) {
   return `${folder}/${url}`;
 }
 
+let resourceResolver = null;
+
 function safeUrl(url, folder, kind) {
   if (/[\u0000-\u001f\u007f\\]/.test(url)) return null;
+  if (!/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url) && resourceResolver) {
+    let path;
+    try { path = decodeURIComponent(url.split(/[?#]/)[0]).replace(/^\.\//, ""); }
+    catch { return null; }
+    if (path.split("/").some(part => ["", ".", ".."].includes(part)) || /[\u0000-\u001f\u007f\\]/.test(path)) return null;
+    const owned = resourceResolver(path, kind, folder);
+    if (owned === false) return null;
+    if (owned) return owned + (url.includes("#") ? url.slice(url.indexOf("#")) : "");
+  }
   const resolved = resolveUrl(url, folder);
   try {
     const parsed = new URL(resolved, document.baseURI);
@@ -238,20 +249,22 @@ function renderEntry(entry) {
   html += `<div class="entry-text">`;
   if (entry.text !== null) html += renderMarkdown(body);
   html += `</div>`;
-  if (entry.visual) {
+  const visual = entry.visual && safeUrl(entry.visual === `${entry.folder}/visual.svg` ? "visual.svg" : entry.visual, entry.folder, "media");
+  if (visual) {
     html +=
       `<figure class="entry-visual">` +
-      `<img src="${esc(entry.visual)}" width="1920" height="1080" alt="${esc(entry.title)} — visualisation">` +
+      `<img src="${esc(visual)}" width="1920" height="1080" alt="${esc(entry.title)} — visualisation">` +
       `</figure>`;
   }
 
-  section.innerHTML = html;
+  const template = document.createElement("template");
+  template.innerHTML = html;
 
   /* Single resolution pass: every relative path in the rendered text —
      annotation resources and markdown-native ones (e.g. ![…](photo.jpg)) —
      resolves against the Entry's folder. The hero visual above is already
      a full path and sits outside this scope. */
-  const textEl = section.querySelector(".entry-text");
+  const textEl = template.content.querySelector(".entry-text");
   for (const el of textEl.querySelectorAll("[src]")) {
     const src = el.getAttribute("src");
     const safe = src && safeUrl(src, entry.folder, "media");
@@ -266,6 +279,7 @@ function renderEntry(entry) {
   }
   prepareInlineImages(textEl);
   CoursePlayback.prepare(textEl);
+  section.append(template.content);
 
   return section;
 }
@@ -303,6 +317,7 @@ function prepareInlineImages(textEl) {
 
 function buildNav(entries) {
   const nav = document.getElementById("nav");
+  nav.replaceChildren();
   entries.forEach((entry, i) => {
     const a = document.createElement("a");
     a.href = `#${entry.folder}`;
@@ -352,6 +367,7 @@ function watchSections(entries) {
     { rootMargin: "-20% 0px -55% 0px" }
   );
   document.querySelectorAll(".entry").forEach((s) => observer.observe(s));
+  return () => observer.disconnect();
 }
 
 /* ---------- interactions ---------- */
@@ -375,7 +391,7 @@ function toggleCenterX(toggle) {
 }
 
 function setupInteractions() {
-  setupImagePreviews();
+  const clearPreview = setupImagePreviews();
   const lightbox = document.getElementById("lightbox");
   const lightboxImg = lightbox.querySelector("img");
 
@@ -437,7 +453,7 @@ function setupInteractions() {
     lightboxImg.src = "";
     document.body.classList.remove("lightbox-open");
   }
-  CoursePlayback.setup();
+  return () => { clearPreview(); closeLightbox(); };
 }
 
 function setupImagePreviews() {
@@ -580,40 +596,58 @@ function setupImagePreviews() {
       event.target.click();
     }
   });
+  return clear;
 }
 
 /* ---------- boot ---------- */
 
-(async function init() {
-  const container = document.getElementById("entries");
-  let folders;
-  try {
-    const res = await fetch("entries.json");
-    folders = await res.json();
-  } catch {
-    container.innerHTML = `<p class="site-note">Could not load entries.json.</p>`;
-    return;
-  }
+let clearInteractions;
+let disposeSections = () => {};
+let playback;
+let startRevision = 0;
 
-  if (!Array.isArray(folders) || folders.length === 0) {
-    container.innerHTML = `<p class="site-note">No entries yet.</p>`;
-    return;
-  }
+function disposeRender() {
+  clearInteractions?.();
+  disposeSections();
+  playback?.dispose();
+}
 
-  const loaded = await Promise.all(folders.map(loadEntry));
-  for (const entry of loaded) {
-    if (entry.text === null && entry.visual === null) {
-      console.warn(`Entry "${entry.folder}" has no text.md and no visual.svg — skipped.`);
-    }
-  }
-
-  const shown = loaded.filter((e) => e.text !== null || e.visual !== null);
-  shown.forEach((entry) => {
-    container.appendChild(renderEntry(entry));
-  });
+function render(entries) {
+  if (!clearInteractions) clearInteractions = setupInteractions();
+  if (!playback) playback = CoursePlayback.setup();
+  const position = { x: window.scrollX, y: window.scrollY };
+  disposeRender();
+  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null);
+  document.getElementById("entries").replaceChildren(...shown.map(renderEntry));
   buildNav(shown);
   buildMarkers(shown);
   if (shown.length) setCurrent(shown[0], 0);
-  watchSections(shown);
-  setupInteractions();
-})();
+  else {
+    document.getElementById("current").textContent = "";
+    document.getElementById("current-authors").textContent = "";
+  }
+  disposeSections = watchSections(shown);
+  playback.mount();
+  window.scrollTo(position.x, position.y);
+}
+
+async function loadEntries() {
+  const response = await fetch("entries.json");
+  if (!response.ok) throw new Error("Could not load entries.json.");
+  const folders = await response.json();
+  if (!Array.isArray(folders)) throw new Error("Invalid entries.json.");
+  return Promise.all(folders.map(loadEntry));
+}
+
+async function start(options = {}) {
+  const revision = ++startRevision;
+  const entries = await (options.loadEntries || loadEntries)();
+  if (revision !== startRevision) return;
+  resourceResolver = options.resolveResource || null;
+  render(entries);
+}
+
+globalThis.CourseSite = {
+  start, render,
+  dispose() { startRevision++; disposeRender(); resourceResolver = null; },
+};

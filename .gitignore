@@ -3,3 +3,4 @@ _site/
 __pycache__/
 .scratch/
 .playwright-cli/
+.playwright-mcp/

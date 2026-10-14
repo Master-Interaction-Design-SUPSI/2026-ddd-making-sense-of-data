@@ -34,35 +34,70 @@ def encode(value):
 
 def validate_release(value):
     fields = {"version", "run_id", "run_attempt", "source_commit", "source_tree", "site_sha256", "manifest_sha256"}
-    if not isinstance(value, dict) or set(value) != fields or type(value["version"]) is not int or value["version"] != 1:
+    v2 = {'version', 'run_id', 'run_attempt', 'main_commit', 'main_tree', 'archive_commit',
+          'archive_manifest_sha256', 'served_manifest_sha256', 'site_sha256', 'probes'}
+    if (not isinstance(value, dict) or type(value.get('version')) is not int
+            or value['version'] not in (1, 2) or set(value) != (fields if value['version'] == 1 else v2)):
         raise RecoveryError("Invalid publication record; do not bypass the freshness check")
     for key in ("run_id", "run_attempt"):
         if not isinstance(value[key], str) or not re.fullmatch(r"[1-9][0-9]*", value[key]):
             raise RecoveryError("Invalid publication run identity")
-    for key, length in (("source_commit", 40), ("source_tree", 40), ("site_sha256", 64), ("manifest_sha256", 64)):
+    digests = (("source_commit", 40), ("source_tree", 40), ("site_sha256", 64), ("manifest_sha256", 64)) if value['version'] == 1 else (
+        ('main_commit', 40), ('main_tree', 40), ('archive_commit', 40), ('archive_manifest_sha256', 64),
+        ('served_manifest_sha256', 64), ('site_sha256', 64))
+    for key, length in digests:
         if not isinstance(value[key], str) or not re.fullmatch(r"[0-9a-f]{" + str(length) + "}", value[key]):
             raise RecoveryError("Invalid publication digest: " + key)
+    if value['version'] == 2:
+        probes = value['probes']
+        if (not isinstance(probes, list) or len(probes) > 16
+                or any(not isinstance(path, str) or len(path) > 576 or len(path.split('/')) < 2
+                       or not all(re.fullmatch(r'[a-z0-9][a-z0-9._-]*', part) for part in path.split('/'))
+                       for path in probes) or len(set(probes)) != len(probes)):
+            raise RecoveryError('Invalid publication content probes')
+    if len(encode(value)) > 4096:
+        raise RecoveryError('Publication record exceeds its served byte limit')
     return value
 
 
-def served_release(url, expected, attempts=12, delay=10):
+def served_release(url, expected, attempts=12, delay=10, *, metrics=None):
     validate_release(expected)
     error = "Publication is not served yet"
+    deadline = time.monotonic() + 180
     for attempt in range(attempts):
+        if time.monotonic() >= deadline:
+            break
+        reader = SiteReader(url)
         try:
-            reader = SiteReader(url)
+            reader.overall_deadline = deadline
             release = json.loads(reader.read(RELEASE, 4096))
             manifest = reader.read(MANIFEST, MAX_MANIFEST_BYTES)
-            if release != expected or digest(manifest) != expected["manifest_sha256"]:
+            manifest_hash = expected['manifest_sha256'] if expected['version'] == 1 else expected['served_manifest_sha256']
+            if release != expected or digest(manifest) != manifest_hash:
                 raise RecoveryError("Served publication differs from the latest deployment record")
             groups = decode_manifest(manifest)
+            if expected['version'] == 2:
+                for path in expected['probes']:
+                    slug, name = path.split('/', 1)
+                    record = groups.get(slug, {}).get('files', {}).get(name)
+                    if record is None:
+                        raise RecoveryError('Verification probe is outside the served inventory')
+                    content = reader.read(path, record['size'])
+                    if len(content) != record['size'] or digest(content) != record['sha256']:
+                        raise RecoveryError('Served content probe differs from accepted snapshot: ' + path)
             if json.loads(reader.read(RELEASE, 4096)) != expected:
                 raise RecoveryError("Served publication changed during verification")
             return groups
         except (RecoveryError, ValueError) as failure:
             error = str(failure)
+        finally:
+            if metrics is not None:
+                for key, count in reader.metrics.items():
+                    metrics[key] = metrics.get(key, 0) + count
         if attempt + 1 < attempts:
-            time.sleep(delay)
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(delay, remaining))
     raise RecoveryError(error + "; publication is blocked. See MAINTAINERS.md for recovery.")
 
 
@@ -96,6 +131,11 @@ def git_revision(ref):
     return subprocess.check_output(["git", "rev-parse", ref], cwd=ROOT, text=True).strip()
 
 
+def worktree_clean():
+    return not subprocess.check_output(["git", "status", "--porcelain", "--untracked-files=all"],
+                                       cwd=ROOT, text=True).strip()
+
+
 def save_state(state):
     STATE.parent.mkdir(parents=True, exist_ok=True)
     STATE.write_bytes(encode(state))
@@ -125,6 +165,8 @@ def prepare(records, url, first_publication=False, retry_publication=False):
             if not latest:
                 raise RecoveryError("There is no recorded candidate to retry")
             release = validate_release(latest["payload"])
+            if release['version'] == 2:
+                raise RecoveryError('Archive release requires durable main/archive reconstruction, not V1 artifact retry')
             state.update(status="retrying", release=release, deployment_id=latest["id"])
             save_state(state)
             output("retry", "true")
@@ -143,14 +185,22 @@ def prepare(records, url, first_publication=False, retry_publication=False):
             if first_publication:
                 raise RecoveryError("A publication record already exists; do not use first publication")
             previous = validate_release(latest["payload"])
+            if previous['version'] == 2:
+                raise RecoveryError('Archive authority is active; use archive publication or the rehearsed V1 rollback')
             previous_groups = served_release(url, previous)
         else:
             if not first_publication:
                 raise RecoveryError("No publication record. A maintainer must run the initial publication explicitly")
             require_unpublished(url)
-        build_site.main(import_remote=True, report_path=REPORT,
+        build = build_site.main(import_remote=True, report_path=REPORT,
                         published_url=url if previous else None, first_publication=previous is None,
-                        expected_manifest_sha256=previous["manifest_sha256"] if previous else None)
+                        expected_manifest_sha256=previous["manifest_sha256"] if previous else None,
+                        allow_unchanged=bool(previous and previous["source_tree"] == git_revision("HEAD^{tree}")
+                                             and worktree_clean()))
+        if build["build_status"] == "unchanged":
+            state.update(status="unchanged", release=previous)
+            save_state(state)
+            return
         report = json.loads(REPORT.read_text())
         manifest = (build_site.OUTPUT / MANIFEST).read_bytes()
         groups = decode_manifest(manifest)
@@ -170,6 +220,7 @@ def prepare(records, url, first_publication=False, retry_publication=False):
         state.update(status="unchanged" if unchanged else "prepared", release=release)
         if not unchanged:
             (build_site.OUTPUT / RELEASE).write_bytes(encode(release))
+            build_site.enforce_site_budget(build_site.OUTPUT)
             output("deploy", "true")
         save_state(state)
     except Exception as error:
@@ -239,6 +290,7 @@ def restore_candidate(records, archive):
                 or site_digest(folder) != release["site_sha256"]):
             raise RecoveryError("Saved artifact does not match the recorded candidate")
         decode_manifest((folder / MANIFEST).read_bytes())
+        build_site.enforce_site_budget(folder)
         folder.rename(build_site.OUTPUT)
     state["status"] = "awaiting_deployment"
     save_state(state)
@@ -279,6 +331,11 @@ def summary():
         values = (result["slug"], result.get("publication_status", result["status"]),
                   selected.get("commit", "—"), result.get("commit") or "—", result.get("error", ""))
         lines.append("| " + " | ".join(cell(value) for value in values) + " |")
+    if report.get("transport"):
+        lines.extend(["", "Build transport (deployment and issue APIs excluded):", "",
+                      "| Measurement | Value |", "| --- | --- |"])
+        lines.extend("| " + cell(key) + " | " + cell(value) + " |"
+                     for key, value in report["transport"].items())
     if state.get("error"):
         lines.extend(["", cell(state["error"])])
     if state.get("deployment_id"):
