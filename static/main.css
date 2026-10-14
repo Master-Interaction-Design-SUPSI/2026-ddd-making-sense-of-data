@@ -1,6 +1,6 @@
 /* Data Driven Design — MAInD SUPSI
    Broad Arial prose and inline media, with a separate left navigation rail.
-   The bar and prose share a fixed 40px rhythm. Inline media stays at or
+   Prose uses fixed 52px leading. Inline media stays at or
    below 30px so it cannot expand the reading lines. Press g for guides. */
 
 :root {
@@ -18,7 +18,7 @@
   --side-width: 180px;
   --header-height: 40px;
   --prose-size: clamp(24px, 2.2vw, 32px);
-  --prose-leading: 40px;
+  --prose-leading: 52px;
   --reading-row: var(--prose-leading);
   --inline-media-height: 30px;
   --annotation-default: var(--signal);

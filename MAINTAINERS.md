@@ -9,10 +9,10 @@ Scope: course site, registry, import, publication, editor, archive. Revision: 20
 
 | Item | State |
 | --- | --- |
-| Production | `main` `9190958`; V1 publisher. Pages run `38525824509`; release metadata matches deployment record. |
+| Production | V2 code merged in PR #19; V1 publishing remains active until the verified archive cutover. The served `release.json` and latest verified deployment record identify the current release. |
 | Published | `example` (local); `ddd-abstract` from `ginevraterenghi/ddd-abstract` `3a8f717`, 19 files, 22,466,039 B. |
 | Hidden | `dust` (`2026-ddd-pilot-alpha`), `pilot-beta` (`2026-ddd-pilot-beta`). Sources intact. |
-| V2 | Branch `v2`: release and archive cutover authorized on 2026-10-14. Switches remain off until protected refs, verified V1 capture and seed comparison pass. |
+| V2 | Release and archive cutover authorized on 2026-10-14. Protected refs and the actual Actions token pilot passed; archive publishing is enabled only after the verified V1 capture and seed comparison pass. |
 | Settings | Issues disabled. V2 rulesets require PRs and the Actions `validate` check on `main`; `main` and `student-work` reject deletion/non-fast-forward updates. No bypass actors. |
 | Checkpoint | `.scratch/tickets/2026-10-14_ddd_editor-v2_handoff.md`; scope `…_plan_final.md`; rationale `…_review.md`. Local, Git-ignored. |
 
@@ -237,7 +237,7 @@ python3 scripts/build_site.py --import-groups \
 python3 scripts/build_site.py --import-groups --first-publication   # disposable preview only
 ```
 
-## 10. Publication: V2 (gated, not deployed)
+## 10. Publication: V2
 
 ### 10.1 Switches
 
@@ -461,15 +461,15 @@ Last local results (2026-10-14):
 
 | Check | Result |
 | --- | --- |
-| Python | 185 passed in 126.607 s for the release. `/tmp/ddd-v2-release-python.log`. |
+| Python | 190 passed in 142.445 s including the final idle-refresh changes. `/tmp/ddd-v2-release-final-python.log`. |
 | Node | 34 passed. |
 | Chrome fidelity | Inconsistent: one exact pass at 1280/390 px; other runs differ at 23 native-audio-edge pixels at 1280. Equal computed layout. Foreground delay did not fix it and was reverted. No tolerance or masking added. |
-| WebKit fidelity | Current script passed exact layout/pixels at 1280 and 390 px. `/tmp/ddd-v2-webkit-fidelity.log`. |
+| WebKit fidelity | Release and 48 px leading follow-up passed exact layout/pixels at 1280 and 390 px. `/tmp/ddd-v2-release-leading-webkit.log`. |
 | Browser lifecycle/storage | Chrome and WebKit passed reload with media, failed-save switch, repeated renders, 390 px overflow, CAS, quota rollback and shared blobs. `/tmp/ddd-v2-{chrome,webkit}-browser.log`. |
 | Denied storage | Chrome and WebKit passed text fallback, quota retry, coexisting draft preservation, explicit migration and missing-attachment discard. `/tmp/ddd-v2-{chrome,webkit}-fallback.log`. |
 | Build/workflow/whitespace | Offline build, actionlint 1.7.7 and `git diff --check` passed. |
 
-Limits of evidence: fixtures and local bare repositories. Unproven: Actions identity and permissions, repository protections, Pages and issue behavior, Safari media, keyboard/touch on devices, cohort timing and bandwidth.
+The actual Actions token passed the isolated beta pilot: direct updates to the main-like protected branch were denied, archive fast-forward succeeded, and archive rewind/deletion were denied. Course `main` and `student-work` have the matching active protections. Evidence: beta run `38572459991`, `.scratch/v2-release/actor-pilot.log`. Remaining live evidence: Pages archive cutover and issue behavior, Safari media, keyboard/touch on devices, cohort timing and bandwidth.
 
 ## 14. Open work
 
