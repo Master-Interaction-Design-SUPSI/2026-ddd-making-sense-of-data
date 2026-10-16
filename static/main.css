@@ -156,6 +156,9 @@ body.lightbox-open {
 .site-nav a {
   color: var(--mid);
   text-decoration: none;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .site-nav .nav-index {
