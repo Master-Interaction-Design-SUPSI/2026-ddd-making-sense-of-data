@@ -7,7 +7,7 @@ Each group edits its own public repository. This repository imports the register
 | Reader | Document |
 | --- | --- |
 | Student | This README, §1–9. The same guide is the README of every group repository. |
-| Maintainer | [Operating manual](MAINTAINERS.md), [acceptance checks](docs/2026-10-15_ddd_acceptance-checks.md), [publication evidence](docs/2026-10-15_ddd_publication-evidence.md). |
+| Maintainer | [Operating manual](MAINTAINERS.md), [acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md). |
 
 **WARNING**: Group repositories are public. Upload only material cleared for publication.
 

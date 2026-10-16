@@ -1,8 +1,8 @@
 # Maintainer manual
 
-Scope: course site, registry, import, publication, editor, archive. Revision: 2026-10-15.
+Scope: course site, registry, import, publication, editor, archive. Revision: 2026-10-16.
 
-Use this manual for current operating instructions. [Acceptance checks](docs/2026-10-15_ddd_acceptance-checks.md) track unfinished validation; [publication evidence](docs/2026-10-15_ddd_publication-evidence.md) holds dated deployments and test results. Update operating instructions when behavior changes, acceptance checks when validation completes, and the evidence record when preserving an observation.
+Use this manual for current operating instructions. [Acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md) track unfinished validation. Update operating instructions when behavior changes and acceptance checks when validation completes; keep dated evidence (deployments, test results) outside the repository.
 
 **WARNING**: irreversible loss of student content or published state.
 **CAUTION**: stalled publication or wrong release.
@@ -13,7 +13,7 @@ Publication goes through the archive. On a fresh repository the first run create
 
 The registry (`groups.json`) starts empty. The course-team pages `materialities-of-ai`, `example` and `ddd-abstract` are local folders (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
 
-Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule remains in `pages.yml` until request-pilot acceptance. Hosted recovery, ordinary student-account and device checks remain on the [acceptance checklist](docs/2026-10-15_ddd_acceptance-checks.md).
+Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule remains in `pages.yml` until request-pilot acceptance. First-run, student-account, request-pilot and device checks are on the [acceptance checklist](docs/2026-10-16_ddd_acceptance-checks.md).
 
 ## 2. Terms
 
@@ -31,6 +31,7 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | Attempted | Deployment record names the release. |
 | Verified | Served site matches the release. The only state meaning "published". |
 | Request | Issue labelled `publication-request`, asking for a refresh. |
+| Problem | A group's newest commit, rejected for its content, with the reason; shown on its entry. |
 
 ## 3. Architecture
 
@@ -49,7 +50,7 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | Path | Function |
 | --- | --- |
 | `groups.json` | Registry. |
-| `static/contract.json` | Content contract v2; read by Python and editor. |
+| `static/contract.json` | Content contract (version 2); read by Python and editor. |
 | `static/main.js`, `bootstrap.js`, `playback.js` | Renderer, production bootstrap, media lifecycle. |
 | `static/annotations.js`, `references.js` | Annotation parser; sole reference collector (browser, Node, Python). |
 | `editor/` | Editor. Static; no compilation. |
@@ -57,7 +58,7 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | `scripts/import_groups.py`, `github_content.py` | Import; GitHub transport. |
 | `scripts/content_contract.py`, `check_content_links.js` | File selection; reference check. |
 | `scripts/release.py`, `deployment_records.py` | Release identity, served manifest and served verification; deployment records. |
-| `scripts/publish.py` | Controller: `admit prepare accept build record authorize verify finalize answer`. |
+| `scripts/publish.py` | Controller: `admit prepare accept build record authorize verify finalize answer summary`. |
 | `scripts/archive_state.py`, `archive_transaction.py`, `archive_git.py`, `archive_release.py` | Archive manifest; candidate transaction; Git transport and writer; release identity. |
 | `scripts/publication_requests.py` | Request capture and answers. |
 | `.github/workflows/pages.yml` | Publication jobs. |
@@ -87,7 +88,7 @@ Course-team pages are folders at the repository root, published with every build
 
 ## 5. Content contract
 
-Source: `static/contract.json` (v2). Python constants are adapters.
+Source: `static/contract.json` (version 2). Python constants are adapters.
 
 | Class | Paths | Limit |
 | --- | --- | --- |
@@ -129,7 +130,7 @@ Invariants:
 
 | Element | Behavior |
 | --- | --- |
-| Annotation | `[[label\|target\|type=…;style=…;color=…]]`. Keys in any order. Duplicate or unknown key, or bad value: literal text. Two-field legacy form valid. |
+| Annotation | `[[label\|target\|type=…;style=…;color=…]]`. Keys in any order. Duplicate or unknown key, or bad value: literal text. The older two-field form stays valid. |
 | Note | Expanded by default. Marker and content in braces. Normal sans serif; `style=italic` explicitly adds italic. |
 | Bibliography | Inline serif `(■ Author, year. Title)`. Black; overrides surrounding and modifier colors. Text targets expand by default; URL targets make the entire citation a source link, underlined on hover, opening in a new tab. |
 | Quote | Native quotation marks on reveal. |
@@ -173,7 +174,7 @@ Hand-off, generated per draft, in any order (until every commit is in, the page 
 
 The final file set is checked against the limits. Names and files that do not resolve are notes, not errors.
 
-Preview: same-origin iframe; layout isolation, not a sandbox. Protocol v1, types `hello ready render ack error`; window, origin, schema, slug, path, size and revision checked. Only editor-owned object URLs bypass scheme checks; `blob:` and `data:` in text are rejected.
+Preview: same-origin iframe; layout isolation, not a sandbox. Protocol version 1, types `hello ready render ack error`; window, origin, schema, slug, path, size and revision checked. Only editor-owned object URLs bypass scheme checks; `blob:` and `data:` in text are rejected.
 
 Editor success = local checks passed. It does not prove commit or publication. Importer-only checks: visibility, tree completeness, Git object types, blob integrity, SVG security.
 
@@ -259,7 +260,7 @@ Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-
 
 ### 9.4 Archive
 
-- Orphan branch `student-work`. Layout `<slug>/…` plus manifest v2 `publication.json` (≤ 8 MiB).
+- Orphan branch `student-work`. Layout `<slug>/…` plus manifest `publication.json` (schema version 2, ≤ 8 MiB).
 - Manifest records per group: state, repository, branch, registry settings, and `problem`; per accepted snapshot: source commit, tree and commit date (`committed_at`), contract version, files (size, SHA-256, Git blob SHA), excluded paths and blob IDs when observed. Unknown IDs stay explicit unknowns.
 - `problem` is `null` or `{commit, message}`: the group's newest commit was rejected for its content (a validation error, never a transport failure). The message is at most 300 characters; the writer checks only its shape. A later accepted commit clears it. With unchanged `main`, the same rejected commit is not downloaded again, so it does not block an idle run.
 - `entries.json` gives each visible group `online` (short commit, commit date) and, for a `live` group with a problem, `problem` (short commit, message). The page shows one line under the title: *Online: commit d5b5fd7, 16 Oct 14:20*, or *Your commit e1f2a3b was not published: reason. The page shows d5b5fd7.* A group whose first commit was rejected gets an entry with only that line. Both come from the archive, so `retry` rebuilds them exactly.
@@ -280,7 +281,7 @@ Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-
 
 ### 9.5 Release
 
-Identity v2: `main` commit, archive commit, tree, manifest and site digests. Site digest excludes `release.json`.
+Release identity (schema version 2): `main` commit, archive commit, tree, manifest and site digests. Site digest excludes `release.json`.
 
 - Archive write fails: no deployment.
 - Deployment fails: archive kept; next run retries the pair before any new import.
@@ -338,7 +339,7 @@ The script generates the marked student-guide section of the root README and all
 
 The remote template repository is a distribution copy of `templates/group/`, never an upstream editing source. After an authorized template update, compare its full file inventory and bytes with the canonical folder; do not copy remote edits back automatically. Local generation and CI do not synchronize or verify that remote repository.
 
-Complete the [ordinary student-account acceptance checks](docs/2026-10-15_ddd_acceptance-checks.md#ordinary-student-accounts-and-request-rollout) before access cutover.
+Complete the [student-account acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md#student-accounts) before handing over access.
 
 ### 10.3 Changes
 
@@ -386,4 +387,4 @@ git diff --check
 - Browser: `scripts/check_editor_browser.js`, `check_editor_fallback.js`, `check_editor_fidelity.js`, in Chrome and WebKit. Rebuild `_site` first, serve it, open `editor/`, then run the three in this order in one browser session (`playwright-cli run-code --filename=…`); the fallback check reuses the draft the first one saves. Each supplies its own test group, so they work with an empty registry.
 - CI: `validate.yml` runs unit, Node and offline build on PRs. Publication reruns tests before import.
 
-For outstanding hosted, browser and student-account validation, use [acceptance checks](docs/2026-10-15_ddd_acceptance-checks.md). Past test counts and deployment observations are retained in [publication evidence](docs/2026-10-15_ddd_publication-evidence.md); rerun checks for the revision being reviewed.
+For outstanding hosted, browser and student-account validation, use [acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md). Rerun checks for the revision being reviewed.
