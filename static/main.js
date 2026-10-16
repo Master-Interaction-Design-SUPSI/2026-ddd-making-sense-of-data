@@ -412,7 +412,21 @@ function buildNav(entries) {
     idx.textContent = entry.folder === "materialities-of-ai"
       ? "M-AI"
       : group ? `G-${pad(Number(group[1]))}` : pad(i + 1);
-    a.append(idx, ` ${entry.title}`);
+    let title = entry.title.trim().replace(/\s+/g, " ");
+    if (group) {
+      const repeated = /^(?:group\s*|g\s*-\s*)(\d+)(?:\s*[:–—-]\s*|\s+|$)/i.exec(title);
+      if (repeated && Number(repeated[1]) === Number(group[1])) {
+        title = title.slice(repeated[0].length).trim() || "Untitled";
+      }
+    }
+    const fullLabel = `${idx.textContent} ${title}`;
+    const budget = 24 - Array.from(idx.textContent).length - 1;
+    const characters = Array.from(title);
+    const shortTitle = characters.length > budget
+      ? characters.slice(0, budget - 1).join("").trimEnd() + "…" : title;
+    a.title = fullLabel;
+    a.setAttribute("aria-label", fullLabel);
+    a.append(idx, ` ${shortTitle}`);
     nav.appendChild(a);
   });
 }
