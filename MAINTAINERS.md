@@ -135,8 +135,8 @@ Invariants:
 | Bibliography | Inline serif `(■ Author, year. Title)`. Black; overrides surrounding and modifier colors. Text targets expand by default; URL targets make the entire citation a source link, underlined on hover, opening in a new tab. |
 | Quote | Native quotation marks on reveal. |
 | Inline image | Thumbnail. Hover/focus preview anchored to the thumbnail, opaque, fitted to viewport. Click/tap/Enter opens the original source in a new tab. |
-| Inline video | No buttons. Muted loop when half-visible, page visible, lightbox closed. Hover enlarges with sound; keyboard focus enlarges muted. Click opens the original source in a new tab. Reduced motion: still; browser playback policy applies. |
-| Inline audio | Static player. Click opens the original source in a new tab; no hover playback. |
+| Inline video | No buttons. Muted loop when half-visible, page visible, lightbox closed. Hover enlarges with sound; keyboard focus enlarges with sound. Click opens the original source in a new tab. Reduced motion: still; browser playback policy applies. |
+| Inline audio | Hover plays with sound; leaving stops playback. Click opens the original source in a new tab. Audio and video offer **Enable sound** if the browser blocks audible hover playback. |
 | External embed | Manual. Loads on reveal; unloads on inactivity; provider link shown. |
 | Dismissal | Escape, outside activation, scroll, resize, navigation, focus loss, page hide. |
 | Prose | Newlines and blank lines between adjacent paragraphs become spaces. Headings, lists, quotes, code stay separate. Responsive 24–32 px type (`--prose-size: clamp(24px, 2.2vw, 32px)`), fixed 52 px leading (`--prose-leading`). Source: `static/main.css`. |

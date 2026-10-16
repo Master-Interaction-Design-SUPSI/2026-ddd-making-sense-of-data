@@ -11,7 +11,7 @@ A [[Example author, 2026|Three invented values|type=bibliography]] uses a square
 
 Compare this wide detail [[wide detail]] with this [[tall transparent detail]] within the same sentence. Hover or focus an image to enlarge it; click or tap to open its source in a new tab. Replace these images and their references with your own supporting material, or remove both.
 
-Listen to a [[five-second demonstration tone]] or watch the [[generated test pattern]] within this sentence. Click the static audio player to open the tone; the video tries to start muted when visible. Hover the video to enlarge it with sound, then move away to stop the preview. Click either medium to open its source in a new tab. Replace these generated demonstrations with your own supporting material, or remove their files and references.
+Listen to a [[five-second demonstration tone]] or watch the [[generated test pattern]] within this sentence. Hover the audio player to hear the tone; the video tries to start muted when visible. Hover the video to enlarge it with sound, then move away to stop the preview. Move away to stop the sound. If your browser blocks playback, choose Enable sound, then hover again. Click either medium to open its source in a new tab. Replace these generated demonstrations with your own supporting material, or remove their files and references.
 
 This sentence is wrapped in the source
 but continues on the same justified passage.

@@ -562,6 +562,19 @@ function setupImagePreviews() {
   const image = preview.querySelector("img");
   const video = preview.querySelector("video");
   const dismiss = document.getElementById("image-preview-close");
+  const audio = document.createElement("audio");
+  audio.preload = "none";
+  audio.hidden = true;
+  audio.dataset.hoverAudio = "";
+  preview.append(audio);
+  const enableSound = document.createElement("button");
+  enableSound.type = "button";
+  enableSound.className = "enable-hover-sound";
+  enableSound.textContent = "Enable sound";
+  enableSound.hidden = true;
+  document.body.append(enableSound);
+  let blockedTarget = null;
+  let playRevision = 0;
   let active = null;
   let mode = null;
   let previewScrollX = window.scrollX;
@@ -574,9 +587,13 @@ function setupImagePreviews() {
     preview.hidden = true;
     dismiss.hidden = true;
     image.removeAttribute("src");
+    playRevision++;
     video.pause();
     video.removeAttribute("src");
     video.load();
+    audio.pause();
+    audio.removeAttribute("src");
+    audio.load();
   }
 
   function reveal(media) {
@@ -601,34 +618,66 @@ function setupImagePreviews() {
 
   async function playPreview() {
     const target = active;
+    const media = target?.matches(".inline-audio") ? audio : video;
+    const revision = ++playRevision;
+    media.muted = false;
+    media.defaultMuted = false;
     try {
-      await video.play();
-      if (!active || video.hidden) video.pause();
-    } catch {
-      if (active === target) target.querySelector(".playback-status").textContent = "Could not preview this video.";
+      await media.play();
+      if (revision !== playRevision) return;
+      if (active !== target) media.pause();
+      else {
+        enableSound.hidden = true;
+        blockedTarget = null;
+      }
+    } catch (error) {
+      if (revision !== playRevision || active !== target) return;
+      if (error.name === "NotAllowedError") {
+        blockedTarget = target;
+        enableSound.hidden = false;
+      } else {
+        const status = target.querySelector(".playback-status");
+        if (status) status.textContent = "Could not play this media.";
+      }
     }
   }
 
+  enableSound.addEventListener("click", () => {
+    const target = active?.matches(".inline-audio, .inline-playback") ? active : blockedTarget;
+    if (!target?.isConnected) { enableSound.hidden = true; return; }
+    // Retry the same shared media element inside this user gesture.
+    if (active === target) playPreview();
+    else show(target, "pinned");
+  });
+
   function show(target, reason) {
-    if (target !== active) {
+    const changed = target !== active;
+    if (changed) {
       clear();
       active = target;
-      const source = target.querySelector("img, video");
-      image.hidden = source.tagName !== "IMG";
-      video.hidden = source.tagName !== "VIDEO";
-      if (source.tagName === "IMG") {
-        image.src = source.src;
-        if (image.complete && image.naturalWidth) reveal(image);
+      if (target.matches(".inline-audio")) {
+        image.hidden = true;
+        video.hidden = true;
+        audio.src = target.dataset.audioSrc;
+        playPreview();
       } else {
-        video.src = source.src;
-        video.currentTime = source.currentTime;
-        video.muted = reason !== "pointer";
-        video.defaultMuted = true;
-        video.loop = true;
-        if (!matchMedia("(prefers-reduced-motion: reduce)").matches) playPreview();
+        const source = target.querySelector("img, video");
+        image.hidden = source.tagName !== "IMG";
+        video.hidden = source.tagName !== "VIDEO";
+        if (source.tagName === "IMG") {
+          image.src = source.src;
+          if (image.complete && image.naturalWidth) reveal(image);
+        } else {
+          video.src = source.src;
+          video.currentTime = source.currentTime;
+          video.muted = false;
+          video.defaultMuted = false;
+          video.loop = true;
+          if (!matchMedia("(prefers-reduced-motion: reduce)").matches || reason === "pinned") playPreview();
+        }
       }
     }
-    if (reason === "pinned" && !video.hidden && video.paused) playPreview();
+    if (!changed && reason === "pinned" && !video.hidden && video.paused) playPreview();
     mode = reason;
     previewScrollX = window.scrollX;
     previewScrollY = window.scrollY;
@@ -641,16 +690,16 @@ function setupImagePreviews() {
   video.addEventListener("error", clear);
   image.addEventListener("error", clear);
   document.addEventListener("pointerover", event => {
-    const target = event.target.closest(".inline-image, .inline-playback");
+    const target = event.target.closest(".inline-image, .inline-playback, .inline-audio");
     if (event.pointerType !== "mouse" || !target || target.contains(event.relatedTarget)) return;
     if (target === active && mode === "pinned") return;
     show(target, "pointer");
   });
   document.addEventListener("pointerout", event => {
-    if ((mode === "pointer" || !video.hidden) && active?.contains(event.target) && !active.contains(event.relatedTarget)) clear();
+    if ((mode === "pointer" || !video.hidden || active?.matches(".inline-audio")) && active?.contains(event.target) && !active.contains(event.relatedTarget)) clear();
   });
   document.addEventListener("focusin", event => {
-    const target = event.target.closest(".inline-image, .inline-playback");
+    const target = event.target.closest(".inline-image, .inline-playback, .inline-audio");
     if (target?.matches(":focus-visible")) show(target, "focus");
   });
   document.addEventListener("focusout", event => {
@@ -662,13 +711,14 @@ function setupImagePreviews() {
         !(mode === "pinned" && event.relatedTarget === dismiss)) clear();
   });
   document.addEventListener("click", event => {
+    if (event.target.closest(".enable-hover-sound")) return;
     const sourceLink = event.target.closest("a.inline-image, a.inline-playback");
     if (sourceLink) { clear(); return; }
     const target = event.target.closest("button.inline-image, .inline-playback");
     if (target) {
       if (active === target && mode === "pinned") clear();
       else show(target, "pinned");
-    } else if (!event.target.closest(".inline-image, .inline-playback")) clear();
+    } else if (!event.target.closest(".inline-image, .inline-playback, .inline-audio")) clear();
   });
   dismiss.addEventListener("click", () => {
     const previous = active;
@@ -690,7 +740,11 @@ function setupImagePreviews() {
       event.target.click();
     }
   });
-  return clear;
+  return () => {
+    clear();
+    blockedTarget = null;
+    enableSound.hidden = true;
+  };
 }
 
 /* ---------- boot ---------- */

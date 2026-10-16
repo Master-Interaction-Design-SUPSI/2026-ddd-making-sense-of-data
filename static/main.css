@@ -283,7 +283,7 @@ body.lightbox-open {
   border: 1px solid var(--ink);
 }
 
-/* Static audio player: activation opens the original source. */
+/* Hover plays audio; activation opens the original source. */
 .entry-text .inline-audio {
   display: inline-flex;
   align-items: center;
@@ -724,3 +724,17 @@ body.show-grid::after {
 .annotation-bibliography .annotation-content a::before {
   content: none;
 }
+
+.enable-hover-sound {
+  position: fixed;
+  inset: auto 16px 16px auto;
+  z-index: 1000;
+  padding: 0.6em 1em;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+.enable-hover-sound[hidden] { display: none; }
