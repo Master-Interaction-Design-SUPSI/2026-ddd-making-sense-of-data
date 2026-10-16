@@ -158,12 +158,9 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
     base = previous.groups.get(group.slug) if previous else None
     same_identity = (base and base["repository"] == group.repository and base["branch"] == group.branch)
     if (allow_unchanged and same_identity and base["commit"] == commit
-            and base.get("require_visual", True) == group.require_visual
             and all(base['files'].get(name, {}).get('sha256') == hashlib.sha256(data).hexdigest()
                     for name, data in generated.items())
-            and (not hasattr(previous, 'can_skip') or previous.can_skip(group, files))
-            and {name: node["size"] for name, node in files.items()}
-            == {name: record["size"] for name, record in base["files"].items()}):
+            and previous.can_skip(group, files)):
         result.update(status="unchanged", files=list(files))
         return
     with tempfile.TemporaryDirectory(prefix=".candidate-", dir=destination) as temporary:
@@ -199,12 +196,13 @@ def import_groups(groups, destination, client_factory=GitHubClient, *, previous=
     deadline = time.monotonic() + 15 * 60
     api_budget = {"requests": 0, "maximum": 100, "remaining": None}
     for group in groups:
+        live = group.state == "live"
         result = dict(slug=group.slug, repository=group.repository, branch=group.branch,
-                      commit=None, status="disabled" if not group.enabled else "failed")
+                      commit=None, status="failed" if live else "disabled")
         if not group.require_visual:
             result["require_visual"] = False
         results.append(result)
-        if not group.enabled:
+        if not live:
             continue
         try:
             target = destination / group.slug

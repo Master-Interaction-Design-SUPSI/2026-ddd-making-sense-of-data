@@ -1,6 +1,4 @@
 import shutil
-import hashlib
-import io
 import json
 import subprocess
 import tempfile
@@ -8,79 +6,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit, unquote
+from urllib.parse import urlsplit
 
 import build_site
+from archive_state import empty_archive
+from archive_transaction import prepare_archive
 from content_contract import MAX_MEDIA_BYTES
 from github_content import GitHubClient, ImportFailure
 from group_registry import Group
 from import_groups import import_groups, validate_references
-
-
-SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><rect width="10" height="10"/></svg>'
-TEXT = b'---\ntitle: Fixture\nauthors: Test group\n---\n*Italic* and {crimson|color}. [[Detail|media/detail.svg]]'
-
-
-class Response(io.BytesIO):
-    headers = {}
-
-
-def with_table(files):
-    """Add the media.csv every imported group needs: one row per media file."""
-    if "media.csv" in files:
-        return files
-    rows = ["name,source,file"] + [f"{name},,{name}" for name in sorted(files) if name not in {"text.md", "visual.svg"}]
-    return {**files, "media.csv": ("\n".join(rows) + "\n").encode()}
-
-
-TABLE = with_table({"media/detail.svg": b""})["media.csv"]
-
-
-class FixtureAPI:
-    def __init__(self):
-        self.routes = {}
-        self.calls = []
-
-    def add(self, repository, files=None, branch="main", table=True):
-        files = files or {"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}
-        if table:
-            files = with_table(files)
-        base = "/repos/" + repository
-        commit = hashlib.sha1(repository.encode()).hexdigest()
-        tree = hashlib.sha1((repository + "tree").encode()).hexdigest()
-        self.routes[base] = dict(private=False, visibility="public", full_name=repository)
-        self.routes[base + "/git/ref/heads/" + branch] = {"ref": "refs/heads/" + branch, "object": {"type": "commit", "sha": commit}}
-        self.routes[base + "/git/commits/" + commit] = {"sha": commit, "tree": {"sha": tree}}
-        nodes = []
-        for name, data in files.items():
-            sha = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
-            nodes.append(dict(path=name, mode="100644", type="blob", size=len(data), sha=sha))
-            self.routes[base + "/git/blobs/" + sha] = data
-        self.routes[base + "/git/trees/" + tree + "?recursive=1"] = {"sha": tree, "tree": nodes, "truncated": False}
-        return commit, nodes
-
-    def open(self, request, timeout):
-        url = urlsplit(request.full_url)
-        path = url.path + ("?" + url.query if url.query else "")
-        self.calls.append(path)
-        if url.hostname == "raw.githubusercontent.com":
-            parts = unquote(path).lstrip("/").split("/")
-            base = "/repos/" + "/".join(parts[:2])
-            commit = self.routes.get(base + "/git/commits/" + parts[2], {})
-            tree = self.routes.get(base + "/git/trees/" + commit.get("tree", {}).get("sha", "") + "?recursive=1", {})
-            node = next((node for node in tree.get("tree", []) if node["path"] == "/".join(parts[3:])), None)
-            path = base + "/git/blobs/" + node["sha"] if node else path
-        if path not in self.routes:
-            raise HTTPError(request.full_url, 404, "not found", {}, None)
-        data = self.routes[path]
-        if isinstance(data, Exception):
-            raise data
-        return Response(data if isinstance(data, bytes) else json.dumps(data).encode())
-
-    def client(self):
-        client = GitHubClient()
-        client.opener = self
-        return client
+from test_fixtures import FixtureAPI, Response, SVG, TEXT, with_table
 
 
 class ImportTests(unittest.TestCase):
@@ -91,7 +26,7 @@ class ImportTests(unittest.TestCase):
         self.api = FixtureAPI()
 
     def group(self, slug="alpha", enabled=True, branch="main"):
-        return Group(slug, "course/" + slug, branch, enabled)
+        return Group(slug, "course/" + slug, branch, "live" if enabled else "hidden")
 
     def run_import(self, groups=None):
         return import_groups(groups or [self.group()], self.root / "imports", self.api.client)
@@ -120,8 +55,8 @@ class ImportTests(unittest.TestCase):
         self.assertFalse(any(call.rsplit("/", 1)[-1] in ignored for call in self.api.calls))
 
     def test_public_personal_repositories_import_across_different_owners(self):
-        groups = [Group("alpha", "alice-student/project", "main", True),
-                  Group("beta", "bob-student/project", "main", True)]
+        groups = [Group("alpha", "alice-student/project", "main", "live"),
+                  Group("beta", "bob-student/project", "main", "live")]
         for group in groups:
             self.api.add(group.repository)
         results = self.run_import(groups)
@@ -135,7 +70,7 @@ class ImportTests(unittest.TestCase):
         _, nodes = self.api.add("course/alpha")
         nodes.append(dict(path="media/12.mov", size=MAX_MEDIA_BYTES + 1,
                           type="blob", mode="100644", sha="a" * 40))
-        result = self.run_import([Group("alpha", "course/alpha", "main", True, ("media/12.mov",))])[0]
+        result = self.run_import([Group("alpha", "course/alpha", "main", "live", ("media/12.mov",))])[0]
         self.assertEqual(result["status"], "imported")
         self.assertEqual(result["excluded_files"], ["media/12.mov"])
         self.assertNotIn("media/12.mov", result["files"])
@@ -145,7 +80,7 @@ class ImportTests(unittest.TestCase):
         self.api.add("course/alpha", {"text.md": TEXT + b' [[Watch|media/12.mov]]',
                                      "visual.svg": SVG, "media/detail.svg": SVG,
                                      "media/12.mov": b'video'})
-        result = self.run_import([Group("alpha", "course/alpha", "main", True, ("media/12.mov",))])[0]
+        result = self.run_import([Group("alpha", "course/alpha", "main", "live", ("media/12.mov",))])[0]
         self.assertEqual(result["status"], "failed")
         self.assertIn("must reference an imported file", result["error"])
 
@@ -154,9 +89,7 @@ class ImportTests(unittest.TestCase):
         files = {path.relative_to(template).as_posix(): path.read_bytes()
                  for path in template.rglob("*") if path.is_file()}
         self.api.add("course/alpha", files)
-        output = self.prepare_build([self.group()])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        output, _ = self.first_archive([self.group()])
         for name in ("text.md", "media/example-motion.mp4", "media/example-tone.mp3"):
             self.assertEqual((output / "alpha" / name).read_bytes(), files[name])
         self.assertFalse((output / "alpha/README.md").exists())
@@ -171,9 +104,7 @@ class ImportTests(unittest.TestCase):
         }
         self.api.add("course/alpha", files)
         self.assertEqual(self.run_import()[0]["status"], "imported")
-        output = self.prepare_build([self.group()])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        output, _ = self.first_archive([self.group()])
         for name, original in files.items():
             self.assertEqual((output / "alpha" / name).read_bytes(), original)
 
@@ -336,35 +267,38 @@ class ImportTests(unittest.TestCase):
         (output / "index.html").write_text("previous publication")
         return output
 
-    def test_build_imports_two_groups_and_writes_source_report(self):
+    def first_archive(self, groups):
+        """Import into a new archive and build its site, as a first run does."""
+        output = self.prepare_build(groups)
+        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
+            report = prepare_archive(groups, empty_archive(self.root / "empty-archive"), self.root / "archive",
+                                     client_factory=self.api.client)
+        return output, report
+
+    def test_first_archive_imports_two_groups_and_builds_them(self):
         self.api.add("course/alpha")
         self.api.add("course/beta")
-        output = self.prepare_build([self.group(), self.group("beta")])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        output, report = self.first_archive([self.group(), self.group("beta")])
         self.assertEqual(json.loads((output / "entries.json").read_text()), ["alpha", "beta"])
         self.assertEqual((output / "alpha/media/detail.svg").read_bytes(), SVG)
         self.assertEqual((output / "index.html").read_text(), "trusted site")
         self.assertFalse((self.root / "alpha").exists())
-        report = json.loads((self.root / ".scratch/group-import-report.json").read_text())
         self.assertEqual([g["status"] for g in report["groups"]], ["imported", "imported"])
 
-    def test_first_publication_skips_invalid_group_after_fetching_other_groups(self):
+    def test_first_archive_skips_invalid_group_after_fetching_other_groups(self):
         self.api.add("course/beta")
-        output = self.prepare_build([self.group(), self.group("beta")])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        output, report = self.first_archive([self.group(), self.group("beta")])
         self.assertEqual(json.loads((output / "entries.json").read_text()), ["beta"])
-        report = json.loads((self.root / ".scratch/group-import-report.json").read_text())
         self.assertEqual([g["status"] for g in report["groups"]], ["failed", "imported"])
         self.assertEqual([g["publication_status"] for g in report["groups"]], ["skipped", "updated"])
 
-    def test_local_path_collision_is_rejected_before_network_or_build_changes(self):
+    def test_local_path_collision_is_rejected_by_the_offline_build(self):
         output = self.prepare_build([self.group()])
         (self.root / "alpha").mkdir()
+        (self.root / "alpha/text.md").write_text("Local entry")
         with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
             with self.assertRaisesRegex(ValueError, "collides"):
-                build_site.main(import_remote=True, client_factory=self.api.client)
+                build_site.main()
         self.assertEqual(self.api.calls, [])
         self.assertEqual((output / "index.html").read_text(), "previous publication")
 
@@ -443,7 +377,7 @@ class TransportTests(unittest.TestCase):
 
     def test_full_cohort_metadata_budget_is_independent_of_file_count(self):
         api = FixtureAPI()
-        groups = [Group(f"group-{i}", f"course/group-{i}", "main", True, require_visual=False) for i in range(15)]
+        groups = [Group(f"group-{i}", f"course/group-{i}", "main", "live", require_visual=False) for i in range(15)]
         for group in groups:
             # 98 media + text.md + media.csv fill the 100-file limit.
             api.add(group.repository, {"text.md": b"Fixture", **{f"media/{i}.png": b"image" for i in range(98)}})

@@ -4,7 +4,7 @@ import hashlib
 
 import build_site
 from content_contract import MEDIA_TABLE
-from archive_state import ArchiveSnapshot, MAX_MANIFEST_BYTES, decode_archive
+from archive_state import MAX_MANIFEST_BYTES, decode_archive, served_groups
 from publication_state import MANIFEST, RecoveryError
 from publish_site import RELEASE, encode, site_digest, validate_release
 
@@ -41,33 +41,21 @@ def make_release(main_commit, main_tree, archive, run_id, run_attempt, previous_
 
 
 def verified_previous_groups(records, repository, verified_record):
-    """Read a served inventory from the independently verified immutable archive pin."""
+    """Read the served inventory of the last verified release from its immutable archive pin."""
     if not verified_record:
         return None
     release = validate_release(verified_record['payload'])
-    if release['version'] != 2 or not records.is_verified(verified_record['id']):
-        return None
-    if records.archive_authority(release['archive_commit']) != 'v2':
-        raise RecoveryError('previous verified release lacks V2 archive authority')
     payload = records.client.raw_file(repository, release['archive_commit'], 'publication.json',
                                       MAX_MANIFEST_BYTES)
     if hashlib.sha256(payload).hexdigest() != release['archive_manifest_sha256']:
         raise RecoveryError('previous archive manifest differs from verified release pin')
-    groups = decode_archive(payload)
-    served = {}
-    for slug, entry in groups.items():
-        snapshot = entry['snapshot']
-        if entry['state'] == 'hidden' or snapshot is None:
-            continue
-        served[slug] = {'files': {name: {key: record[key] for key in ('size', 'sha256')}
-                                  for name, record in snapshot['files'].items()}}
-    return served
+    return served_groups(decode_archive(payload))
 
 
 def reconstruct(release, archive, main_commit, main_tree):
     """Use matching trusted checkout and pinned archive, even after artifact expiration."""
     validate_release(release)
-    if (release['version'] != 2 or main_commit != release['main_commit'] or main_tree != release['main_tree']
+    if (main_commit != release['main_commit'] or main_tree != release['main_tree']
             or archive.commit != release['archive_commit']
             or hashlib.sha256(archive.payload).hexdigest() != release['archive_manifest_sha256']):
         raise RecoveryError('reconstruction requires the exact recorded main/archive pair')
@@ -83,15 +71,11 @@ def reconstruct(release, archive, main_commit, main_tree):
 def publication_strategy(latest, verified, main_commit):
     """Retry a pending same-code pair before reading new source revisions."""
     if not latest:
-        return {'mode': 'refresh', 'supersedes': None}
+        return {'mode': 'refresh'}
     release = validate_release(latest['payload'])
-    if release['version'] == 1:
-        return {'mode': 'migration', 'supersedes': None}
-    if release['main_commit'] != main_commit:
-        return {'mode': 'refresh', 'supersedes': latest['id']}
-    if verified and verified['id'] == latest['id']:
-        if verified['payload'] != release:
-            raise RecoveryError('verified record payload differs from latest attempted release')
-        return {'mode': 'refresh', 'supersedes': None}
-    return {'mode': 'verify_then_retry', 'deployment_id': latest['id'], 'release': release,
-            'archive_commit': release['archive_commit'], 'supersedes': None}
+    latest_verified = bool(verified and verified['id'] == latest['id'])
+    if latest_verified and verified['payload'] != release:
+        raise RecoveryError('verified record payload differs from latest attempted release')
+    if latest_verified or release['main_commit'] != main_commit:
+        return {'mode': 'refresh'}
+    return {'mode': 'verify_then_retry', 'deployment_id': latest['id'], 'release': release}

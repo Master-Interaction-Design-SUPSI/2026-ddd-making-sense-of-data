@@ -20,7 +20,6 @@ MAX_TABLE_BYTES = LIMITS["table_bytes"]
 MAX_SVG_BYTES = LIMITS["svg_bytes"]
 MAX_MEDIA_BYTES = LIMITS["media_bytes"]
 MAX_TOTAL_BYTES = LIMITS["group_bytes"]
-LEGACY_MAX_TOTAL_BYTES = LIMITS["legacy_group_bytes"]
 MAX_SITE_BYTES = LIMITS["site_bytes"]
 MAX_FILES = LIMITS["files"]
 PATH_PART = re.compile(CONTRACT["path_component"])
@@ -51,9 +50,8 @@ def validate_visual(path):
             raise ValueError(f"{path}: {attribute} must be {expected} pixels or omitted")
 
 
-def select_content_files(file_sizes, *, require_visual=True, recovery=False):
+def select_content_files(file_sizes, *, require_visual=True):
     """Return sorted allowed paths; ignore non-content files, reject bad content."""
-    total_limit = LEGACY_MAX_TOTAL_BYTES if recovery else MAX_TOTAL_BYTES
     selected = []
     total = 0
     for name, size in file_sizes.items():
@@ -67,8 +65,7 @@ def select_content_files(file_sizes, *, require_visual=True, recovery=False):
             raise ValueError(f"{name}: use exactly visual.svg for the main visual")
         required = name in {"text.md", "visual.svg"}
         media = path.suffix.lower() in MEDIA_EXTENSIONS and (len(parts) == 1 or parts[0] == "media")
-        # Selected whenever present; import admission, not recovery of older
-        # snapshots, is where media.csv becomes mandatory.
+        # Selected whenever present; import admission is where media.csv becomes mandatory.
         table = name == MEDIA_TABLE
         if not required and not media and not table:
             continue
@@ -84,8 +81,8 @@ def select_content_files(file_sizes, *, require_visual=True, recovery=False):
             raise ValueError(f"{name}: exceeds the {limit}-byte file limit")
         selected.append(name)
         total += size
-        if len(selected) > MAX_FILES or total > total_limit:
-            raise ValueError(f"group content exceeds {MAX_FILES} files or {total_limit // (1024 * 1024)} MiB")
+        if len(selected) > MAX_FILES or total > MAX_TOTAL_BYTES:
+            raise ValueError(f"group content exceeds {MAX_FILES} files or {MAX_TOTAL_BYTES // (1024 * 1024)} MiB")
     required_files = {"text.md", "visual.svg"} if require_visual else {"text.md"}
     if not required_files <= set(selected):
         raise ValueError("group content requires " + " and ".join(sorted(required_files)))

@@ -5,8 +5,6 @@ from pathlib import Path
 from unittest.mock import patch
 
 import build_site
-from content_contract import MAX_MEDIA_BYTES, MAX_TOTAL_BYTES, select_content_files
-from publication_state import decode_manifest
 
 
 class EditorBuildTests(unittest.TestCase):
@@ -43,14 +41,3 @@ class EditorBuildTests(unittest.TestCase):
                 with self.assertRaisesRegex(ValueError, 'site limit'):
                     build_site.write_site({})
             self.assertEqual((output / 'index.html').read_text(), 'previous')
-
-    def test_legacy_recovery_keeps_snapshots_above_new_admission_cap_readable(self):
-        files = {'text.md': 1, 'visual.svg': 1, **{f'media/{i}.mp4': MAX_MEDIA_BYTES for i in range(3)}}
-        self.assertGreater(sum(files.values()), MAX_TOTAL_BYTES)
-        with self.assertRaisesRegex(ValueError, '50 MiB'):
-            select_content_files(files)
-        manifest = {'version': 1, 'groups': {'group': {
-            'repository': 'course/group', 'branch': 'main', 'commit': 'a' * 40,
-            'files': {name: {'size': size, 'sha256': 'a' * 64} for name, size in files.items()},
-        }}}
-        self.assertIn('group', decode_manifest(json.dumps(manifest)))

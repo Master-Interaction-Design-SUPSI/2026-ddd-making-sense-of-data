@@ -27,25 +27,26 @@ class GroupContractTests(unittest.TestCase):
         return load_registry(self.registry)
 
     def group(self, **changes):
-        return {"slug": "city-water", "repository": "course/city-water", "enabled": True, **changes}
+        return {"slug": "city-water", "repository": "course/city-water", "state": "live", **changes}
 
     def test_empty_registry_and_branch_default(self):
         self.assertEqual(self.load([]), [])
         group = self.load([self.group()])[0]
         self.assertEqual(group.branch, "main")
-        self.assertTrue(group.enabled)
+        self.assertEqual(group.state, "live")
 
-    def test_explicit_states_migrate_enabled_without_ambiguous_source_reads(self):
+    def test_state_is_required_and_explicit(self):
         for state in ('live', 'frozen', 'hidden'):
-            entry = self.group(state=state)
-            entry.pop('enabled')
-            group = self.load([entry])[0]
-            self.assertEqual(group.publication_state, state)
-            self.assertEqual(group.enabled, state == 'live')
-        self.assertEqual(self.load([self.group(enabled=False)])[0].publication_state, 'hidden')
-        for state in ('unknown', True, ['live']):
-            with self.assertRaises(ValueError): self.load([self.group(state=state)])
-        with self.assertRaises(ValueError): self.load([self.group(state='frozen', enabled=True)])
+            self.assertEqual(self.load([self.group(state=state)])[0].state, state)
+        for state in ('unknown', True, None, ['live']):
+            with self.subTest(state=state), self.assertRaises(ValueError):
+                self.load([self.group(state=state)])
+        entry = self.group()
+        entry.pop('state')
+        with self.assertRaisesRegex(ValueError, 'state'):
+            self.load([entry])
+        with self.assertRaises(ValueError):
+            self.load([self.group(enabled=True)])
 
     def test_optional_media_exclusions(self):
         group = self.load([self.group(exclude=["media/12.mov"])])[0]
@@ -64,11 +65,11 @@ class GroupContractTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             select_content_files({}, require_visual=False)
 
-    def test_repository_change_preserves_slug_and_disabled_entries_are_retained(self):
+    def test_repository_change_preserves_slug(self):
         before = self.load([self.group()])[0]
-        after = self.load([self.group(repository="new-owner/renamed", enabled=False, branch="draft/content")])[0]
+        after = self.load([self.group(repository="new-owner/renamed", state="hidden", branch="draft/content")])[0]
         self.assertEqual(before.slug, after.slug)
-        self.assertFalse(after.enabled)
+        self.assertEqual(after.state, "hidden")
         self.assertEqual(after.branch, "draft/content")
 
     def test_personal_repository_owners_need_not_share_an_organization(self):
@@ -94,11 +95,11 @@ class GroupContractTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "duplicate repository"):
             self.load([self.group(), self.group(slug="other", repository="Course/City-Water")])
 
-    def test_rejects_mistyped_fields_including_disabled_entries(self):
+    def test_rejects_mistyped_fields_including_hidden_entries(self):
         for entry in (
-            self.group(enabled="false"), self.group(brnach="draft"),
+            self.group(state="false"), self.group(brnach="draft"),
             {"slug": "city-water", "repository": "course/city-water"},
-            self.group(branch="draft/../main", enabled=False),
+            self.group(branch="draft/../main", state="hidden"),
             self.group(branch="draft//main"), self.group(branch="draft.lock"),
             self.group(branch="draft/.hidden"), self.group(branch="main;echo"),
             self.group(branch=None),

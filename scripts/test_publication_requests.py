@@ -10,7 +10,7 @@ from publication_state import RecoveryError
 
 REPOSITORY = 'course/site'
 CUTOFF = '2026-10-14T12:00:00Z'
-REGISTRY = [Group('alpha', 'course/alpha', 'main', True)]
+REGISTRY = [Group('alpha', 'course/alpha', 'main', 'live')]
 
 
 def issue(number=1, body='### Group\n\nalpha', **extra):

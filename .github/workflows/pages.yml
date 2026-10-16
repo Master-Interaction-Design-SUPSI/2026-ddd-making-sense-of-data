@@ -8,27 +8,6 @@ on:
   issues:
     types: [opened]
   workflow_dispatch:
-    inputs:
-      first_publication:
-        description: 'Initial rollout only: no imported publication exists yet'
-        type: boolean
-        default: false
-      retry_publication:
-        description: 'Recovery only: redeploy the exact latest recorded candidate'
-        type: boolean
-        default: false
-      seed_archive:
-        description: 'Protected-ref pilot only: seed student-work from verified V1; do not cut over'
-        type: boolean
-        default: false
-      reconcile_seed:
-        description: 'Before cutover only: update an existing V1 seed to current verified V1; no deployment'
-        type: boolean
-        default: false
-      rebind_archive:
-        description: 'Reviewed migration only: apply the exact main-controlled archive-rebind.json plan'
-        type: boolean
-        default: false
 
 permissions:
   contents: read
@@ -37,91 +16,12 @@ env:
   DDD_PUBLICATION_PAUSED: ${{ vars.DDD_PUBLICATION_PAUSED }}
 
 concurrency:
-  group: ${{ vars.DDD_PUBLICATION_PAUSED == 'true' && format('publication-paused-{0}', github.run_id) || (github.event_name != 'issues' && 'pages') || (vars.DDD_ARCHIVE_ENABLED == 'true' && vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request') && 'pages') || format('ignored-issue-{0}', github.event.issue.number) }}
+  group: ${{ vars.DDD_PUBLICATION_PAUSED == 'true' && format('publication-paused-{0}', github.run_id) || (github.event_name != 'issues' && 'pages') || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request') && 'pages') || format('ignored-issue-{0}', github.event.issue.number) }}
   cancel-in-progress: false
 
 jobs:
-  publish:
-    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main' && vars.DDD_ARCHIVE_ENABLED != 'true' && github.event_name != 'issues' && !(github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))
-    runs-on: ubuntu-latest
-    timeout-minutes: 45
-    permissions:
-      contents: read
-      actions: read
-      deployments: write
-      pages: write
-      id-token: write
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: main
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-      - name: Check trusted publishing code
-        run: python3 -m unittest discover -s scripts -p 'test_*.py'
-      - name: Check annotation and playback behavior
-        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
-      - id: pages
-        uses: actions/configure-pages@v5
-      - name: Import groups and prepare publication
-        id: prepare
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-          PAGES_URL: ${{ steps.pages.outputs.base_url }}
-          FIRST_PUBLICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.first_publication }}
-          RETRY_PUBLICATION: ${{ github.event_name == 'workflow_dispatch' && inputs.retry_publication }}
-        run: python3 scripts/publish_site.py prepare
-      - name: Download recorded candidate for recovery
-        if: steps.prepare.outputs.retry == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: course-pages-${{ steps.prepare.outputs.artifact_run }}-${{ steps.prepare.outputs.artifact_attempt }}
-          path: .scratch/pending-artifact
-          run-id: ${{ steps.prepare.outputs.artifact_run }}
-          github-token: ${{ github.token }}
-      - name: Validate and restore recorded candidate
-        if: steps.prepare.outputs.retry == 'true'
-        id: restore
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_site.py restore
-      - name: Upload complete candidate
-        if: steps.prepare.outputs.deploy == 'true' || steps.restore.outputs.deploy == 'true'
-        uses: actions/upload-pages-artifact@v4
-        with:
-          name: course-pages-${{ github.run_id }}-${{ github.run_attempt }}
-          path: _site
-          retention-days: 30
-      - name: Record expected publication
-        if: steps.prepare.outputs.deploy == 'true'
-        id: record
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_site.py record
-      - id: deployment
-        if: steps.record.outputs.deploy == 'true' || steps.restore.outputs.deploy == 'true'
-        uses: actions/deploy-pages@v4
-        with:
-          artifact_name: course-pages-${{ github.run_id }}-${{ github.run_attempt }}
-      - name: Verify served publication
-        if: steps.record.outputs.deploy == 'true' || steps.restore.outputs.deploy == 'true'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_site.py verify
-      - name: Summarize group results
-        if: always()
-        run: python3 scripts/publish_site.py summary
-
   pin:
-    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main' && (vars.DDD_ARCHIVE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))) && (github.event_name != 'issues' || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request')))
+    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main' && (github.event_name != 'issues' || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -152,10 +52,6 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       REQUESTS_ENABLED: ${{ vars.DDD_REQUESTS_ENABLED == 'true' }}
-      SEED_ARCHIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.seed_archive }}
-      RECONCILE_SEED: ${{ github.event_name == 'workflow_dispatch' && inputs.reconcile_seed }}
-      ARCHIVE_ENABLED: ${{ vars.DDD_ARCHIVE_ENABLED == 'true' }}
-      REBIND_ARCHIVE: ${{ github.event_name == 'workflow_dispatch' && inputs.rebind_archive }}
     outputs:
       metadata_sha256: ${{ steps.admit.outputs.metadata_sha256 }}
       artifact_attempt: ${{ steps.admit.outputs.artifact_attempt }}
@@ -232,7 +128,7 @@ jobs:
 
   archive:
     needs: [pin, prepare_archive]
-    if: needs.prepare_archive.outputs.archive == 'true' && vars.DDD_ARCHIVE_WRITES_ENABLED == 'true'
+    if: needs.prepare_archive.outputs.archive == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -240,9 +136,6 @@ jobs:
       deployments: read
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
-      PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      ARCHIVE_WRITES_ENABLED: ${{ vars.DDD_ARCHIVE_WRITES_ENABLED == 'true' }}
-      ARCHIVE_ENABLED: ${{ vars.DDD_ARCHIVE_ENABLED == 'true' }}
       EXPECTED_METADATA_SHA256: ${{ needs.prepare_archive.outputs.metadata_sha256 }}
       EXPECTED_PRODUCER_ATTEMPT: ${{ needs.prepare_archive.outputs.artifact_attempt }}
     outputs:
@@ -279,7 +172,7 @@ jobs:
 
   publish_archive:
     needs: [pin, prepare_archive, archive]
-    if: always() && needs.prepare_archive.result == 'success' && needs.prepare_archive.outputs.mode != 'seed' && needs.prepare_archive.outputs.mode != 'reconcile_seed' && needs.prepare_archive.outputs.mode != 'rebind' && (needs.prepare_archive.outputs.archive != 'true' || needs.archive.result == 'success')
+    if: always() && needs.prepare_archive.result == 'success' && (needs.prepare_archive.outputs.archive != 'true' || needs.archive.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -361,7 +254,7 @@ jobs:
 
   answer:
     needs: [pin, admission, prepare_archive, archive, publish_archive]
-    if: always() && needs.admission.result == 'success' && needs.admission.outputs.mode != 'seed' && needs.admission.outputs.mode != 'reconcile_seed' && needs.admission.outputs.mode != 'rebind' && vars.DDD_REQUESTS_ENABLED == 'true'
+    if: always() && needs.admission.result == 'success' && vars.DDD_REQUESTS_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

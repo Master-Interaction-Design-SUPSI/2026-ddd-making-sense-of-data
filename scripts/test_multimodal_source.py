@@ -9,7 +9,7 @@ from import_groups import import_groups
 from multimodal_source import REPOSITORY, convert, prepare
 from content_contract import CONTRACT
 from github_content import ImportFailure
-from test_import_groups import FixtureAPI
+from test_fixtures import FixtureAPI
 
 
 HTML = b'''<html><body><article id="abstract"><strong>Digital technologies</strong>
@@ -51,7 +51,7 @@ class MultimodalSourceTests(unittest.TestCase):
         files = {'index.html': HTML, 'sources.json': SOURCES, 'style.css': b':root {--red: #FF09D6;}', 'script.js': b'bad()',
                  'media/1.png': b'image', 'media/5.mp3': b'audio', 'media/4.mp4': b'video'}
         commit, _ = api.add(REPOSITORY, files, table=False)
-        group = Group('materialities-of-ai', REPOSITORY, 'main', True, require_visual=False)
+        group = Group('materialities-of-ai', REPOSITORY, 'main', 'live', require_visual=False)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             result = import_groups([group], root / 'first', api.client)[0]
@@ -71,7 +71,7 @@ class MultimodalSourceTests(unittest.TestCase):
         api = FixtureAPI()
         api.add('other/html', {'index.html': HTML, 'sources.json': SOURCES}, table=False)
         with tempfile.TemporaryDirectory() as temporary:
-            result = import_groups([Group('other', 'other/html', 'main', True, require_visual=False)],
+            result = import_groups([Group('other', 'other/html', 'main', 'live', require_visual=False)],
                                    Path(temporary), api.client)[0]
             self.assertEqual(result['status'], 'failed')
             self.assertIn('requires text.md', result['error'])
@@ -90,7 +90,7 @@ class AdapterBoundaryTests(unittest.TestCase):
         api = FixtureAPI()
         text = b'---\ntitle: Native brief\n---\nNative content'
         api.add(REPOSITORY, {'text.md': text, 'index.html': b'invalid HTML'}, table=False)
-        group = Group('brief', REPOSITORY, 'main', True, require_visual=False)
+        group = Group('brief', REPOSITORY, 'main', 'live', require_visual=False)
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
             result = import_groups([group], root, api.client)[0]
@@ -106,7 +106,7 @@ class AdapterBoundaryTests(unittest.TestCase):
 
     def test_invalid_listing_is_rejected_before_source_downloads(self):
         from import_groups import validate_tree
-        group = Group('brief', REPOSITORY, 'main', True, require_visual=False)
+        group = Group('brief', REPOSITORY, 'main', 'live', require_visual=False)
         client = Mock()
         tree = {'truncated': True, 'tree': []}
         with self.assertRaises(ImportFailure):
@@ -114,7 +114,7 @@ class AdapterBoundaryTests(unittest.TestCase):
         client.raw_file.assert_not_called()
 
     def test_sources_are_size_bounded_hash_verified_and_pinned_to_one_commit(self):
-        group = Group('brief', REPOSITORY, 'main', True, require_visual=False)
+        group = Group('brief', REPOSITORY, 'main', 'live', require_visual=False)
         payloads = {'index.html': b'<article id="abstract">Brief</article>',
                     'sources.json': b'{}', 'style.css': b':root {}'}
         nodes = [{'path': name, 'size': len(data), 'sha': hashlib.sha1(

@@ -6,42 +6,26 @@ import unittest
 from unittest.mock import Mock, patch
 
 import archive_release
-import build_site
-from archive_state import ArchiveSnapshot, encode_archive, seed_v1
+import archive_transaction
 from deployment_records import DeploymentRecords, ENVIRONMENT, TASK
-from group_registry import load_registry
 from publication_state import RecoveryError
 from publish_site import served_release, validate_release
-import test_publication_state as fixtures
+from test_fixtures import URL, Course
 
 
 class ReleasePairTests(unittest.TestCase):
     def setUp(self):
-        self.fixture = fixtures.PublicationTests()
-        self.fixture.setUp()
-        self.addCleanup(self.fixture.doCleanups)
-        self.fixture.bootstrap()
-        groups = seed_v1((self.fixture.live / 'publication.json').read_bytes(),
-            load_registry(self.fixture.root / 'groups.json'), lambda slug, name: (self.fixture.live / slug / name).read_bytes())
-        folder = self.fixture.workspace / 'archive'
-        folder.mkdir()
-        for slug in groups:
-            shutil.copytree(self.fixture.live / slug, folder / slug)
-        (folder / 'publication.json').write_bytes(encode_archive(groups))
-        self.archive = ArchiveSnapshot(folder, 'c' * 40)
+        self.fixture = Course(self)
+        self.archive = self.fixture.first_archive(commit='c' * 40)
         self.release = archive_release.make_release('a' * 40, 'b' * 40, self.archive, '50', '1')
 
-    def bytes(self):
-        return {p.relative_to(self.fixture.output).as_posix(): p.read_bytes()
-                for p in self.fixture.output.rglob('*') if p.is_file()}
-
     def test_exact_pair_rebuilds_all_site_bytes_without_artifact_or_source(self):
-        expected = self.bytes()
+        expected = self.fixture.bytes_at(self.fixture.output)
         shutil.rmtree(self.fixture.output)
-        with patch.object(build_site, 'PublishedSite', side_effect=AssertionError('no Pages recovery')), \
-                patch.object(build_site, 'import_groups', side_effect=AssertionError('no source reads')):
+        with patch.object(archive_transaction, 'import_groups', side_effect=AssertionError('no source reads')), \
+                patch('publication_state.build_opener', side_effect=AssertionError('no Pages reads')):
             archive_release.reconstruct(self.release, self.archive, 'a' * 40, 'b' * 40)
-        self.assertEqual(self.bytes(), expected)
+        self.assertEqual(self.fixture.bytes_at(self.fixture.output), expected)
 
     def test_reconstruction_rejects_other_code_archive_or_changed_trusted_assets(self):
         with self.assertRaises(RecoveryError):
@@ -57,11 +41,26 @@ class ReleasePairTests(unittest.TestCase):
     def test_changed_text_and_representative_media_are_probed_on_served_site(self):
         self.assertEqual(self.release['probes'], ['alpha/text.md', 'beta/text.md', 'alpha/media/detail.svg'])
         self.fixture.deploy()
-        served_release('https://site.test/course/', self.release, attempts=1)
+        served_release(URL, self.release, attempts=1)
         path = self.fixture.live / 'beta/text.md'
         path.write_bytes(b'X' * path.stat().st_size)
         with self.assertRaisesRegex(RecoveryError, 'content probe'):
-            served_release('https://site.test/course/', self.release, attempts=1)
+            served_release(URL, self.release, attempts=1)
+
+    def test_served_verification_has_one_overall_deadline_across_retries(self):
+        clock = {'seconds': 0}
+
+        def expired_read(*arguments):
+            clock['seconds'] = 181
+            raise RecoveryError('stale release')
+
+        with patch('publish_site.time.monotonic', side_effect=lambda: clock['seconds']), \
+                patch('publish_site.SiteReader') as reader, patch('publish_site.time.sleep') as sleep:
+            reader.return_value.read.side_effect = expired_read
+            with self.assertRaisesRegex(RecoveryError, 'stale release'):
+                served_release(URL, self.release)
+        self.assertEqual(reader.call_count, 1)
+        sleep.assert_not_called()
 
     def test_release_digest_excludes_release_identity_and_same_input_is_deterministic(self):
         second = archive_release.make_release('a' * 40, 'b' * 40, self.archive, '51', '2')
@@ -78,13 +77,11 @@ class ReleasePairTests(unittest.TestCase):
         probes = archive_release.probes_for(current, previous)
         self.assertEqual(probes, ['beta/media/detail.svg'])
 
-    def test_previous_served_inventory_requires_verified_v2_archive_and_matching_manifest(self):
+    def test_previous_served_inventory_requires_verified_release_and_matching_manifest(self):
         previous = self.release | {'archive_commit': 'c' * 40,
                                    'archive_manifest_sha256': hashlib.sha256(self.archive.payload).hexdigest()}
         verified = {'id': 7, 'payload': previous}
         records = Mock()
-        records.is_verified.return_value = True
-        records.archive_authority.return_value = 'v2'
         records.client.raw_file.return_value = self.archive.payload
         served = archive_release.verified_previous_groups(records, 'course/site', verified)
         self.assertEqual(set(served), set(self.archive.served()))
@@ -93,19 +90,12 @@ class ReleasePairTests(unittest.TestCase):
         records.client.raw_file.assert_called_once_with('course/site', 'c' * 40, 'publication.json',
                                                         archive_release.MAX_MANIFEST_BYTES)
 
-        records.is_verified.return_value = False
         records.client.raw_file.reset_mock()
-        self.assertIsNone(archive_release.verified_previous_groups(records, 'course/site', verified))
+        self.assertIsNone(archive_release.verified_previous_groups(records, 'course/site', None))
         records.client.raw_file.assert_not_called()
 
-        records.is_verified.return_value = True
         records.client.raw_file.return_value = b'{}'
         with self.assertRaisesRegex(RecoveryError, 'manifest differs'):
-            archive_release.verified_previous_groups(records, 'course/site', verified)
-
-        records.client.raw_file.return_value = self.archive.payload
-        records.archive_authority.return_value = 'v1-seed'
-        with self.assertRaisesRegex(RecoveryError, 'V2 archive authority'):
             archive_release.verified_previous_groups(records, 'course/site', verified)
 
     def test_pending_pair_retry_precedes_import_and_code_change_explicitly_supersedes(self):
@@ -113,7 +103,7 @@ class ReleasePairTests(unittest.TestCase):
         self.assertEqual(archive_release.publication_strategy(attempted, None, 'a' * 40)['mode'], 'verify_then_retry')
         verified = copy.deepcopy(attempted)
         self.assertEqual(archive_release.publication_strategy(attempted, verified, 'a' * 40)['mode'], 'refresh')
-        self.assertEqual(archive_release.publication_strategy(attempted, None, 'd' * 40), {'mode': 'refresh', 'supersedes': 1})
+        self.assertEqual(archive_release.publication_strategy(attempted, None, 'd' * 40), {'mode': 'refresh'})
 
     def test_schema_rejects_missing_pins_and_unsafe_or_unbounded_probes(self):
         for probes in (['../escape'], ['alpha/text.md', 'alpha/text.md'], [None], [['alpha/text.md']], ['alpha/text.md'] * 17):

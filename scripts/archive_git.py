@@ -7,7 +7,7 @@ import time
 import base64
 from pathlib import Path
 
-from archive_state import ArchiveSnapshot, SHA, MAX_MANIFEST_BYTES, MAX_TRANSFER_BYTES, decode_archive, unpack_snapshot
+from archive_state import ArchiveSnapshot, SHA, MAX_MANIFEST_BYTES, MAX_TRANSFER_BYTES, decode_archive, empty_archive, unpack_snapshot
 from group_registry import REPOSITORY
 from publication_state import RecoveryError
 
@@ -62,7 +62,7 @@ def require_heads(repository, expected_main, expected_parent):
     if not isinstance(expected_main, str) or not SHA.fullmatch(expected_main):
         raise RecoveryError('main code must be pinned to a full commit')
     if expected_parent is not None and (not isinstance(expected_parent, str) or not SHA.fullmatch(expected_parent)):
-        raise RecoveryError('archive parent must be a full commit or explicit first seed')
+        raise RecoveryError('archive parent must be a full commit, or None on a first run')
     refs = remote_heads(repository)
     if refs.get(MAIN_REF) != expected_main:
         raise RecoveryError('main changed; archive candidate is superseded')
@@ -70,18 +70,10 @@ def require_heads(repository, expected_main, expected_parent):
         raise RecoveryError('archive head changed; re-read and rebuild candidate')
 
 
-def create_commit(repository, snapshot, expected_parent, *, main_commit=None, authority='v2'):
-    """Construct only manifest-listed regular blobs and a commit with one parent."""
-    archive = ArchiveSnapshot(snapshot, expected_parent or '0' * 40)
-    if authority not in {'v1-seed', 'v2'}:
-        raise RecoveryError('unknown archive authority')
-    if authority == 'v1-seed' and any(entry['snapshot'] and (
-            entry['snapshot']['contract_version'] != 1 or entry['snapshot']['tree'] is not None)
-            for entry in archive.groups.values()):
-        raise RecoveryError('V1 seed marker requires V1 seed snapshots')
-    if expected_parent and authority == 'v1-seed' and accepted_authority(repository, expected_parent) != 'v1-seed':
-        raise RecoveryError('V1 seed authority cannot replace V2 archive authority')
-    if main_commit is not None and (not isinstance(main_commit, str) or not SHA.fullmatch(main_commit)):
+def create_commit(repository, snapshot, expected_parent, *, main_commit):
+    """Construct only manifest-listed regular blobs and a commit with one parent, or a root on a first run."""
+    archive = ArchiveSnapshot(snapshot)
+    if not isinstance(main_commit, str) or not SHA.fullmatch(main_commit):
         raise RecoveryError('accepted snapshot needs an exact main code identity')
     with tempfile.TemporaryDirectory(prefix='archive-index-') as temporary:
         index = Path(temporary) / 'index'
@@ -112,40 +104,13 @@ def create_commit(repository, snapshot, expected_parent, *, main_commit=None, au
         indexed('read-tree', '--empty')
         indexed('update-index', '-z', '--index-info', input=b''.join(entries))
         tree = indexed('write-tree').decode().strip()
-    if expected_parent:
-        previous_tree = git(repository, 'rev-parse', expected_parent + '^{tree}').decode().strip()
-        if tree == previous_tree and accepted_authority(repository, expected_parent) == authority:
-            return expected_parent
     arguments = ['commit-tree', tree]
     if expected_parent:
+        if tree == git(repository, 'rev-parse', expected_parent + '^{tree}').decode().strip():
+            return expected_parent
         arguments.extend(['-p', expected_parent])
-    message = 'Accept validated student snapshots\n'
-    message += '\nArchive-Authority: ' + authority + '\n'
-    if main_commit:
-        message += '\nMain-Commit: ' + main_commit + '\n'
+    message = 'Accept validated student snapshots\n\nMain-Commit: ' + main_commit + '\n'
     return git(repository, *arguments, input=message.encode()).decode().strip()
-
-
-def accepted_authority(repository, commit):
-    if not isinstance(commit, str) or not SHA.fullmatch(commit):
-        raise RecoveryError('archive authority requires an exact commit')
-    body = git(repository, 'show', '-s', '--format=%B', commit).decode()
-    values = [line.removeprefix('Archive-Authority: ') for line in body.splitlines()
-              if line.startswith('Archive-Authority: ')]
-    if len(values) != 1 or values[0] not in {'v1-seed', 'v2'}:
-        raise RecoveryError('archive has no unambiguous durable authority marker')
-    return values[0]
-
-
-def accepted_main(repository, commit):
-    """Recover the code pin even if a build job died before creating its deployment record."""
-    if not isinstance(commit, str) or not SHA.fullmatch(commit):
-        raise RecoveryError('accepted archive requires an exact commit')
-    body = git(repository, 'show', '-s', '--format=%B', commit).decode()
-    pins = [line.removeprefix('Main-Commit: ') for line in body.splitlines() if line.startswith('Main-Commit: ')]
-    if len(pins) != 1 or not SHA.fullmatch(pins[0]):
-        raise RecoveryError('archive acceptance has no unambiguous durable main pin')
-    return pins[0]
 
 
 def publish_commit(repository, commit, expected_main, expected_parent, *, authenticated=False):
@@ -258,6 +223,14 @@ def snapshot_from_git(repository, commit, destination):
                 checksum.update(chunk)
         unpack_snapshot(tar, destination, checksum.hexdigest(), git_directories=True)
     return ArchiveSnapshot(destination, commit)
+
+
+def parent_snapshot(repository, commit, destination):
+    """The accepted parent in this writer repository, or the empty archive of a first run."""
+    if commit is None:
+        return empty_archive(destination)
+    fetch_commit(repository, commit)
+    return snapshot_from_git(repository, commit, destination)
 
 
 def read_remote_snapshot(repository, commit, destination):

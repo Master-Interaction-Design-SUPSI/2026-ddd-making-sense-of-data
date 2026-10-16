@@ -1,6 +1,5 @@
 """Deterministic durable snapshots; archive data is never executable site code."""
 
-import copy
 import hashlib
 import json
 import re
@@ -9,12 +8,11 @@ import tempfile
 from pathlib import Path, PurePosixPath
 
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files
-from group_registry import REPOSITORY, RESERVED_SLUGS, SLUG, validate_branch, validate_exclusions
+from group_registry import REPOSITORY, RESERVED_SLUGS, SLUG, STATES, validate_branch, validate_exclusions
 from import_groups import validate_content
-from publication_state import RecoveryError, decode_manifest, unique_keys
+from publication_state import RecoveryError, unique_keys
 
 MANIFEST = 'publication.json'
-STATES = frozenset({'live', 'frozen', 'hidden'})
 SHA = re.compile(r'[0-9a-f]{40}')
 DIGEST = re.compile(r'[0-9a-f]{64}')
 MAX_MANIFEST_BYTES = 8 * 1024 * 1024
@@ -41,6 +39,27 @@ def canonical(value):
 
 def blob_sha(content):
     return hashlib.sha1(f'blob {len(content)}\0'.encode() + content).hexdigest()
+
+
+def file_record(content):
+    return {'size': len(content), 'sha256': hashlib.sha256(content).hexdigest(), 'blob_sha': blob_sha(content)}
+
+
+def served_groups(groups):
+    """Public inventory for the served manifest; hidden records never enter Pages."""
+    return {slug: served_entry(entry) for slug, entry in groups.items()
+            if entry['state'] != 'hidden' and entry['snapshot']}
+
+
+def served_entry(entry):
+    """One group's record in the served manifest, or None before its first accepted snapshot."""
+    snapshot = entry['snapshot']
+    if snapshot is None:
+        return None
+    return {'repository': entry['repository'], 'branch': entry['branch'], 'commit': snapshot['commit'],
+            'require_visual': snapshot['require_visual'],
+            'files': {name: {key: record[key] for key in ('size', 'sha256')}
+                      for name, record in snapshot['files'].items()}}
 
 
 def decode_archive(payload):
@@ -79,9 +98,9 @@ def decode_archive(payload):
                 raise ValueError(f'{slug}: invalid snapshot')
             if not isinstance(snapshot['commit'], str) or not SHA.fullmatch(snapshot['commit']):
                 raise ValueError(f'{slug}: invalid source commit')
-            if snapshot['tree'] is not None and (not isinstance(snapshot['tree'], str) or not SHA.fullmatch(snapshot['tree'])):
+            if not isinstance(snapshot['tree'], str) or not SHA.fullmatch(snapshot['tree']):
                 raise ValueError(f'{slug}: invalid source tree')
-            if type(snapshot['contract_version']) is not int or snapshot['contract_version'] not in {1, CONTRACT_VERSION}:
+            if type(snapshot['contract_version']) is not int or snapshot['contract_version'] != CONTRACT_VERSION:
                 raise ValueError(f'{slug}: unsupported contract')
             if type(snapshot['require_visual']) is not bool:
                 raise ValueError(f'{slug}: invalid snapshot visual setting')
@@ -96,8 +115,7 @@ def decode_archive(payload):
                         or not isinstance(record['blob_sha'], str) or not SHA.fullmatch(record['blob_sha'])):
                     raise ValueError(f'{slug}: invalid file digest')
             selected = select_content_files({name: record['size'] for name, record in files.items()},
-                                            require_visual=snapshot['require_visual'],
-                                            recovery=snapshot['contract_version'] == 1)
+                                            require_visual=snapshot['require_visual'])
             if set(selected) != set(files) or set(files) & set(snapshot['exclude']):
                 raise ValueError(f'{slug}: unsupported/excluded archive content')
             if any('/'.join(name.split('/')[:i]) in files for name in files
@@ -124,87 +142,32 @@ def encode_archive(groups):
     return payload
 
 
-def group_record(group, state=None):
-    return {'repository': group.repository, 'branch': group.branch,
-            'state': state or group.publication_state,
+def group_record(group):
+    return {'repository': group.repository, 'branch': group.branch, 'state': group.state,
             'require_visual': group.require_visual, 'exclude': list(group.exclude), 'snapshot': None}
 
 
-def seed_v1(payload, registry, read_file):
-    """Seed from verified deployed bytes, requiring no surviving source repository."""
-    published = decode_manifest(payload)
-    configured = {group.slug: group for group in registry}
-    groups = {group.slug: group_record(group) for group in registry}
-    for slug, previous in published.items():
-        group = configured.get(slug)
-        if group and (group.repository.casefold(), group.branch) != (previous['repository'].casefold(), previous['branch']):
-            raise RecoveryError(f'{slug}: seed repository identity differs from registry; migration required')
-        if not group:
-            groups[slug] = {'repository': previous['repository'], 'branch': previous['branch'], 'state': 'hidden',
-                            'require_visual': previous.get('require_visual', True), 'exclude': [], 'snapshot': None}
-        files = {}
-        for name, record in previous['files'].items():
-            content = read_file(slug, name)
-            if len(content) != record['size'] or hashlib.sha256(content).hexdigest() != record['sha256']:
-                raise RecoveryError(f'{slug}/{name}: seed bytes differ from verified V1 inventory')
-            files[name] = record | {'blob_sha': blob_sha(content)}
-        # V1 did not record exclusions or source trees. Unknown stays explicit.
-        groups[slug]['snapshot'] = {'commit': previous['commit'], 'tree': None, 'contract_version': 1,
-                                    'require_visual': previous.get('require_visual', True), 'exclude': [],
-                                    'files': files, 'excluded': {}}
-    encode_archive(groups)
-    return groups
-
-
-def reconcile(groups, registry, states=None):
-    """Retain removed rows as hidden; require deliberate migrations for rebinds."""
-    result = copy.deepcopy(groups)
-    states = states or {}
-    configured = {group.slug: group for group in registry}
-    if set(states) - set(configured):
-        raise RecoveryError('state override names an unregistered group')
-    for slug, entry in result.items():
-        if slug not in configured:
-            entry['state'] = 'hidden'
-    for slug, group in configured.items():
-        entry = result.get(slug)
-        if entry and (entry['repository'].casefold(), entry['branch']) != (group.repository.casefold(), group.branch):
-            raise RecoveryError(f'{slug}: repository/branch rebind requires explicit migration')
-        updated = group_record(group, states.get(slug))
-        if entry:
-            updated['snapshot'] = entry['snapshot']
-        result[slug] = updated
+def reconcile(groups, registry):
+    """The archive mirrors the registry: a row per group, keeping a snapshot only for the same source."""
+    result = {}
+    for group in registry:
+        entry = groups.get(group.slug)
+        result[group.slug] = group_record(group)
+        if entry and (entry['repository'].casefold(), entry['branch']) == (group.repository.casefold(), group.branch):
+            result[group.slug]['snapshot'] = entry['snapshot']
+        elif entry and group.state == 'frozen':
+            raise RecoveryError(f'{group.slug}: a frozen group keeps its accepted snapshot; change its repository '
+                                'or branch only while it is live or hidden')
     encode_archive(result)
     return result
-
-
-def reconcile_v1_seed(previous, payload, registry, read_file):
-    """Advance a pre-cutover seed while retaining disappeared snapshots hidden.
-
-    This authority is restricted to V1 seeds. Once V2 has accepted any content,
-    only normal archive transactions may advance the branch.
-    """
-    if any(entry['snapshot'] and (entry['snapshot']['contract_version'] != 1
-                                  or entry['snapshot']['tree'] is not None)
-           for entry in previous.values()):
-        raise RecoveryError('seed reconciliation cannot replace V2 accepted content')
-    # Reject identity rebinds even for a group absent from the new served release.
-    retained = reconcile(previous, registry)
-    current = seed_v1(payload, registry, read_file)
-    published = decode_manifest(payload)
-    for slug, entry in retained.items():
-        if slug not in published and entry['snapshot']:
-            current[slug] = copy.deepcopy(entry)
-            current[slug]['state'] = 'hidden'
-    encode_archive(current)
-    return current
 
 
 class ArchiveSnapshot:
     """Read a validated local snapshot from a pinned, bounded archive transfer."""
 
-    def __init__(self, folder, commit):
-        if not isinstance(commit, str) or not SHA.fullmatch(commit):
+    def __init__(self, folder, commit=None):
+        # commit is set only for a snapshot read from student-work.
+        if commit is not None and (not isinstance(commit, str) or not SHA.fullmatch(commit)):
             raise RecoveryError('archive must be pinned to a full commit')
         self.folder = Path(folder)
         self.commit = commit
@@ -250,17 +213,15 @@ class ArchiveSnapshot:
         return content
 
     def served(self):
-        """V1-compatible public inventory; hidden records never enter Pages."""
-        groups = {}
-        for slug, entry in self.groups.items():
-            accepted = entry['snapshot']
-            if entry['state'] == 'hidden' or accepted is None:
-                continue
-            groups[slug] = {'repository': entry['repository'], 'branch': entry['branch'],
-                            'commit': accepted['commit'], 'require_visual': accepted['require_visual'],
-                            'files': {name: {key: record[key] for key in ('size', 'sha256')}
-                                      for name, record in accepted['files'].items()}}
-        return groups
+        return served_groups(self.groups)
+
+
+def empty_archive(folder):
+    """The archive of a first run: no student-work branch yet, so no groups and no commit."""
+    folder = Path(folder)
+    folder.mkdir()
+    (folder / MANIFEST).write_bytes(encode_archive({}))
+    return ArchiveSnapshot(folder)
 
 
 def unpack_snapshot(archive, destination, expected_digest, *, git_directories=False):
@@ -331,6 +292,6 @@ def unpack_snapshot(archive, destination, expected_digest, *, git_directories=Fa
                         target.write(chunk)
                         remaining -= len(chunk)
             # The transport digest alone cannot authorise bytes or active SVG.
-            ArchiveSnapshot(staged, '0' * 40)
+            ArchiveSnapshot(staged)
             staged.rename(destination)
     return groups

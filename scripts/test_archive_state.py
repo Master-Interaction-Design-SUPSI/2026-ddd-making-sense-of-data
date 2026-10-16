@@ -10,10 +10,10 @@ from pathlib import Path
 from unittest.mock import patch
 
 import build_site
-from archive_state import ArchiveSnapshot, blob_sha, decode_archive, encode_archive, reconcile, seed_v1, unpack_snapshot
+from archive_state import ArchiveSnapshot, blob_sha, decode_archive, encode_archive, reconcile, unpack_snapshot
 from group_registry import Group
-from publication_state import RecoveryError, encode_manifest
-from test_import_groups import SVG
+from publication_state import RecoveryError
+from test_fixtures import SVG, archived_group
 
 
 class ArchiveTests(unittest.TestCase):
@@ -22,11 +22,8 @@ class ArchiveTests(unittest.TestCase):
         self.addCleanup(temporary.cleanup)
         self.root = Path(temporary.name)
         self.bytes = {'text.md': b'Accepted text', 'visual.svg': SVG}
-        self.group = Group('alpha', 'course/alpha', 'main', True)
-        self.v1 = encode_manifest({'alpha': {'repository': 'course/alpha', 'branch': 'main', 'commit': 'a' * 40,
-                                           'files': {name: {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
-                                                     for name, data in self.bytes.items()}}})
-        self.groups = seed_v1(self.v1, [self.group], lambda slug, name: self.bytes[name])
+        self.group = Group('alpha', 'course/alpha', 'main', 'live')
+        self.groups = {'alpha': archived_group(self.bytes)}
 
     def snapshot(self, groups=None, data=None):
         groups = groups if groups is not None else self.groups
@@ -54,42 +51,40 @@ class ArchiveTests(unittest.TestCase):
         return [('publication.json', encode_archive(self.groups), tarfile.REGTYPE)] + [
             ('alpha/' + name, content, tarfile.REGTYPE) for name, content in self.bytes.items()]
 
-    def test_v1_seed_survives_source_loss_and_projects_only_visible_groups(self):
+    def test_snapshot_projects_only_visible_groups_without_source_bytes(self):
         folder = self.snapshot()
-        self.bytes.clear()  # no source bytes remain available to the seed callback
         archive = ArchiveSnapshot(folder, 'b' * 40)
         self.assertEqual(archive.read_file('alpha', 'text.md'), b'Accepted text')
-        self.assertEqual(archive.served(), json.loads(self.v1)['groups'] | {
-            'alpha': json.loads(self.v1)['groups']['alpha'] | {'require_visual': True}})
-        hidden = reconcile(archive.groups, [])
+        self.assertEqual(archive.served(), {'alpha': {
+            'repository': 'course/alpha', 'branch': 'main', 'commit': 'a' * 40, 'require_visual': True,
+            'files': {name: {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
+                      for name, data in self.bytes.items()}}})
+        hidden = reconcile(archive.groups, [Group('alpha', 'course/alpha', 'main', 'hidden')])
         (folder / 'publication.json').write_bytes(encode_archive(hidden))
         self.assertEqual(ArchiveSnapshot(folder, 'b' * 40).served(), {})
         self.assertEqual(hidden['alpha']['snapshot'], archive.groups['alpha']['snapshot'])
 
-    def test_seed_detects_corrupt_bytes_and_identity_rebind(self):
-        with self.assertRaises(RecoveryError):
-            seed_v1(self.v1, [self.group], lambda slug, name: b'wrong bytes')
-        other = Group('alpha', 'new/alpha', 'main', True)
-        with self.assertRaises(RecoveryError):
-            seed_v1(self.v1, [other], lambda slug, name: self.bytes[name])
-        with self.assertRaises(RecoveryError):
-            reconcile(self.groups, [other])
-
-    def test_missing_hidden_valid_frozen_invalid_and_removed_rows_retained(self):
-        pilot = Group('pilot', 'course/pilot', 'main', False)
+    def test_archive_mirrors_the_registry(self):
+        pilot = Group('pilot', 'course/pilot', 'main', 'hidden')
         groups = reconcile(self.groups, [self.group, pilot])
         self.assertIsNone(groups['pilot']['snapshot'])
-        with self.assertRaises(RecoveryError):
-            reconcile(groups, [self.group, pilot], {'pilot': 'frozen'})
-        frozen = reconcile(groups, [self.group, pilot], {'alpha': 'frozen'})
+        self.assertEqual(groups['alpha']['snapshot'], self.groups['alpha']['snapshot'])
+        with self.assertRaisesRegex(RecoveryError, 'frozen'):
+            reconcile(groups, [self.group, Group('pilot', 'course/pilot', 'main', 'frozen')])
+        frozen = reconcile(groups, [Group('alpha', 'course/alpha', 'main', 'frozen'), pilot])
         self.assertEqual(frozen['alpha']['state'], 'frozen')
-        removed = reconcile(frozen, [pilot])
-        self.assertEqual(removed['alpha']['state'], 'hidden')
-        self.assertEqual(removed['alpha']['snapshot'], self.groups['alpha']['snapshot'])
-        self.assertEqual(encode_archive(removed), encode_archive(reconcile(removed, [pilot])))
+        with self.assertRaisesRegex(RecoveryError, 'keeps its accepted snapshot'):
+            reconcile(frozen, [Group('alpha', 'new/alpha', 'main', 'frozen'), pilot])
+        self.assertEqual(reconcile(frozen, [pilot]), {'pilot': groups['pilot']})
+        self.assertEqual(encode_archive(groups), encode_archive(reconcile(groups, [self.group, pilot])))
+        for moved in (Group('alpha', 'new/alpha', 'main', 'live'), Group('alpha', 'course/alpha', 'draft', 'live')):
+            with self.subTest(moved=moved):
+                self.assertIsNone(reconcile(self.groups, [moved])['alpha']['snapshot'])
+        renamed = reconcile(self.groups, [Group('alpha', 'Course/Alpha', 'main', 'live')])
+        self.assertEqual(renamed['alpha']['snapshot'], self.groups['alpha']['snapshot'])
 
     def test_schema_paths_contract_and_exclusion_provenance(self):
-        for mutation in ('schema', 'path', 'blob', 'contract', 'exclusions'):
+        for mutation in ('schema', 'path', 'blob', 'contract', 'legacy-contract', 'unknown-tree', 'exclusions'):
             with self.subTest(mutation=mutation):
                 manifest = {'version': 2, 'groups': copy.deepcopy(self.groups)}
                 snapshot = manifest['groups']['alpha']['snapshot']
@@ -97,6 +92,8 @@ class ArchiveTests(unittest.TestCase):
                 if mutation == 'path': snapshot['files']['../text.md'] = snapshot['files'].pop('text.md')
                 if mutation == 'blob': snapshot['files']['text.md']['blob_sha'] = 'wrong'
                 if mutation == 'contract': snapshot['contract_version'] = 999
+                if mutation == 'legacy-contract': snapshot['contract_version'] = 1
+                if mutation == 'unknown-tree': snapshot['tree'] = None
                 if mutation == 'exclusions': snapshot['exclude'] = ['media/original.mov']
                 with self.assertRaises(RecoveryError): decode_archive(json.dumps(manifest).encode())
         snapshot = self.groups['alpha']['snapshot']
@@ -187,12 +184,12 @@ class ArchiveTests(unittest.TestCase):
             shutil.copytree(actual_root / name, checkout / name)
         shutil.copy2(actual_root / 'index.html', checkout / 'index.html')
         (checkout / 'groups.json').write_text(json.dumps({'groups': [
-            {'slug': 'alpha', 'repository': 'course/alpha', 'enabled': True},
-            {'slug': 'hidden', 'repository': 'course/hidden', 'enabled': False}]}))
+            {'slug': 'alpha', 'repository': 'course/alpha', 'state': 'live'},
+            {'slug': 'hidden', 'repository': 'course/hidden', 'state': 'hidden'}]}))
         output = self.root / 'site'
         with patch.object(build_site, 'ROOT', checkout), patch.object(build_site, 'OUTPUT', output), \
-                patch.object(build_site, 'PublishedSite', side_effect=AssertionError('Pages must not be read')), \
-                patch.object(build_site, 'import_groups', side_effect=AssertionError('sources must not be read')):
+                patch('publication_state.build_opener', side_effect=AssertionError('Pages must not be read')), \
+                patch('github_content.build_opener', side_effect=AssertionError('sources must not be read')):
             first = build_site.build_archive(folder, 'b' * 40)
             files = {path.relative_to(output).as_posix(): path.read_bytes()
                      for path in output.rglob('*') if path.is_file()}

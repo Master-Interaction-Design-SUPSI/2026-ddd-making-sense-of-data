@@ -11,10 +11,7 @@ Outstanding validation as of 2026-10-15. V2 deployment and archive cutover are r
 
 ## Hosted recovery and archive operations
 
-- [ ] Rehearse capture → V1 rollback → V2 resume through `recovery.yml`: preserve the reviewed release/capture identities, verify every captured served file, prove the archive head is unchanged, and clear the pause only after served V2 verification. Include pending-attempt and changed-code retries; local fixture coverage is recorded separately.
 - [ ] Rehearse source loss and offline reproduction. Verify retained accepted snapshots and reproduce the full pinned code/archive release without source repositories or media caches.
-- [ ] Publish and protect the reviewed `final-2026` freeze tag; verify the tag reproduces the exact full release pair and rejects altered pins/digests. Local tag creation alone does not complete this check.
-- [ ] Rehearse a reviewed identity rebind against the exact archive parent. Verify old bytes remain under the hidden retired slug, then verify the new identity through an ordinary refresh.
 - [ ] Exercise deployment races and superseded attempts; confirm stale authority cannot deploy or answer requests.
 
 ## Capacity and browser checks

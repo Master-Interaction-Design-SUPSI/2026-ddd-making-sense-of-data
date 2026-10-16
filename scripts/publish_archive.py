@@ -8,7 +8,6 @@ import re
 import shutil
 import subprocess
 import tempfile
-import time
 from contextvars import ContextVar
 from datetime import datetime, timezone
 from functools import wraps
@@ -16,23 +15,21 @@ from pathlib import Path
 
 import archive_git
 import archive_release
-import archive_rebind
-import publish_site as legacy_publication
+import publish_site
 import build_site
-from archive_state import ArchiveSnapshot, MAX_TRANSFER_BYTES, encode_archive, reconcile_v1_seed, seed_v1, unpack_snapshot
+from archive_state import MANIFEST, ArchiveSnapshot, MAX_TRANSFER_BYTES, empty_archive, unpack_snapshot
 from archive_transaction import admit_candidate, pack_snapshot, prepare_archive
-from content_contract import LIMITS
 from deployment_records import DeploymentRecords
-from github_content import ImportFailure
 from group_registry import REPOSITORY, load_registry
 from publication_requests import RequestAPI, body_hash, capture_batch, parse_group, refresh_allowed, validate_batch, answer_batch, LABEL
-from publication_state import MANIFEST, MAX_MANIFEST_BYTES, PublishedSite, RecoveryError, unique_keys
+from publication_state import MAX_MANIFEST_BYTES, RecoveryError, unique_keys
 from publish_site import RELEASE, encode, output, served_release, site_digest, validate_release
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE = ROOT / '.scratch/v2-build-state.json'
 KINDS = {'admission', 'prepared', 'accepted', 'result'}
-MODES = {'seed', 'reconcile_seed', 'rebind', 'refresh', 'unchanged', 'retry', 'repair', 'pending', 'deferred', 'invalid', 'superseded'}
+MODES = {'refresh', 'unchanged', 'pending', 'retry', 'repair', 'deferred', 'invalid', 'superseded'}
+MEMBERS = {'batch.json', 'report.json', 'candidate.tar'}
 MAX_REPORT_BYTES = 8 * 1024 * 1024
 TRANSPORT_STAGE = ContextVar('publication_transport_stage', default=None)
 
@@ -114,7 +111,7 @@ def identity():
 
 
 def require_main(records):
-    legacy_publication.require_publication_active()
+    publish_site.require_publication_active()
     context = identity()
     if records.main_commit() != context['main_commit']:
         raise RecoveryError('main changed; this run is superseded')
@@ -132,7 +129,7 @@ def seal(folder, kind, data, files):
     if (folder / 'metadata.json').exists() or kind not in KINDS:
         raise RecoveryError('job artifact identity must be immutable')
     for name, source in files.items():
-        if name not in {'batch.json', 'report.json', 'candidate.tar', 'seed-manifest.json'}:
+        if name not in MEMBERS:
             raise RecoveryError('unexpected job artifact member')
         target = folder / name
         if name == 'report.json' and isinstance(source, bytes):
@@ -177,7 +174,7 @@ def load(folder, expected_hash, kinds):
             or not isinstance(value['data'], dict) or value['data'].get('mode') not in MODES
             or not isinstance(value['files'], dict)
             or not {'batch.json', 'report.json'} <= value['files'].keys()
-            or value['files'].keys() - {'batch.json', 'report.json', 'candidate.tar', 'seed-manifest.json'}):
+            or value['files'].keys() - MEMBERS):
         raise RecoveryError('job artifact code/registry/run/schema identity differs')
     if {path.name for path in folder.iterdir()} != {'metadata.json', *value['files']}:
         raise RecoveryError('job artifact contains unexpected files')
@@ -217,20 +214,13 @@ class AdmissionRecords(DeploymentRecords):
             'payload': {'version': 1, **context, 'cutoff': cutoff, 'event': event}})
 
 
-def admit(records, api, destination, event, *, issue_number=None, requests_enabled=False, seed=False,
-          reconcile_seed=False, archive_enabled=False, rebind=False):
+def admit(records, api, destination, event, *, issue_number=None, requests_enabled=False):
     context = require_main(records)
     cutoff = utc_now()
     groups = registry()
-    mode = 'seed' if seed else 'reconcile_seed' if reconcile_seed else 'rebind' if rebind else 'refresh'
-    if (event not in {'push', 'schedule', 'workflow_dispatch', 'issues'}
-            or (seed or reconcile_seed or rebind) and event != 'workflow_dispatch'
-            or sum(bool(value) for value in (seed, reconcile_seed, rebind)) > 1):
-        raise RecoveryError('untrusted publication event/recovery input')
-    if (seed or reconcile_seed) and archive_enabled:
-        raise RecoveryError('seed operations are disabled after archive cutover')
-    if rebind and not archive_enabled:
-        raise RecoveryError('identity rebind requires archive authority after cutover')
+    mode = 'refresh'
+    if event not in {'push', 'schedule', 'workflow_dispatch', 'issues'}:
+        raise RecoveryError('untrusted publication event')
     batch = {'version': 1, 'repository': context['repository'], 'cutoff': cutoff, 'requests': []}
     if event == 'issues':
         if not requests_enabled or type(issue_number) is not int or issue_number <= 0:
@@ -257,59 +247,11 @@ def admit(records, api, destination, event, *, issue_number=None, requests_enabl
                     'admission': dict(records.client.metrics), 'issues': dict(api.client.metrics)}})})
 
 
-def _read_archive(records, destination, commit=None):
-    return archive_git.read_remote_snapshot(identity()['repository'], commit or records.archive_commit(), destination)
-
-
-def _seed(records, url, destination, *, metrics=None, retained=None):
-    if retained is not None and records.archive_authority(retained.commit) != 'v1-seed':
-        raise RecoveryError('seed reconciliation cannot replace V2 archive authority')
-    latest = records.latest()
-    if not latest or validate_release(latest['payload'])['version'] != 1:
-        raise RecoveryError('seed requires a currently verified V1 publication')
-    release = latest['payload']
-    if not records.is_verified(latest['id']):
-        raise RecoveryError('seed requires the latest V1 deployment to be verified')
-    served_release(url, release, metrics=metrics)
-    previous = PublishedSite(url)
-    if hashlib.sha256(previous.payload).hexdigest() != release['manifest_sha256']:
-        raise RecoveryError('V1 advanced during seed capture; capture again')
-    destination.mkdir()
-    if any(sum(record['size'] for record in entry['files'].values()) > LIMITS['group_bytes']
-           for entry in previous.groups.values()):
-        raise RecoveryError('V1 snapshot exceeds new admission cap; explicit migration decision required')
-    previous.overall_deadline = time.monotonic() + 20 * 60
-    active_slug = None
-    def read_seed(slug, name):
-        nonlocal active_slug
-        if slug != active_slug:
-            previous.deadline = time.monotonic() + 180
-            active_slug = slug
-        return previous.read_file(slug, name)
-    # Validation and materialization read the same verified bytes. Keep this
-    # disposable acceleration store outside the admitted snapshot inventory.
-    with tempfile.TemporaryDirectory(prefix='ddd-v1-seed-cache-', dir=destination.parent) as cache:
-        previous.cache_directory = Path(cache)
-        try:
-            groups = (seed_v1(previous.payload, registry(), read_seed) if retained is None
-                      else reconcile_v1_seed(retained.groups, previous.payload, registry(), read_seed))
-            for slug, entry in groups.items():
-                if entry['snapshot']:
-                    folder = destination / slug
-                    folder.mkdir()
-                    for name in entry['snapshot']['files']:
-                        target = folder / name
-                        target.parent.mkdir(parents=True, exist_ok=True)
-                        content = (read_seed(slug, name) if slug in previous.groups
-                                   else retained.read_file(slug, name))
-                        target.write_bytes(content)
-            (destination / MANIFEST).write_bytes(encode_archive(groups))
-            previous.check_unchanged()
-        finally:
-            if metrics is not None:
-                for key, count in previous.metrics.items():
-                    metrics[key] = metrics.get(key, 0) + count
-    return ArchiveSnapshot(destination, '0' * 40), previous.payload, release
+def _read_archive(destination, commit):
+    """Read the accepted archive at commit, or start from the empty archive on a first run."""
+    if commit is None:
+        return empty_archive(destination), {'archive_transfer_bytes': 0}
+    return archive_git.read_remote_snapshot(identity()['repository'], commit, destination)
 
 
 @transport_stage('prepare')
@@ -318,185 +260,77 @@ def prepare(records, url, admission, checksum, destination):
     admitted, batch, report = load(admission, checksum, {'admission'})
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
-    mode = admitted['data']['mode']
-    data = {'mode': mode, 'archive_commit': None, 'expected_parent': None, 'previous_release': None,
-            'deployment_id': None, 'supersedes': None, 'seed_release': None, 'source_checked': False}
+    data = {'mode': admitted['data']['mode'], 'archive_commit': None, 'expected_parent': None,
+            'previous_release': None, 'deployment_id': None, 'source_checked': False}
     files = {'batch.json': encode(batch)}
-    if mode in {'deferred', 'invalid', 'superseded'}:
+
+    def finish(**changes):
+        data.update(changes)
         files['report.json'] = encode(report)
         return seal(destination, 'prepared', data, files)
+
+    if data['mode'] in {'deferred', 'invalid', 'superseded'}:
+        return finish()
+    latest = records.latest()
+    # Classifying this exact attempt needs one status request, not a history sweep.
+    verified = latest if latest and records.is_verified(latest['id']) else None
+    strategy = archive_release.publication_strategy(latest, verified, context['main_commit'])
+    if strategy['mode'] == 'verify_then_retry':
+        release = strategy['release']
+        try:
+            served_release(url, release, attempts=1)
+            mode = 'repair'
+        except RecoveryError:
+            mode = 'retry'
+        return finish(mode=mode, archive_commit=release['archive_commit'], previous_release=release,
+                      deployment_id=strategy['deployment_id'])
+    head = records.archive_commit()
+    if latest and head is None:
+        raise RecoveryError('a course-publication deployment record exists but the student-work branch is '
+                            'missing; restore the branch before publishing')
+    same_main = bool(latest and latest['payload']['main_commit'] == context['main_commit'])
     with tempfile.TemporaryDirectory(prefix='ddd-v2-prepare-') as temporary:
         root = Path(temporary)
-        if mode == 'rebind':
-            spec = read_json(ROOT / '.github/archive-rebind.json', 16384)
-            if not isinstance(spec, dict):
-                raise RecoveryError('reviewed rebind plan must be a bounded object')
-            latest = records.latest()
-            if (not latest or validate_release(latest['payload'])['version'] != 2
-                    or not records.is_verified(latest['id'])):
-                raise RecoveryError('rebind requires a verified V2 release; recover pending publication first')
-            previous, metrics = _read_archive(records, root / 'previous')
-            if previous.commit != latest['payload']['archive_commit']:
-                raise RecoveryError('archive is ahead of verified publication; recover before identity rebind')
-            if records.archive_authority(previous.commit) != 'v2':
-                raise RecoveryError('identity rebind requires durable V2 archive authority')
-            report['transport']['archive'] = metrics
-            data['expected_parent'] = previous.commit
-            data['previous_release'] = latest['payload']
-            snapshot, derived = archive_rebind.prepare_rebind(previous, registry(), spec.get('slug'),
-                spec.get('old_repository'), spec.get('old_branch'), root / 'rebind')
-            if spec != derived:
-                raise RecoveryError('reviewed rebind plan differs from current parent/registry')
-            archive_rebind.admit_rebind(snapshot, registry(), previous, spec)
-            report['migration'] = spec
-        elif mode in {'seed', 'reconcile_seed'}:
-            previous = None
-            if mode == 'seed':
-                try:
-                    records.archive_commit()
-                except ImportFailure as error:
-                    if error.code != 'unavailable_repository':
-                        raise
-                else:
-                    raise RecoveryError('archive already exists; inspect and reconcile instead of reseeding')
-            else:
-                previous, metrics = _read_archive(records, root / 'previous')
-                report['transport']['archive'] = metrics
-                data['expected_parent'] = previous.commit
-            report['transport']['seed_pages'] = {}
-            snapshot, manifest, release = _seed(records, url, root / 'seed',
-                                                metrics=report['transport']['seed_pages'], retained=previous)
-            admit_candidate(snapshot, registry(), previous, seed_manifest=manifest)
-            data['seed_release'] = release
-            files['seed-manifest.json'] = manifest
-            report['groups'] = []
-        else:
-            latest = records.latest()
-            # Classifying this exact attempt needs one status request, not a history sweep.
-            verified = latest if latest and records.is_verified(latest['id']) else None
-            strategy = archive_release.publication_strategy(latest, verified, context['main_commit'])
-            data['supersedes'] = strategy.get('supersedes')
-            if strategy['mode'] == 'verify_then_retry':
-                release = strategy['release']
-                data.update(mode='retry', archive_commit=release['archive_commit'],
-                            previous_release=release, deployment_id=strategy['deployment_id'])
-                try:
-                    served_release(url, release, attempts=1)
-                except RecoveryError:
-                    pass
-                else:
-                    data['mode'] = 'repair'
-                files['report.json'] = encode(report)
-                return seal(destination, 'prepared', data, files)
-            previous, metrics = _read_archive(records, root / 'previous')
-            report['transport']['archive'] = metrics
-            data['expected_parent'] = previous.commit
-            data['previous_release'] = latest['payload'] if latest else None
-            if strategy['mode'] == 'migration':
-                if records.archive_authority(previous.commit) == 'v2':
-                    accepted_main = records.archive_main(previous.commit)
-                    if accepted_main == context['main_commit']:
-                        data.update(mode='pending', archive_commit=previous.commit)
-                        files['report.json'] = encode(report)
-                        return seal(destination, 'prepared', data, files)
-                    data['supersedes'] = latest['id']
-                else:
-                    served = served_release(url, latest['payload'])
-                    normalized = {slug: entry | {'require_visual': entry.get('require_visual', True)}
-                                  for slug, entry in served.items()}
-                    if previous.served() != normalized:
-                        raise RecoveryError('seed is stale or differs from verified V1; reconcile before cutover')
-            elif latest and latest['payload']['main_commit'] == context['main_commit'] and previous.commit != latest['payload']['archive_commit']:
-                # Acceptance survived, but its build/record job did not. Publish it first.
-                data.update(mode='pending', archive_commit=previous.commit)
-                files['report.json'] = encode(report)
-                return seal(destination, 'prepared', data, files)
-            result = prepare_archive(registry(), previous, root / 'candidate',
-                                     allow_unchanged=bool(latest and latest['payload']['version'] == 2
-                                         and latest['payload']['main_commit'] == context['main_commit']),
-                                     allow_idle=bool(verified and verified['payload']['version'] == 2
-                                         and verified['payload']['main_commit'] == context['main_commit']
-                                         and verified['payload']['main_tree'] == context['main_tree']
-                                         and verified['payload']['archive_commit'] == previous.commit
-                                         and legacy_publication.worktree_clean()))
-            report['groups'] = result['groups']
-            report['removed_groups'] = result['removed_groups']
-            report['transport']['import'] = result['transport']
-            data['source_checked'] = True
-            if result.get('idle'):
-                data.update(mode='unchanged', archive_commit=previous.commit)
-                files['report.json'] = encode(report)
-                return seal(destination, 'prepared', data, files)
-            snapshot = ArchiveSnapshot(root / 'candidate', previous.commit)
-            if (snapshot.payload == previous.payload and latest and latest['payload']['version'] == 2
-                    and latest['payload']['main_commit'] == context['main_commit']
-                    and site_digest(build_site.OUTPUT) == latest['payload']['site_sha256']):
-                data.update(mode='unchanged', archive_commit=previous.commit)
-                files['report.json'] = encode(report)
-                return seal(destination, 'prepared', data, files)
-        pack_snapshot(snapshot.folder, destination / 'candidate.tar')
+        # No branch and no record: the first run starts from the empty archive.
+        previous, report['transport']['archive'] = _read_archive(root / 'previous', head)
+        data.update(expected_parent=previous.commit, previous_release=latest['payload'] if latest else None)
+        if same_main and previous.commit != latest['payload']['archive_commit']:
+            # Acceptance survived, but its build/record job did not. Publish it first.
+            return finish(mode='pending', archive_commit=previous.commit)
+        result = prepare_archive(registry(), previous, root / 'candidate', allow_unchanged=same_main,
+                                 allow_idle=bool(same_main and verified
+                                     and verified['payload']['main_tree'] == context['main_tree']
+                                     and verified['payload']['archive_commit'] == previous.commit
+                                     and publish_site.worktree_clean()))
+        report['groups'] = result['groups']
+        report['transport']['import'] = result['transport']
+        data['source_checked'] = True
+        if result['idle'] or (same_main and (root / 'candidate' / MANIFEST).read_bytes() == previous.payload
+                              and site_digest(build_site.OUTPUT) == latest['payload']['site_sha256']):
+            return finish(mode='unchanged', archive_commit=previous.commit)
+        pack_snapshot(root / 'candidate', destination / 'candidate.tar')
         files['candidate.tar'] = destination / 'candidate.tar'
-        files['report.json'] = encode(report)
-    return seal(destination, 'prepared', data, files)
+        return finish()
 
 
 @transport_stage('accept')
-def accept(records, url, preparation, checksum, destination, *, writes_enabled=False, archive_enabled=False):
+def accept(records, preparation, checksum, destination):
     context = require_main(records)
-    if not writes_enabled:
-        raise RecoveryError('archive writes are disabled until protection/pilot approval')
     prepared, batch, report = load(preparation, checksum, {'prepared'})
     data = prepared['data']
-    if data['mode'] not in {'seed', 'reconcile_seed', 'rebind', 'refresh'} or 'candidate.tar' not in prepared['files']:
+    if data['mode'] != 'refresh' or 'candidate.tar' not in prepared['files']:
         raise RecoveryError('only an independently admitted candidate may be accepted')
-    seed_operation = data['mode'] in {'seed', 'reconcile_seed'}
-    rebind_operation = data['mode'] == 'rebind'
-    if seed_operation and archive_enabled:
-        raise RecoveryError('seed operations are disabled after archive cutover')
-    if (data['mode'] == 'seed' and data['expected_parent'] is not None
-            or data['mode'] == 'reconcile_seed' and data['expected_parent'] is None):
-        raise RecoveryError('seed mode does not match expected archive parent')
-    if rebind_operation and (not archive_enabled or data['expected_parent'] is None):
-        raise RecoveryError('identity rebind requires archive authority and an exact parent')
     with tempfile.TemporaryDirectory(prefix='ddd-v2-writer-') as temporary:
         root = Path(temporary)
         unpack_snapshot(Path(preparation) / 'candidate.tar', root / 'candidate', prepared['files']['candidate.tar'])
-        candidate = ArchiveSnapshot(root / 'candidate', data['expected_parent'] or '0' * 40)
+        candidate = ArchiveSnapshot(root / 'candidate')
         git = archive_git.init_remote(root / 'writer.git', context['repository'])
+        # A first run expects no student-work branch, so a concurrent first run cannot be replaced.
         archive_git.require_heads(git, context['main_commit'], data['expected_parent'])
-        seed_payload = None
-        if data['mode'] in {'seed', 'reconcile_seed'}:
-            release = validate_release(data['seed_release'])
-            latest = records.latest()
-            if (release['version'] != 1 or not latest or latest['payload'] != release
-                    or not records.is_verified(latest['id'])):
-                raise RecoveryError('seed authority differs from latest verified V1')
-            served_release(url, release)
-            seed_payload = (Path(preparation) / 'seed-manifest.json').read_bytes()
-            if hashlib.sha256(seed_payload).hexdigest() != release['manifest_sha256']:
-                raise RecoveryError('seed authority differs from current V1')
-        if data['expected_parent']:
-            archive_git.fetch_commit(git, data['expected_parent'])
-            if seed_operation and archive_git.accepted_authority(git, data['expected_parent']) != 'v1-seed':
-                raise RecoveryError('seed reconciliation cannot replace V2 archive authority')
-            previous = archive_git.snapshot_from_git(git, data['expected_parent'], root / 'previous')
-            if rebind_operation:
-                latest = records.latest()
-                if (not latest or latest['payload'] != data['previous_release']
-                        or validate_release(latest['payload'])['version'] != 2
-                        or not records.is_verified(latest['id'])
-                        or latest['payload']['archive_commit'] != data['expected_parent']
-                        or archive_git.accepted_authority(git, data['expected_parent']) != 'v2'):
-                    raise RecoveryError('rebind authority changed; recover or prepare the current parent')
-                archive_rebind.admit_rebind(candidate, registry(), previous,
-                                            read_json(ROOT / '.github/archive-rebind.json', 16384))
-            else:
-                admit_candidate(candidate, registry(), previous, seed_manifest=seed_payload)
-        else:
-            admit_candidate(candidate, registry(), seed_manifest=seed_payload)
+        previous = archive_git.parent_snapshot(git, data['expected_parent'], root / 'previous')
+        admit_candidate(candidate, registry(), previous)
         commit = archive_git.create_commit(git, candidate.folder, data['expected_parent'],
-                                           main_commit=context['main_commit'],
-                                           authority='v1-seed' if seed_operation else 'v2')
+                                           main_commit=context['main_commit'])
         archive_git.publish_commit(git, commit, context['main_commit'], data['expected_parent'], authenticated=True)
     data['archive_commit'] = commit
     output('archive_commit', commit)
@@ -521,7 +355,7 @@ def build(records, url, source, checksum):
     _save(state)
     output('deploy', 'false')
     try:
-        if data['mode'] in {'invalid', 'deferred', 'superseded', 'seed', 'reconcile_seed', 'rebind'}:
+        if data['mode'] in {'invalid', 'deferred', 'superseded'}:
             state['status'] = data['mode']
             return
         if data['mode'] == 'refresh' and payload['kind'] != 'accepted':
@@ -532,15 +366,16 @@ def build(records, url, source, checksum):
             previous = data['previous_release']
             if latest and latest['payload'] != previous:
                 attempted = validate_release(latest['payload'])
-                if (attempted['version'] == 2 and attempted['main_commit'] == context['main_commit']
+                if (attempted['main_commit'] == context['main_commit']
                         and attempted['archive_commit'] == data['archive_commit']):
                     # An earlier build attempt recorded this accepted pair before failing.
                     data.update(mode='retry', previous_release=attempted, deployment_id=latest['id'])
                     state['deployment_id'] = latest['id']
                 else:
                     raise RecoveryError('another release superseded this accepted run')
-            elif records.archive_commit() != data['archive_commit']:
-                raise RecoveryError('archive advanced; this accepted run is superseded')
+            elif (head := records.archive_commit()) != data['archive_commit']:
+                raise RecoveryError('the student-work branch is missing' if head is None
+                                    else 'archive advanced; this accepted run is superseded')
         if data['mode'] in {'repair', 'unchanged'}:
             state['release'] = validate_release(data['previous_release'])
             served_release(url, state['release'])
@@ -552,14 +387,13 @@ def build(records, url, source, checksum):
             state['status'] = 'verified' if data['mode'] == 'unchanged' else 'recovered'
             return
         with tempfile.TemporaryDirectory(prefix='ddd-v2-build-') as temporary:
-            archive, metrics = _read_archive(records, Path(temporary) / 'archive', data['archive_commit'])
+            archive, metrics = _read_archive(Path(temporary) / 'archive', data['archive_commit'])
             report['transport']['build_archive'] = metrics
             if data['mode'] == 'retry':
                 release = archive_release.reconstruct(data['previous_release'], archive, context['main_commit'], context['main_tree'])
             else:
-                verified_record = records.latest_verified() if data['mode'] in {'refresh', 'pending'} else None
                 previous_groups = archive_release.verified_previous_groups(
-                    records, context['repository'], verified_record)
+                    records, context['repository'], records.latest_verified())
                 release = archive_release.make_release(context['main_commit'], context['main_tree'], archive,
                                                        context['run_id'], context['run_attempt'],
                                                        previous_groups=previous_groups)
@@ -644,7 +478,7 @@ def finalize(source, checksum, destination):
 
 
 def answer(api, source, checksum, records=None):
-    legacy_publication.require_publication_active()
+    publish_site.require_publication_active()
     context = identity()
     if records is not None and records.main_commit() != context['main_commit']:
         return
@@ -672,17 +506,11 @@ def main():
         event = read_json(os.environ['GITHUB_EVENT_PATH'])
         admit(AdmissionRecords(context['repository']), RequestAPI(context['repository']), destination,
               os.environ['GITHUB_EVENT_NAME'], issue_number=event.get('issue', {}).get('number'),
-              requests_enabled=os.environ.get('REQUESTS_ENABLED') == 'true',
-              seed=os.environ.get('SEED_ARCHIVE') == 'true',
-              reconcile_seed=os.environ.get('RECONCILE_SEED') == 'true',
-              archive_enabled=os.environ.get('ARCHIVE_ENABLED') == 'true',
-              rebind=os.environ.get('REBIND_ARCHIVE') == 'true')
+              requests_enabled=os.environ.get('REQUESTS_ENABLED') == 'true')
     elif args.command == 'prepare':
         prepare(DeploymentRecords(context['repository']), url, source, checksum, destination)
     elif args.command == 'accept':
-        accept(DeploymentRecords(context['repository']), url, source, checksum, destination,
-                writes_enabled=os.environ.get('ARCHIVE_WRITES_ENABLED') == 'true',
-                archive_enabled=os.environ.get('ARCHIVE_ENABLED') == 'true')
+        accept(DeploymentRecords(context['repository']), source, checksum, destination)
     elif args.command == 'build':
         build(DeploymentRecords(context['repository']), url, source, checksum)
     elif args.command == 'finalize':
