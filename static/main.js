@@ -25,16 +25,17 @@ const esc = (s) =>
 
 /* A URL with no scheme, no leading "/" and no leading "#" is taken to be
    relative to the Entry's folder, so students can keep extra assets there. */
+const isLocal = url => !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url);
+
 function resolveUrl(url, folder) {
-  if (/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url)) return url;
-  return `${folder}/${url}`;
+  return isLocal(url) ? `${folder}/${url}` : url;
 }
 
 let resourceResolver = null;
 
 function safeUrl(url, folder, kind) {
   if (/[\u0000-\u001f\u007f\\]/.test(url)) return null;
-  if (!/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url) && resourceResolver) {
+  if (isLocal(url) && resourceResolver) {
     let path;
     try { path = decodeURIComponent(url.split(/[?#]/)[0]).replace(/^\.\//, ""); }
     catch { return null; }
@@ -81,13 +82,19 @@ function parseFrontmatter(raw) {
 
 function expandAnnotations(src) {
   return CourseAnnotations.replace(src, (annotation) => {
-    const { label, target, resource, type, style, color, marker } = annotation;
+    const { label, target, resource, type, style, color, marker, sourceUrl } = annotation;
     if (!annotation.valid || (color && !CSS.supports("color", color))) return annotation.source;
     const bibliography = type === "bibliography";
+    if (bibliography && resource) {
+      return `<span class="annotation annotation-bibliography"><a href="${esc(target)}" target="_blank" rel="noopener noreferrer">(■ ${label})</a></span>`;
+    }
     const open = bibliography || type === "note";
     let content = target;
     if (resource) content = bibliography ? linkHtml(target) : resourceHtml(target);
     else if (type === "quote") content = `<q>${target}</q>`;
+    if (sourceUrl && resource && [...IMAGE_EXTS, ...AUDIO_EXTS, ...VIDEO_EXTS].includes(extensionOf(target))) {
+      content = `<a href="${esc(sourceUrl.replace(/&amp;/g, "&"))}" target="_blank" rel="noopener noreferrer">${content}</a>`;
+    }
     const mark = marker || ({ note: DEFAULT_MARKER, bibliography: "■" }[type] || DEFAULT_MARKER);
     const glyph = `<span class="annotation-marker" aria-hidden="true">${esc(mark)}</span>`;
     const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
@@ -151,7 +158,7 @@ function resourceHtml(url) {
   if (AUDIO_EXTS.includes(ext))
     return `<audio controls preload="none" src="${resolved}"></audio>`;
   if (VIDEO_EXTS.includes(ext))
-    return `<video controls preload="metadata" src="${resolved}"></video>`;
+    return `<video controls muted loop playsinline preload="metadata" src="${resolved}"></video>`;
   return linkHtml(url);
 }
 
@@ -173,6 +180,7 @@ function expandColours(src) {
   for (let guard = 0; guard < 500; guard++) {
     const next = out.replace(COLOUR_RE, (_, colour, text) => {
       const value = colour.trim();
+      if (value === "underline") return `<u>${text}</u>`;
       if (!CSS.supports("color", value)) return text;
       const content = /^\*?✶\s/.test(text.trim()) ? `&#123;${text}&#125;` : text;
       return `<span class="tinted" style="color:${value};--annotation-color:${value}">${content}</span>`;
@@ -183,9 +191,9 @@ function expandColours(src) {
   return out;
 }
 
-function renderMarkdown(body) {
+function renderMarkdown(body, table = null) {
   // Keep Markdown blockquotes (>) while preventing contributor HTML (<...>).
-  const plain = body.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const plain = CourseMediaTable.expand(body, table).replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const expanded = expandColours(expandAnnotations(plain));
   const tokens = marked.lexer(expanded);
   marked.walkTokens(tokens, (token) => {
@@ -210,24 +218,65 @@ function renderMarkdown(body) {
   return marked.parser(flow);
 }
 
-/* ---------- loading ---------- */
+/* One visible mark for a name or file that is not in the group (yet). */
+function missingMark(name) {
+  const mark = document.createElement("span");
+  mark.className = "annotation annotation-missing";
+  const text = document.createElement("span");
+  text.className = "annotation-content annotation-text";
+  text.textContent = `missing: ${name}`;
+  mark.append(text);
+  return mark;
+}
 
-async function findVisual(folder) {
-  const url = `${folder}/visual.svg`;
-  try {
-    const res = await fetch(url, { method: "HEAD" });
-    return res.ok ? url : null;
-  } catch {
-    return null;
+/* An unknown [[name]] stays literal text through Markdown; mark it in text
+   nodes only, so attributes, code and the names' characters stay intact. */
+function markMissingNames(textEl) {
+  const walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT);
+  const nodes = [];
+  while (walker.nextNode()) {
+    const node = walker.currentNode;
+    if (node.data.includes("[[") && !node.parentElement.closest("code, pre")) nodes.push(node);
+  }
+  for (const node of nodes) {
+    const parts = CourseMediaTable.splitNames(node.data);
+    if (parts.some(part => typeof part !== "string")) {
+      node.replaceWith(...parts.map(part => typeof part === "string" ? part : missingMark(part.name)));
+    }
   }
 }
 
-async function loadEntry(folder) {
-  const [text, visual] = await Promise.all([
-    fetch(`${folder}/text.md`).then((r) => (r.ok ? r.text() : null)).catch(() => null),
-    findVisual(folder),
-  ]);
-  return { folder, text, visual };
+/* The site knows each entry's files from entries.json; a local path outside
+   them is missing. The editor preview supplies its own resolver. */
+function siteResolver(entries) {
+  const files = new Map(entries.map(entry => [entry.folder, entry.files]));
+  return (path, kind, folder) => !files.get(folder) || files.get(folder).has(path) ? undefined : false;
+}
+
+/* ---------- loading ---------- */
+
+async function loadEntry({ slug, files, online, problem }) {
+  const present = new Set(files);
+  const read = name => present.has(name) ? fetch(`${slug}/${name}`).then((r) => (r.ok ? r.text() : null)).catch(() => null) : null;
+  const [text, table] = await Promise.all([read("text.md"), read("media.csv")]);
+  return { folder: slug, files: present, text, table, visual: present.has("visual.svg") ? `${slug}/visual.svg` : null,
+           online, problem };
+}
+
+const COMMIT_TIME = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Zurich",
+});
+
+/* One quiet line under a group's title: which commit is online, or which
+   commit was not published and why. Course-team pages have neither. */
+function statusLine({ online, problem }) {
+  if (problem) {
+    const reason = problem.message.replace(/[.\s]+$/, "");
+    return `Your commit ${problem.commit} was not published: ${reason}.` + (online ? ` The page shows ${online.commit}.` : "");
+  }
+  if (!online) return null;
+  const time = Object.fromEntries(COMMIT_TIME.formatToParts(new Date(online.committed_at)).map(part => [part.type, part.value]));
+  return `Online: commit ${online.commit}, ${time.day} ${time.month} ${time.hour}:${time.minute}`;
 }
 
 /* ---------- rendering ---------- */
@@ -246,8 +295,11 @@ function renderEntry(entry) {
   if (entry.authors) html += `<p class="entry-authors">${esc(entry.authors)}</p>`;
   html += `</div>`;
   html += `</header>`;
+  let table = null;
+  try { table = entry.table ? CourseMediaTable.read(entry.table) : null; }
+  catch { /* The importer rejects invalid tables; its names then show as missing. */ }
   html += `<div class="entry-text">`;
-  if (entry.text !== null) html += renderMarkdown(body);
+  if (entry.text !== null) html += renderMarkdown(body, table);
   html += `</div>`;
   const visual = entry.visual && safeUrl(entry.visual === `${entry.folder}/visual.svg` ? "visual.svg" : entry.visual, entry.folder, "media");
   if (visual) {
@@ -259,14 +311,35 @@ function renderEntry(entry) {
 
   const template = document.createElement("template");
   template.innerHTML = html;
+  const status = statusLine(entry);
+  if (status) {
+    const line = document.createElement("p");
+    line.className = "entry-authors entry-status";
+    line.textContent = status;
+    template.content.querySelector(".entry-caption > div").append(line);
+  }
 
-  /* Single resolution pass: every relative path in the rendered text —
+  /* One resolution pass: every relative path in the rendered text —
      annotation resources and markdown-native ones (e.g. ![…](photo.jpg)) —
-     resolves against the Entry's folder. The hero visual above is already
-     a full path and sits outside this scope. */
+     resolves against the Entry's folder; a file that is not there shows as
+     missing. The hero visual above is already a full path. */
   const textEl = template.content.querySelector(".entry-text");
+  markMissingNames(textEl);
+  const sources = CourseMediaTable.sources(table);
   for (const el of textEl.querySelectorAll("[src]")) {
     const src = el.getAttribute("src");
+    if (src && resourceResolver && isLocal(src) && !safeUrl(src, entry.folder, "media")) {
+      (el.closest(".annotation") || el).replaceWith(missingMark(src.replace(/^\.\//, "").split(/[?#]/)[0]));
+      continue;
+    }
+    // A Markdown image links to its media.csv source, like [[name]] media.
+    const source = src && sources.get(src.replace(/^\.\//, ""));
+    if (source && el.tagName === "IMG" && !el.closest("a[href]")) {
+      const link = document.createElement("a");
+      link.href = source;
+      el.replaceWith(link);
+      link.append(el);
+    }
     const safe = src && safeUrl(src, entry.folder, "media");
     if (safe) el.setAttribute("src", safe);
     else el.removeAttribute("src");
@@ -276,6 +349,10 @@ function renderEntry(entry) {
     const safe = href && safeUrl(href, entry.folder, "link");
     if (safe) a.setAttribute("href", safe);
     else a.removeAttribute("href");
+    if (safe) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
   }
   prepareInlineImages(textEl);
   CoursePlayback.prepare(textEl);
@@ -286,22 +363,29 @@ function renderEntry(entry) {
 
 function prepareInlineImages(textEl) {
   for (const image of textEl.querySelectorAll("img[src]")) {
-    const content = image.parentElement.matches(".annotation-content") &&
-      image.parentElement.childNodes.length === 1 ? image.parentElement : null;
+    const content = image.closest(".annotation-content");
     let target;
     if (content) {
-      target = content.parentElement.querySelector(".annotation-toggle");
-      target.querySelector(".annotation-marker")?.remove();
-      image.alt = target.textContent.trim();
-      target.classList.remove("annotation-toggle");
+      const label = content.parentElement.querySelector(".annotation-toggle");
+      label.querySelector(".annotation-marker")?.remove();
+      image.alt = label.textContent.trim();
+      target = image.closest("a[href]") || document.createElement("a");
+      if (!target.hasAttribute("href")) target.href = image.src;
+      target.target = "_blank";
+      target.rel = "noopener noreferrer";
+      target.setAttribute("aria-label", `Open image source: ${image.alt}`);
       target.replaceChildren(image);
+      label.replaceWith(target);
       content.remove();
     } else {
       // Linked Markdown images keep their link and native activation.
       target = image.closest("a[href]");
       if (!target) {
-        target = document.createElement("button");
-        target.type = "button";
+        target = document.createElement("a");
+        target.href = image.src;
+        target.target = "_blank";
+        target.rel = "noopener noreferrer";
+        target.setAttribute("aria-label", `Open image source: ${image.alt || "supporting image"}`);
         image.replaceWith(target);
         target.append(image);
       }
@@ -460,7 +544,6 @@ function setupImagePreviews() {
   const preview = document.getElementById("image-preview");
   const image = preview.querySelector("img");
   const video = preview.querySelector("video");
-  let animation;
   const dismiss = document.getElementById("image-preview-close");
   let active = null;
   let mode = null;
@@ -473,7 +556,6 @@ function setupImagePreviews() {
     mode = null;
     preview.hidden = true;
     dismiss.hidden = true;
-    animation?.cancel();
     image.removeAttribute("src");
     video.pause();
     video.removeAttribute("src");
@@ -496,16 +578,8 @@ function setupImagePreviews() {
     const top = Math.max(48, Math.min(y - h / 2, innerHeight - h - 16));
     Object.assign(preview.style, {
       width: `${w}px`, height: `${h}px`, left: `${left}px`, top: `${top}px`,
-      transformOrigin: `${x - left}px ${y - top}px`,
     });
     preview.hidden = false;
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      animation?.cancel();
-      animation = preview.animate([
-        { transform: `scale(${anchor.width / w}, ${anchor.height / h})` },
-        { transform: "scale(1)" },
-      ], { duration: 180, easing: "ease-out" });
-    }
   }
 
   async function playPreview() {
@@ -514,8 +588,7 @@ function setupImagePreviews() {
       await video.play();
       if (!active || video.hidden) video.pause();
     } catch {
-      // A hover cannot override a browser's audio activation policy.
-      if (active === target) target.querySelector(".playback-status").textContent = "Click the video to enable sound.";
+      if (active === target) target.querySelector(".playback-status").textContent = "Could not preview this video.";
     }
   }
 
@@ -532,8 +605,10 @@ function setupImagePreviews() {
       } else {
         video.src = source.src;
         video.currentTime = source.currentTime;
-        video.muted = false;
-        playPreview();
+        video.muted = reason !== "pointer";
+        video.defaultMuted = true;
+        video.loop = true;
+        if (!matchMedia("(prefers-reduced-motion: reduce)").matches) playPreview();
       }
     }
     if (reason === "pinned" && !video.hidden && video.paused) playPreview();
@@ -570,6 +645,8 @@ function setupImagePreviews() {
         !(mode === "pinned" && event.relatedTarget === dismiss)) clear();
   });
   document.addEventListener("click", event => {
+    const sourceLink = event.target.closest("a.inline-image, a.inline-playback");
+    if (sourceLink) { clear(); return; }
     const target = event.target.closest("button.inline-image, .inline-playback");
     if (target) {
       if (active === target && mode === "pinned") clear();
@@ -591,7 +668,7 @@ function setupImagePreviews() {
   window.addEventListener("resize", clear);
   document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
   document.addEventListener("keydown", event => {
-    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".inline-playback")) {
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".inline-playback:not(a)")) {
       event.preventDefault();
       event.target.click();
     }
@@ -612,12 +689,23 @@ function disposeRender() {
   playback?.dispose();
 }
 
+function alignEntryCaptionAuthors() {
+  const barAuthors = document.getElementById("current-authors");
+  const caption = document.querySelector(".entry-caption");
+  if (!barAuthors || !caption) return;
+  const offset = barAuthors.getBoundingClientRect().left - caption.getBoundingClientRect().left;
+  document.documentElement.style.setProperty("--entry-author-offset", `${offset}px`);
+}
+
 function render(entries) {
-  if (!clearInteractions) clearInteractions = setupInteractions();
+  if (!clearInteractions) {
+    clearInteractions = setupInteractions();
+    window.addEventListener("resize", alignEntryCaptionAuthors);
+  }
   if (!playback) playback = CoursePlayback.setup();
   const position = { x: window.scrollX, y: window.scrollY };
   disposeRender();
-  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null);
+  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null || entry.problem);
   document.getElementById("entries").replaceChildren(...shown.map(renderEntry));
   buildNav(shown);
   buildMarkers(shown);
@@ -626,6 +714,7 @@ function render(entries) {
     document.getElementById("current").textContent = "";
     document.getElementById("current-authors").textContent = "";
   }
+  alignEntryCaptionAuthors();
   disposeSections = watchSections(shown);
   playback.mount();
   window.scrollTo(position.x, position.y);
@@ -634,16 +723,18 @@ function render(entries) {
 async function loadEntries() {
   const response = await fetch("entries.json");
   if (!response.ok) throw new Error("Could not load entries.json.");
-  const folders = await response.json();
-  if (!Array.isArray(folders)) throw new Error("Invalid entries.json.");
-  return Promise.all(folders.map(loadEntry));
+  const items = await response.json();
+  if (!Array.isArray(items) || !items.every(item => typeof item?.slug === "string" && Array.isArray(item.files))) {
+    throw new Error("Invalid entries.json.");
+  }
+  return Promise.all(items.map(loadEntry));
 }
 
 async function start(options = {}) {
   const revision = ++startRevision;
   const entries = await (options.loadEntries || loadEntries)();
   if (revision !== startRevision) return;
-  resourceResolver = options.resolveResource || null;
+  resourceResolver = options.resolveResource || siteResolver(entries);
   render(entries);
 }
 

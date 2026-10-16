@@ -49,7 +49,7 @@ class EntryValidationTests(unittest.TestCase):
                     folder = self.entry(visual="raster", filename=filename)
                     if with_svg:
                         (folder / "visual.svg").write_text(SVG.format(attributes=""))
-                    with self.assertRaisesRegex(ValueError, "exactly one visual.svg"):
+                    with self.assertRaisesRegex(ValueError, "exactly visual.svg"):
                         build_site.find_entries()
                     (folder / filename).unlink()
                     (folder / "visual.svg").unlink(missing_ok=True)
@@ -68,15 +68,41 @@ class EntryValidationTests(unittest.TestCase):
                 with self.assertRaises(ValueError):
                     build_site.find_entries()
 
-    def test_skips_incomplete_entries_and_allows_extra_media(self):
+    def test_course_team_folders_may_omit_the_visual_but_not_the_text(self):
         self.entry("text-only")
         self.entry("visual-only", SVG.format(attributes=""), text=False)
         folder = self.entry("complete", SVG.format(attributes=""))
         (folder / "photo.jpg").write_bytes(b"extra media")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            self.assertEqual(build_site.find_entries(), ["complete"])
-        self.assertEqual(len(caught), 2)
+            self.assertEqual(build_site.find_entries(), ["complete", "text-only"])
+        self.assertEqual(len(caught), 1)
+
+    def test_course_team_folders_get_the_same_content_checks_as_an_import(self):
+        folder = self.entry("brief")
+        for name, content, message in (
+                ("text.md", "See ![x](../other/photo.png)", "brief: text.md: Reference must stay inside this group"),
+                ("media/detail.svg", '<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>', "brief: detail.svg"),
+                ("media/Photo.png", "x", "brief: media/Photo.png")):
+            with self.subTest(name=name):
+                (folder / "text.md").write_text("Our work")
+                target = folder / name
+                target.parent.mkdir(exist_ok=True)
+                target.write_text(content)
+                with self.assertRaisesRegex(ValueError, message):
+                    build_site.find_entries()
+                if name != "text.md":
+                    target.unlink()
+
+    def test_course_team_folder_reference_that_does_not_resolve_is_a_warning(self):
+        folder = self.entry("brief")
+        (folder / "text.md").write_text("See [[ghost]] and ![x](media/later.png).")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self.assertEqual(build_site.find_entries(), ["brief"])
+        self.assertEqual([str(warning.message) for warning in caught], [
+            "brief: text.md: [[ghost]] is not a name in media.csv",
+            "brief: text.md: media/later.png is not in this group yet"])
 
     def test_validation_failure_preserves_previous_build(self):
         self.entry(visual="invalid")

@@ -88,27 +88,32 @@
       const name = label ? [...label.childNodes].filter(node => !node.classList?.contains("annotation-marker"))
         .map(node => node.textContent).join("").trim() : "Inline media";
       media.setAttribute("aria-label", name);
-      if (content) {
-        label.replaceWith(media);
-        content.remove();
-      }
+      const sourceLink = media.closest("a[href]");
+      const wrapper = sourceLink || document.createElement("a");
+      if (!sourceLink) wrapper.href = media.src;
+      wrapper.target = "_blank";
+      wrapper.rel = "noopener noreferrer";
       if (media.tagName === "AUDIO") {
-        media.classList.add("inline-audio");
+        wrapper.className = "inline-audio";
+        wrapper.setAttribute("aria-label", `Open audio source: ${name}`);
+        const icon = document.createElement("span");
+        icon.textContent = "▶";
+        icon.setAttribute("aria-hidden", "true");
+        if (!content && !sourceLink) media.replaceWith(wrapper);
+        wrapper.replaceChildren(icon, ` ${name}`);
+        if (content) { label.replaceWith(wrapper); content.remove(); }
         continue;
       }
       media.controls = false;
       media.muted = true;
       media.defaultMuted = true;
+      media.loop = true;
       media.playsInline = true;
-      const wrapper = document.createElement("span");
       wrapper.className = "inline-playback";
-      wrapper.tabIndex = 0;
-      wrapper.setAttribute("role", "button");
-      wrapper.setAttribute("aria-label", `Preview video: ${name}`);
-      wrapper.setAttribute("aria-controls", "image-preview");
-      wrapper.setAttribute("aria-expanded", "false");
-      media.replaceWith(wrapper);
-      wrapper.append(media);
+      wrapper.setAttribute("aria-label", `Open video source: ${name}`);
+      if (content) { label.replaceWith(wrapper); content.remove(); }
+      else if (!sourceLink) media.replaceWith(wrapper);
+      wrapper.replaceChildren(media);
       const status = document.createElement("span");
       status.className = "playback-status";
       status.setAttribute("role", "status");
@@ -150,23 +155,6 @@
       media = [];
     }
 
-    const hoveredAudio = new Set();
-    document.addEventListener("pointerover", async event => {
-      const audio = event.target.closest(".inline-audio");
-      if (event.pointerType !== "mouse" || !audio || !media.includes(audio) || audio.contains(event.relatedTarget) || !isActive(audio)) return;
-      hoveredAudio.add(audio);
-      try {
-        await audio.play();
-        if (!hoveredAudio.has(audio) || !isActive(audio)) audio.pause();
-      } catch {
-        hoveredAudio.delete(audio);
-      }
-    });
-    document.addEventListener("pointerout", event => {
-      const audio = event.target.closest(".inline-audio");
-      if (audio && !audio.contains(event.relatedTarget) && hoveredAudio.delete(audio)) audio.pause();
-    });
-
     function isActive(element) {
       if (document.hidden || !document.getElementById("lightbox").hidden || element.closest("[hidden]")) return false;
       const rect = element.getBoundingClientRect();
@@ -188,7 +176,6 @@
     }
 
     function stopAll() {
-      hoveredAudio.clear();
       for (const element of media) {
         if (videos.has(element)) videos.get(element).setActive(false);
         else if (element.tagName === "AUDIO") element.pause();

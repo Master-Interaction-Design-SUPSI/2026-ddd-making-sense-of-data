@@ -7,27 +7,30 @@ Each group edits its own public repository. This repository imports the register
 | Reader | Document |
 | --- | --- |
 | Student | This README, §1–9. The same guide is the README of every group repository. |
-| Maintainer | [Maintainer manual](MAINTAINERS.md). |
+| Maintainer | [Operating manual](MAINTAINERS.md), [acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md). |
 
 **WARNING**: Group repositories are public. Upload only material cleared for publication.
 
+<!-- BEGIN GENERATED STUDENT GUIDE: templates/group/README.md -->
+
 ## 1. Prerequisites
 
-- GitHub account and browser. Nothing to install.
-- From the course team: group repository link, group identifier (slug), website link, invitation if another student owns the repository.
-- Publication starts when the course team confirms setup.
-- Edit only your group repository, never this one.
-- Group repositories start from [`templates/group/`](templates/group/). Its text, visual and `media/example-*` files are demonstrations with invented numbers. Replace them. Delete a file only after removing its reference from `text.md`.
+- A GitHub account and a browser. Nothing to install.
+- One repository per group. Open the repository assigned by the course team and accept your GitHub invitation. The course team adds each teammate with Write access. If you have not received a repository link, ask the course team before creating another repository.
+- The course team sends you your group identifier (slug) and the website link, and tells you when publication starts.
+- Edit only your group repository, never the course repository.
+- The text, visual, `media.csv` and `media/example-*` files you start with are demonstrations with invented numbers. Replace them.
 
 ## 2. Files
 
 | Path | Role | Rule |
 | --- | --- | --- |
 | `text.md` | Text | Required. Front matter: title, authors. |
-| `visual.svg` | Main visual | Required unless the course team exempts your group. 1920 × 1080 SVG. |
-| `media/…` | Extra images, audio, video | Optional. Referenced from `text.md`. |
+| `media.csv` | Media table | When you use media. First line `name,source,file`; one row per media file used in `text.md`. |
+| `visual.svg` | Main visual | Required. 1920 × 1080 SVG. |
+| `media/…` | Extra images, audio, video | Optional. Listed in `media.csv`, named in `text.md`. |
 
-Everything else (READMEs, design sources, HTML, scripts) is ignored and never published.
+Everything else (this README, design sources, HTML, scripts) is ignored and never published.
 
 ## 3. Edit text
 
@@ -48,7 +51,7 @@ Everything else (READMEs, design sources, HTML, scripts) is ignored and never pu
 
 4. **Commit changes** → **Commit directly to the main branch** → confirm.
 
-GitHub offers only a fork or a proposed change: wrong repository, or invitation not accepted. Ask the course team to check your access. Reference: [GitHub editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files).
+If GitHub offers only a fork or a proposed change, you are in the wrong repository or have not accepted the invitation yet. Ask the course team to check your access. Reference: [GitHub editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files).
 
 ## 4. Upload main visual
 
@@ -62,14 +65,20 @@ GitHub offers only a fork or a proposed change: wrong repository, or invitation 
 ## 5. Add media
 
 1. Open `media/` (or the root) → **Add file → Upload files** → commit to **main**.
-2. Reference the exact path in `text.md`:
+2. Add a row to `media.csv` at the root: the name you write in the text, the link to the original source, the file's exact path. Commit.
 
    ```text
-   [[Listen to the interview|media/interview.mp3]]
-   [[Watch the recording|media/recording.mp4]]
+   name,source,file
+   interview,https://archive.org/details/example-interview,media/interview.mp3
+   lithium mine,https://example.org/photo-of-the-mine,media/mine.jpg
    ```
 
-3. To remove a file: delete its reference, commit, then delete the file.
+3. Write the name in double brackets in `text.md`: `[[interview]]`, `[[lithium mine]]`. Commit. The file appears there; a click opens its source.
+4. To remove a file: delete its name from `text.md`, the file and its row.
+
+Commit in any order. Until a file is there, your page shows *missing: its name* in its place.
+
+List your media in `media.csv` when you use media. Names: unique, ignoring case; no `[`, `]` or `|`. Source: a full `https://` link, or empty for your own material. A spreadsheet can save it as **CSV UTF-8**; commas or semicolons both work. Typing in GitHub: put a value containing a comma in double quotes.
 
 Filenames: lowercase letters, digits, `.`, `_`, `-`. First character a letter or digit. No spaces. Example: `survey-photo.jpg`. References must match exactly, including case.
 
@@ -86,46 +95,25 @@ SVG: static, self-contained. No scripts, links, animation or external files. Onl
 
 ## 6. Check publication
 
-Valid commits publish automatically, without approval. The site refreshes every ten minutes; delivery can take longer.
-
-1. Open the website. Find your title. Check text, visual, links and media.
-2. Not updated: open [publication results](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml) → latest completed run on **main** → summary **Course publication** → row with your group identifier.
-
-| Status | Meaning |
-| --- | --- |
-| `updated` | New version selected for this run. |
-| `unchanged` | Same version as before. |
-| `retained` | Update rejected; previous version kept. Read the explanation. |
-| `skipped` | No valid published version yet. Correct and commit again. |
-| `disabled`, `hidden`, `frozen` | Publication turned off or fixed by the course team. |
-
-Published = run marked **verified** or **unchanged**. `updated` alone proves nothing. Run failed, unverified or pending; no row; no runs: contact the course team.
-
-| Fault | Action |
-| --- | --- |
-| Wrong SVG size | Re-export the whole 1920 × 1080 frame. |
-| Missing media | Upload the file, or correct its path in `text.md`. Match case exactly. |
-| Rejected update | Correct; commit to **main**. The next refresh retries. The previous version stays online meanwhile. |
+Open the site and look at your entry: it says which commit is online, or what to fix. Commits publish automatically, usually within a few hours.
 
 ## 7. Syntax
 
-Prose: line breaks and blank lines between paragraphs become spaces, forming one continuous justified passage. Two trailing spaces or a trailing backslash also become a space. Headings, lists, blockquotes and code blocks stay separate; code keeps its line breaks. Never break a URL or filename across lines.
+Your text becomes one continuous, justified passage: line breaks and blank lines turn into spaces. Headings, lists, quotes and code stay separate. Never break a link or filename across lines.
 
-| Write in `text.md` | Result |
-| --- | --- |
-| `*a few words*` | Italic. |
-| `[[the source\|https://example.org/data]]` | Link. |
-| `[[a detail\|A short explanation]]` | Note: `{✶ A short explanation}`. |
-| `[[the source\|https://example.org/data\|type=bibliography]]` | Bibliography: `(■ …)`. |
-| `[[a note\|More context\|type=note;color=green]]` | Green note. |
-| `[[a quotation\|Quoted words\|type=quote;style=italic;color=crimson]]` | Crimson italic quotation. |
-| `{crimson\|a key finding}` | Colored text. |
-| `[[the sketch\|media/example-detail.svg]]` | Inline image. |
-| `![A description](media/example-tall.svg)` | Inline image (Markdown). |
-| `[[a tone\|media/example-tone.mp3]]` | Inline audio. |
-| `[[a video\|media/example-motion.mp4]]` | Inline video. |
+| Idea | Write in `text.md` | Result |
+| --- | --- | --- |
+| Research question | `*Where and how is AI computation performed?*` | Sans serif italic. |
+| Keyword or key concept | `**Data centres**` | Sans serif bold. |
+| Data source | `[Dataset XX](https://example.org/data)` | Underlined; opens in a new tab. |
+| Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`, open; the label folds it. |
+| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`. Put a link where the title goes and the whole citation opens it. |
+| Quote | `[[a quotation\|Quoted words\|type=quote]]` | The label reveals the words in quotation marks. |
+| Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
+| Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |
+| Underline | `{underline\|Dataset XX}` | Underlined text, e.g. a data source without a link. |
 
-Annotation form: `[[label|target|modifiers]]`. Modifiers are optional, separated by `;`, in any order.
+Notes, citations and quotes take optional modifiers after a second `|`, separated by `;`: `[[a note|More context|type=note;color=green]]`.
 
 | Modifier | Values |
 | --- | --- |
@@ -133,52 +121,72 @@ Annotation form: `[[label|target|modifiers]]`. Modifiers are optional, separated
 | `style` | `italic`, `normal` |
 | `color` | `crimson` or any CSS color, e.g. `#116964` |
 
-- Note: open by default; `{✶ text}`; black italic. `style=normal` removes italic. The label toggles it.
-- Bibliography: open by default; inline, black, `(■ Author, year. Title)`. URLs stay links. Black overrides every color. The label toggles it.
-- Quote: quotation marks on reveal.
-- An explicit `color` overrides a surrounding `{color|…}` span; otherwise the span applies.
-- `{color|✶ text}` renders in braces.
-- Markdown `*italics*` works in prose and labels.
-- Two-field annotations and emoji markers in the third field still work.
-- Unknown, repeated or malformed modifiers stay visible as literal text. Correct them.
 - Never put `|`, `[` or `]` inside a field.
+- Anything the site cannot read stays visible as plain text. Correct it.
 
 ## 8. Media behavior
 
 | Media | Behavior |
 | --- | --- |
-| Image | Inline thumbnail; aspect ratio kept. Hover or focus: large opaque preview, expanding from the thumbnail. Tap or Enter/Space: pin. Dismiss: tap again, **Close media preview**, Escape, tap elsewhere, scroll, switch entry. Linked image: hover previews, activation follows the link. |
-| Audio | Native controls. Hover plays; leaving pauses. |
-| Video | Inline, muted, no buttons. Starts when half visible. Hover or focus: enlarged preview with sound; leaving stops it. Click or tap: pin. |
-| External embed | Opens manually from its annotation. Fallback: **Open media on provider**. YouTube/Vimeo playback unverified. |
+| Image | Inline thumbnail; aspect ratio kept. Hover or keyboard focus: enlarged preview. Click or tap: opens the original source in a new tab. |
+| Audio | Static player with a play symbol and label. Click or tap: opens the original source in a new tab. |
+| Video | Inline, muted and looping; starts when half visible. Hover: enlarged preview with sound, when the browser permits playback. Keyboard focus: muted preview. Click or tap: opens the original source in a new tab. |
+| External embed | Opens from its annotation. An **Open media on provider** link is always shown; playback inside the page may vary. |
+
+A click opens the source in the file's `media.csv` row. With an empty source, it opens the published file itself.
+
+The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/1WP-dlkyGFV2Ki1NTLo7auSYGrvrBxwdUBvVFZjOkV30/edit) is the working resource listed in *DDD-REPO-Commenti&Risorse.pdf*. Copy each source URL into the matching row of `media.csv`.
 
 - Playback stops off screen, on entry switch, while the main image is enlarged, and when the page is hidden.
-- Reduced motion: no autoplay, no preview animation.
-- Browsers may require a click before sound. Refused autoplay leaves the video still.
-- Playback depends on file encoding and browser. Check your entry on the site.
+- With reduced motion turned on, videos stay still and previews do not animate.
+- Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. The source link always works. Check your entry on the site.
 
 ## 9. Editor (preview)
 
 Use only after the course team announces it. URL: website link + `editor/`.
 
 1. **Group** → **Open last published version**. New group: **Start from template**.
-2. Edit the Markdown. Attach files with their exact destination, e.g. `media/new-photo.png`.
+2. Edit the Markdown. Attach files with their exact destination, e.g. `media/new-photo.png`, a name and a source link; the row goes into `media.csv`. **Insert in text** writes `[[name]]`.
 3. **Check and prepare GitHub steps**. Resolve every error.
-4. Execute the generated steps in order: compare current GitHub text, upload media, commit `text.md`, delete removed files.
-5. Replacing referenced media: use a new filename.
+4. Follow the generated steps on GitHub, in any order: compare current GitHub text, upload media, commit `media.csv`, commit `text.md`, delete removed files.
+5. To replace media the text already uses, upload it under a new filename.
 6. If shown, **Request publication** after all commits. Read the answer on the issue.
 
-Drafts are saved in this browser only. Restore brings back text and attachments together. Storage denied or full: the editor lists what was not saved; a text-only backup needs its media reattached or discarded. Saving unavailable: **Download text.md** before leaving.
+Drafts are saved in this browser only. Restore brings back text and attachments together. If storage is denied or full, the editor lists what was not saved; a text-only backup needs its media reattached or discarded. If saving is unavailable, **Download text.md** before leaving.
 
-**WARNING**: A browser draft is not a commit. A completed checklist proves neither commit nor publication.
+Nothing is published until the commits are on GitHub. After the last one, look at your entry on the site (§6).
+
+<!-- END GENERATED STUDENT GUIDE -->
 
 ## 10. Repository layout
 
 | Path | Content |
 | --- | --- |
 | `groups.json` | Registry of group repositories. |
-| `example/` | Demonstration entry. |
-| `templates/group/` | Group repository template. Copy its contents, not the folder. |
+| `materialities-of-ai/`, `ddd-abstract/` | Course-team pages, published as they are. |
+| `example/` | Demonstration generated from `templates/group/`. |
+| `templates/group/` | Canonical student guide and demonstration. Copy its contents, not the folder. |
 | `editor/` | Entry editor. |
 | `static/` | Renderer, styles, content contract. |
 | `scripts/` | Build, import, publication, tests. |
+
+Edit shared instructions and demonstration files in `templates/group/`, then run `python3 scripts/sync_course_materials.py --write`. CI checks the generated copies; see the [operating manual](MAINTAINERS.md#102-provisioning) for the distribution workflow.
+
+## 11. Prepared group repositories
+
+Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `hidden`; the course team assigns members and switches each group to `live` when ready. The samples do not appear as student work on the course website.
+
+| Group | Repository |
+| --- | --- |
+| 01 | [2026-ddd-group-01](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-01) |
+| 02 | [2026-ddd-group-02](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-02) |
+| 03 | [2026-ddd-group-03](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-03) |
+| 04 | [2026-ddd-group-04](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-04) |
+| 05 | [2026-ddd-group-05](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-05) |
+| 06 | [2026-ddd-group-06](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-06) |
+| 07 | [2026-ddd-group-07](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-07) |
+| 08 | [2026-ddd-group-08](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-08) |
+| 09 | [2026-ddd-group-09](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-09) |
+| 10 | [2026-ddd-group-10](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-10) |
+| 11 | [2026-ddd-group-11](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-11) |
+| 12 | [2026-ddd-group-12](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-12) |

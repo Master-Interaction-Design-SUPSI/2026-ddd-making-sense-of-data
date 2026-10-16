@@ -7,7 +7,7 @@ from datetime import datetime, timezone
 from urllib.parse import quote
 
 from group_registry import REPOSITORY, SLUG
-from publication_state import RecoveryError
+from release import PublicationError
 from github_content import GitHubClient
 
 LABEL = 'publication-request'
@@ -95,15 +95,15 @@ def capture_batch(api, repository, registry, cutoff):
     for page in range(1, MAX_PAGES + 1):
         issues = api.get(f'/repos/{repository}/issues?state=open&labels={LABEL}&sort=created&direction=asc&per_page={PAGE_SIZE}&page={page}')
         if not isinstance(issues, list) or len(issues) > PAGE_SIZE:
-            raise RecoveryError('invalid publication request page')
+            raise PublicationError('invalid publication request page')
         for issue in issues:
             if not isinstance(issue, dict):
-                raise RecoveryError('invalid publication request')
+                raise PublicationError('invalid publication request')
             if 'pull_request' in issue:
                 continue
             number = issue.get('number')
             if type(number) is not int or number <= 0 or number in numbers:
-                raise RecoveryError('duplicate/invalid request number')
+                raise PublicationError('duplicate/invalid request number')
             numbers.add(number)
             if issue.get('state') != 'open' or LABEL not in [label.get('name') for label in issue.get('labels', []) if isinstance(label, dict)]:
                 continue
@@ -122,7 +122,7 @@ def validate_batch(batch, repository, registry):
     if (not isinstance(batch, dict) or set(batch) != {'version', 'repository', 'cutoff', 'requests'}
             or type(batch['version']) is not int or batch['version'] != 1 or batch['repository'] != repository
             or not isinstance(batch['requests'], list) or len(batch['requests']) > MAX_BATCH):
-        raise RecoveryError('invalid request batch artifact')
+        raise PublicationError('invalid request batch artifact')
     timestamp(batch['cutoff'])
     seen = set()
     slugs = {group.slug for group in registry}
@@ -131,7 +131,7 @@ def validate_batch(batch, repository, registry):
                 or type(record['number']) is not int or record['number'] <= 0 or record['number'] in seen
                 or record['slug'] is not None and record['slug'] not in slugs
                 or not isinstance(record['body_sha256'], str) or not re.fullmatch(r'[0-9a-f]{64}', record['body_sha256'])):
-            raise RecoveryError('invalid request batch record')
+            raise PublicationError('invalid request batch record')
         seen.add(record['number'])
     return batch
 
@@ -205,7 +205,7 @@ def answer_batch(api, batch, repository, registry, results, stage, run_id, attem
     for result in results:
         slug = result['slug']
         if slug in by_slug:
-            raise RecoveryError('duplicate group result')
+            raise PublicationError('duplicate group result')
         by_slug[slug] = result
     answered = []
     for record in batch['requests']:
@@ -226,7 +226,7 @@ def answer_batch(api, batch, repository, registry, results, stage, run_id, attem
         for page in range(1, MAX_PAGES + 1):
             comments = api.get(base + f'/comments?per_page={PAGE_SIZE}&page={page}')
             if not isinstance(comments, list) or len(comments) > PAGE_SIZE:
-                raise RecoveryError('invalid request comments')
+                raise PublicationError('invalid request comments')
             existing.extend(comment for comment in comments if isinstance(comment, dict)
                             and comment.get('user', {}).get('login') == 'github-actions[bot]'
                             and comment.get('user', {}).get('type') == 'Bot'
@@ -240,7 +240,7 @@ def answer_batch(api, batch, repository, registry, results, stage, run_id, attem
         if existing:
             comment = existing[0]
             if type(comment.get('id')) is not int or comment['id'] <= 0:
-                raise RecoveryError('invalid status comment identity')
+                raise PublicationError('invalid status comment identity')
             # Identical outcomes across retry runs do not churn a status comment.
             previous_outcome = comment['body'].split('\n\n[Publication run](')[0]
             next_outcome = reply['body'].split('\n\n[Publication run](')[0]

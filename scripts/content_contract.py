@@ -15,12 +15,14 @@ CONTRACT_VERSION = CONTRACT["version"]
 LIMITS = CONTRACT["limits"]
 MEDIA_EXTENSIONS = frozenset(CONTRACT["media_extensions"])
 MAX_TEXT_BYTES = LIMITS["text_bytes"]
+MEDIA_TABLE = CONTRACT["media_table"]
+MAX_TABLE_BYTES = LIMITS["table_bytes"]
 MAX_SVG_BYTES = LIMITS["svg_bytes"]
 MAX_MEDIA_BYTES = LIMITS["media_bytes"]
 MAX_TOTAL_BYTES = LIMITS["group_bytes"]
-LEGACY_MAX_TOTAL_BYTES = LIMITS["legacy_group_bytes"]
 MAX_SITE_BYTES = LIMITS["site_bytes"]
 MAX_FILES = LIMITS["files"]
+REQUIRED_FILES = tuple(CONTRACT["required_files"])
 PATH_PART = re.compile(CONTRACT["path_component"])
 
 
@@ -49,9 +51,8 @@ def validate_visual(path):
             raise ValueError(f"{path}: {attribute} must be {expected} pixels or omitted")
 
 
-def select_content_files(file_sizes, *, require_visual=True, recovery=False):
+def select_content_files(file_sizes, *, required=REQUIRED_FILES):
     """Return sorted allowed paths; ignore non-content files, reject bad content."""
-    total_limit = LEGACY_MAX_TOTAL_BYTES if recovery else MAX_TOTAL_BYTES
     selected = []
     total = 0
     for name, size in file_sizes.items():
@@ -63,9 +64,10 @@ def select_content_files(file_sizes, *, require_visual=True, recovery=False):
         path = PurePosixPath(name)
         if len(parts) == 1 and path.stem.lower() == "visual" and name != "visual.svg":
             raise ValueError(f"{name}: use exactly visual.svg for the main visual")
-        required = name in {"text.md", "visual.svg"}
+        root_file = name in REQUIRED_FILES
         media = path.suffix.lower() in MEDIA_EXTENSIONS and (len(parts) == 1 or parts[0] == "media")
-        if not required and not media:
+        table = name == MEDIA_TABLE
+        if not root_file and not media and not table:
             continue
         if len(name) > LIMITS["path_length"] or len(parts) > LIMITS["path_depth"]:
             raise ValueError(f"{name}: content path too long")
@@ -73,14 +75,14 @@ def select_content_files(file_sizes, *, require_visual=True, recovery=False):
             raise ValueError(f"{name}: content filenames must use lowercase letters, digits, dots, hyphens or underscores")
         if type(size) is not int or size < 0:
             raise ValueError(f"{name}: invalid file size")
-        limit = MAX_TEXT_BYTES if name == "text.md" else MAX_SVG_BYTES if path.suffix == ".svg" else MAX_MEDIA_BYTES
+        limit = (MAX_TEXT_BYTES if name == "text.md" else MAX_TABLE_BYTES if name == MEDIA_TABLE
+                 else MAX_SVG_BYTES if path.suffix == ".svg" else MAX_MEDIA_BYTES)
         if size > limit:
             raise ValueError(f"{name}: exceeds the {limit}-byte file limit")
         selected.append(name)
         total += size
-        if len(selected) > MAX_FILES or total > total_limit:
-            raise ValueError(f"group content exceeds {MAX_FILES} files or {total_limit // (1024 * 1024)} MiB")
-    required_files = {"text.md", "visual.svg"} if require_visual else {"text.md"}
-    if not required_files <= set(selected):
-        raise ValueError("group content requires " + " and ".join(sorted(required_files)))
+        if len(selected) > MAX_FILES or total > MAX_TOTAL_BYTES:
+            raise ValueError(f"group content exceeds {MAX_FILES} files or {MAX_TOTAL_BYTES // (1024 * 1024)} MiB")
+    if not set(required) <= set(selected):
+        raise ValueError("group content requires " + " and ".join(sorted(required)))
     return sorted(selected)

@@ -14,19 +14,16 @@ SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
 REPOSITORY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9_][A-Za-z0-9_.-]*")
 
 
+STATES = ('live', 'frozen', 'hidden')
+
+
 @dataclass(frozen=True)
 class Group:
     slug: str
     repository: str
     branch: str
-    enabled: bool
+    state: str
     exclude: tuple[str, ...] = ()
-    require_visual: bool = True
-    state: str = None
-
-    @property
-    def publication_state(self):
-        return self.state or ('live' if self.enabled else 'hidden')
 
 
 def validate_exclusions(exclude):
@@ -73,11 +70,10 @@ def load_registry(path):
         label = f"registry group {index}"
         if not isinstance(entry, dict):
             raise ValueError(f"{label}: expected an object")
-        if (not {"slug", "repository"} <= entry.keys() or not ({'enabled', 'state'} & entry.keys())
-                or entry.keys() - {
-            "slug", "repository", "branch", "enabled", "exclude", "require_visual", "state"
-        }):
-            raise ValueError(f"{label}: require slug, repository, enabled; branch is optional")
+        if not {"slug", "repository", "state"} <= entry.keys() or entry.keys() - {
+            "slug", "repository", "branch", "state", "exclude"
+        }:
+            raise ValueError(f"{label}: require slug, repository, state; branch and exclude are optional")
         slug = entry["slug"]
         if not isinstance(slug, str) or len(slug) > 63 or not SLUG.fullmatch(slug):
             raise ValueError(f"{label}: slug must use lowercase letters, digits and single hyphens (max 63)")
@@ -88,21 +84,12 @@ def load_registry(path):
             raise ValueError(f"{label}: repository must be owner/name, without a URL or .git suffix")
         if repository.casefold() in repositories:
             raise ValueError(f"{label}: duplicate repository {repository!r}")
-        if 'enabled' in entry and type(entry["enabled"]) is not bool:
-            raise ValueError(f"{label}: enabled must be true or false")
-        state = entry.get('state')
-        if ('state' in entry and state is None and 'enabled' not in entry
-                or state is not None and state not in ('live', 'frozen', 'hidden')):
-            raise ValueError(f'{label}: state must be live, frozen or hidden')
-        enabled = entry.get('enabled', state == 'live')
-        if state is not None and enabled != (state == 'live'):
-            raise ValueError(f'{label}: enabled conflicts with explicit state')
+        state = entry["state"]
+        if state not in STATES:
+            raise ValueError(f"{label}: state must be live, frozen or hidden")
         branch = validate_branch(entry.get("branch", "main"))
         exclude = validate_exclusions(entry.get("exclude", []))
-        require_visual = entry.get("require_visual", True)
-        if type(require_visual) is not bool:
-            raise ValueError(f"{label}: require_visual must be true or false")
-        groups.append(Group(slug, repository, branch, enabled, exclude, require_visual, state))
+        groups.append(Group(slug, repository, branch, state, exclude))
         slugs.add(slug)
         repositories.add(repository.casefold())
     return groups

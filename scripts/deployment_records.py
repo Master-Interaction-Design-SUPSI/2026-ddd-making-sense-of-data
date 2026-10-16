@@ -38,32 +38,13 @@ class DeploymentRecords:
         return self.client.json(self.base + "/git/ref/heads/main")["object"]["sha"]
 
     def archive_commit(self):
-        return self.client.json(self.base + '/git/ref/heads/student-work')['object']['sha']
-
-    def archive_main(self, commit):
-        import re
-        if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
-            raise ValueError('Expected an exact archive commit')
-        record = self.client.json(self.base + '/git/commits/' + commit)
-        if record.get('sha') != commit or not isinstance(record.get('message'), str):
-            raise ValueError('Unexpected archive acceptance record')
-        pins = re.findall(r'^Main-Commit: ([0-9a-f]{40})$', record['message'], re.MULTILINE)
-        if len(pins) != 1:
-            raise ValueError('Archive acceptance has no unambiguous main identity')
-        return pins[0]
-
-    def archive_authority(self, commit):
-        import re
-        if not isinstance(commit, str) or not re.fullmatch(r'[0-9a-f]{40}', commit):
-            raise ValueError('Expected an exact archive commit')
-        record = self.client.json(self.base + '/git/commits/' + commit)
-        if record.get('sha') != commit or not isinstance(record.get('message'), str):
-            raise ValueError('Unexpected archive authority record')
-        values = [line.removeprefix('Archive-Authority: ') for line in record['message'].splitlines()
-                  if line.startswith('Archive-Authority: ')]
-        if len(values) != 1 or values[0] not in {'v1-seed', 'v2'}:
-            raise ValueError('Archive has no unambiguous durable authority marker')
-        return values[0]
+        """Return the student-work head, or None before the first accepted run."""
+        try:
+            return self.client.json(self.base + '/git/ref/heads/student-work', missing='missing_archive')['object']['sha']
+        except ImportFailure as error:
+            if error.code == 'missing_archive':
+                return None
+            raise
 
     def is_verified(self, identifier):
         if type(identifier) is not int or identifier <= 0:
@@ -117,7 +98,7 @@ class DeploymentRecords:
 
     def create(self, release):
         record = self.post("/deployments", {
-            "ref": release['main_commit'] if release.get('version', 1) == 2 else release["source_commit"],
+            "ref": release['main_commit'],
             "task": TASK, "environment": ENVIRONMENT,
             "auto_merge": False, "required_contexts": [], "payload": release,
             "description": "Expected course publication; verify served files before the next build",

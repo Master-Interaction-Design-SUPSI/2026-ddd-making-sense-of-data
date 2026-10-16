@@ -1,4 +1,12 @@
 async page => {
+  // A fresh registry is empty; give the editor one live group so it can start from the template.
+  await page.route('**/editor/groups.json', async route => {
+    const response = await route.fetch();
+    const policy = await response.json();
+    policy.groups = [{ slug: 'check-group', repository: 'course/check-group', branch: 'main', exclude: [], state: 'live', editable: true, contract_version: 2 }];
+    await route.fulfill({ response, json: policy });
+  });
+  await page.reload();
   const failures = [];
   page.on('pageerror', error => failures.push(error.message));
   await page.evaluate(async () => {

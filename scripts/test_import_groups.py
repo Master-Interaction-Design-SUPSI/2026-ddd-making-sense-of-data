@@ -1,6 +1,4 @@
 import shutil
-import hashlib
-import io
 import json
 import subprocess
 import tempfile
@@ -8,66 +6,16 @@ import unittest
 from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
-from urllib.parse import urlsplit, unquote
+from urllib.parse import urlsplit
 
 import build_site
+from archive_state import empty_archive
+from archive_transaction import prepare_archive
 from content_contract import MAX_MEDIA_BYTES
 from github_content import GitHubClient, ImportFailure
 from group_registry import Group
 from import_groups import import_groups, validate_references
-
-
-SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><rect width="10" height="10"/></svg>'
-TEXT = b'---\ntitle: Fixture\nauthors: Test group\n---\n*Italic* and {crimson|color}. [[Detail|media/detail.svg]]'
-
-
-class Response(io.BytesIO):
-    headers = {}
-
-
-class FixtureAPI:
-    def __init__(self):
-        self.routes = {}
-        self.calls = []
-
-    def add(self, repository, files=None, branch="main"):
-        files = files or {"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}
-        base = "/repos/" + repository
-        commit = hashlib.sha1(repository.encode()).hexdigest()
-        tree = hashlib.sha1((repository + "tree").encode()).hexdigest()
-        self.routes[base] = dict(private=False, visibility="public", full_name=repository)
-        self.routes[base + "/git/ref/heads/" + branch] = {"ref": "refs/heads/" + branch, "object": {"type": "commit", "sha": commit}}
-        self.routes[base + "/git/commits/" + commit] = {"sha": commit, "tree": {"sha": tree}}
-        nodes = []
-        for name, data in files.items():
-            sha = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
-            nodes.append(dict(path=name, mode="100644", type="blob", size=len(data), sha=sha))
-            self.routes[base + "/git/blobs/" + sha] = data
-        self.routes[base + "/git/trees/" + tree + "?recursive=1"] = {"sha": tree, "tree": nodes, "truncated": False}
-        return commit, nodes
-
-    def open(self, request, timeout):
-        url = urlsplit(request.full_url)
-        path = url.path + ("?" + url.query if url.query else "")
-        self.calls.append(path)
-        if url.hostname == "raw.githubusercontent.com":
-            parts = unquote(path).lstrip("/").split("/")
-            base = "/repos/" + "/".join(parts[:2])
-            commit = self.routes.get(base + "/git/commits/" + parts[2], {})
-            tree = self.routes.get(base + "/git/trees/" + commit.get("tree", {}).get("sha", "") + "?recursive=1", {})
-            node = next((node for node in tree.get("tree", []) if node["path"] == "/".join(parts[3:])), None)
-            path = base + "/git/blobs/" + node["sha"] if node else path
-        if path not in self.routes:
-            raise HTTPError(request.full_url, 404, "not found", {}, None)
-        data = self.routes[path]
-        if isinstance(data, Exception):
-            raise data
-        return Response(data if isinstance(data, bytes) else json.dumps(data).encode())
-
-    def client(self):
-        client = GitHubClient()
-        client.opener = self
-        return client
+from test_fixtures import FixtureAPI, Response, SVG, TEXT, with_table, entry_slugs
 
 
 class ImportTests(unittest.TestCase):
@@ -78,7 +26,7 @@ class ImportTests(unittest.TestCase):
         self.api = FixtureAPI()
 
     def group(self, slug="alpha", enabled=True, branch="main"):
-        return Group(slug, "course/" + slug, branch, enabled)
+        return Group(slug, "course/" + slug, branch, "live" if enabled else "hidden")
 
     def run_import(self, groups=None):
         return import_groups(groups or [self.group()], self.root / "imports", self.api.client)
@@ -89,6 +37,7 @@ class ImportTests(unittest.TestCase):
                  "media/sound.mp3": b'ID3 audio fixture', "media/movie.mp4": b'video fixture',
                  "README.md": b'ignored', "index.html": b'<script>bad()</script>',
                  ".github/workflows/run.yml": b'run: bad-command', "media/script.js": b'bad()'}
+        files = with_table(files)
         alpha, nodes = self.api.add("course/alpha", files, branch="draft/content")
         beta, _ = self.api.add("course/beta")
         self.api.add("course/unregistered")
@@ -106,8 +55,8 @@ class ImportTests(unittest.TestCase):
         self.assertFalse(any(call.rsplit("/", 1)[-1] in ignored for call in self.api.calls))
 
     def test_public_personal_repositories_import_across_different_owners(self):
-        groups = [Group("alpha", "alice-student/project", "main", True),
-                  Group("beta", "bob-student/project", "main", True)]
+        groups = [Group("alpha", "alice-student/project", "main", "live"),
+                  Group("beta", "bob-student/project", "main", "live")]
         for group in groups:
             self.api.add(group.repository)
         results = self.run_import(groups)
@@ -121,28 +70,42 @@ class ImportTests(unittest.TestCase):
         _, nodes = self.api.add("course/alpha")
         nodes.append(dict(path="media/12.mov", size=MAX_MEDIA_BYTES + 1,
                           type="blob", mode="100644", sha="a" * 40))
-        result = self.run_import([Group("alpha", "course/alpha", "main", True, ("media/12.mov",))])[0]
+        result = self.run_import([Group("alpha", "course/alpha", "main", "live", ("media/12.mov",))])[0]
         self.assertEqual(result["status"], "imported")
         self.assertEqual(result["excluded_files"], ["media/12.mov"])
         self.assertNotIn("media/12.mov", result["files"])
         self.assertFalse(any(call.endswith("a" * 40) for call in self.api.calls))
 
-    def test_reference_to_excluded_media_still_fails(self):
+    def test_reference_to_excluded_media_is_accepted_with_a_warning(self):
         self.api.add("course/alpha", {"text.md": TEXT + b' [[Watch|media/12.mov]]',
                                      "visual.svg": SVG, "media/detail.svg": SVG,
                                      "media/12.mov": b'video'})
-        result = self.run_import([Group("alpha", "course/alpha", "main", True, ("media/12.mov",))])[0]
-        self.assertEqual(result["status"], "failed")
-        self.assertIn("must reference an imported file", result["error"])
+        result = self.run_import([Group("alpha", "course/alpha", "main", "live", ("media/12.mov",))])[0]
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["warnings"], ["text.md: media/12.mov is not in this group yet"])
+
+    def test_text_committed_before_its_media_is_accepted_and_the_next_commit_completes_it(self):
+        files = {"text.md": b"A [[photo]] and ![x](media/later.png).", "visual.svg": SVG,
+                 "media.csv": b"name,source,file\nphoto,,media/photo.png\n"}
+        self.api.add("course/alpha", files, table=False)
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["warnings"], ["text.md: media/later.png is not in this group yet",
+                                              "text.md: media/photo.png is not in this group yet"])
+        self.api.add("course/alpha", {**files, "media/photo.png": b"png", "media/later.png": b"png",
+                                      "media.csv": b"name,source,file\nphoto,,media/photo.png\nlater,,media/later.png\n"},
+                     table=False, commit="b" * 40)
+        self.root = self.root / "next"
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["warnings"], [])
 
     def test_inline_playback_template_imports_and_builds_real_media(self):
         template = Path(__file__).resolve().parent.parent / "templates/group"
         files = {path.relative_to(template).as_posix(): path.read_bytes()
                  for path in template.rglob("*") if path.is_file()}
         self.api.add("course/alpha", files)
-        output = self.prepare_build([self.group()])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        output, _ = self.first_archive([self.group()])
         for name in ("text.md", "media/example-motion.mp4", "media/example-tone.mp3"):
             self.assertEqual((output / "alpha" / name).read_bytes(), files[name])
         self.assertFalse((output / "alpha/README.md").exists())
@@ -157,20 +120,64 @@ class ImportTests(unittest.TestCase):
         }
         self.api.add("course/alpha", files)
         self.assertEqual(self.run_import()[0]["status"], "imported")
-        output = self.prepare_build([self.group()])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
+        output, _ = self.first_archive([self.group()])
         for name, original in files.items():
             self.assertEqual((output / "alpha" / name).read_bytes(), original)
 
     def test_one_failure_does_not_stop_other_groups_or_leave_partial_files(self):
-        commit, _ = self.api.add("course/alpha", {"text.md": b'[[missing|media/absent.svg]]', "visual.svg": SVG})
+        commit, _ = self.api.add("course/alpha", {"text.md": b'[[outside|../beta/visual.svg]]', "visual.svg": SVG})
         self.api.add("course/beta")
         results = self.run_import([self.group(), self.group("beta")])
         self.assertEqual(results[0]["error_code"], "invalid_content")
         self.assertEqual(results[0]["commit"], commit)
         self.assertEqual(results[1]["status"], "imported")
         self.assertEqual([p.name for p in (self.root / "imports").iterdir()], ["beta"])
+
+    def test_media_table_is_optional_and_resolves_names_with_warnings(self):
+        table = b'name,source,file\nthe detail,https://example.org/detail,media/detail.svg\n'
+        self.api.add("course/alpha", {"text.md": b"Only text and a visual.", "visual.svg": SVG}, table=False)
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported", result.get("error"))
+        self.assertEqual(sorted(result["files"]), ["text.md", "visual.svg"])
+        self.assertEqual(result["warnings"], [])
+        cases = {
+            "header": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"file,name\n"}, "media.csv: the first line"),
+            "encoding": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n\xe9t\xe9,,media/x.svg\n"},
+                         "media.csv: save the table as a UTF-8"),
+        }
+        for case, (files, message) in cases.items():
+            with self.subTest(case=case):
+                self.api = FixtureAPI()
+                self.api.add("course/alpha", files, table=False)
+                shutil.rmtree(self.root / "imports", ignore_errors=True)
+                result = self.run_import()[0]
+                self.assertEqual(result["error_code"], "invalid_content")
+                self.assertTrue(result["error"].startswith(message), result["error"])
+        warnings = {
+            "unknown name": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG, "media.csv": table, "media/detail.svg": SVG},
+                             "text.md: [[elsewhere]] is not a name in media.csv"),
+            "name without a table": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG},
+                                     "text.md: [[elsewhere]] is not a name in media.csv"),
+            "unlisted media": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n", "media/detail.svg": SVG},
+                               "text.md: media/detail.svg is used in the text but has no row in media.csv"),
+        }
+        for case, (files, message) in warnings.items():
+            with self.subTest(case=case):
+                self.api = FixtureAPI()
+                self.api.add("course/alpha", files, table=False)
+                shutil.rmtree(self.root / "imports", ignore_errors=True)
+                result = self.run_import()[0]
+                self.assertEqual(result["status"], "imported", result.get("error"))
+                self.assertEqual(result["warnings"], [message])
+        self.api = FixtureAPI()
+        self.api.add("course/alpha", {"text.md": b"See [[The Detail]].", "visual.svg": SVG, "media.csv": table,
+                                      "media/detail.svg": SVG}, table=False)
+        shutil.rmtree(self.root / "imports", ignore_errors=True)
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported", result.get("error"))
+        self.assertEqual(result["warnings"], [])
+        self.assertEqual((self.root / "imports/alpha/media.csv").read_bytes(), table)
+
 
     def test_rejects_private_and_missing_repositories_and_missing_branch(self):
         self.api.add("course/private")
@@ -257,17 +264,26 @@ class ImportTests(unittest.TestCase):
 
     def test_reference_markdown_links_and_annotations_use_group_local_files(self):
         valid = "![chart][img]\n\n[img]: media/detail.svg\n\n[[detail|./media/detail.svg]] [source](https://example.org) [jump](#note)"
-        validate_references(valid, {"media/detail.svg"})
-        for target in ("../other/visual.svg", "%2e%2e/other/visual.svg", "/static/main.js", "//other.test/photo.jpg", "media/missing.svg", "javascript:alert"):
+        self.assertEqual(validate_references(valid, {"media/detail.svg"}), [])
+        self.assertEqual(validate_references("[link](media/missing.svg)", {"media/detail.svg"}),
+                         ["text.md: media/missing.svg is not in this group yet"])
+        for target in ("../other/visual.svg", "%2e%2e/other/visual.svg", "/static/main.js", "//other.test/photo.jpg", "javascript:alert"):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_references(f"[link]({target})", {"media/detail.svg"})
+
+    def test_warnings_are_bounded(self):
+        text = " ".join(f"[[name {i}]]" for i in range(50)) + " [[" + "x" * 400 + "]]"
+        warnings = validate_references(text, set())
+        self.assertEqual(len(warnings), 21)
+        self.assertEqual(warnings[-1], "text.md: 31 more references do not resolve")
+        self.assertTrue(all(len(warning) <= 300 for warning in warnings))
 
     def test_typed_annotation_references_share_the_renderer_parser(self):
         validate_references("[[detail|media/detail.svg|style=italic;color=crimson]] "
                             "[[source|https://example.org|type=bibliography]] "
                             "[[quote|Quoted words|type=quote;style=italic;color=crimson]]",
                             {"media/detail.svg"})
-        for target in ("media/missing.svg", "../beta/visual.svg", "/static/main.js"):
+        for target in ("../beta/visual.svg", "/static/main.js"):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_references(f"[[detail|{target}|type=bibliography;style=italic]]",
                                     {"media/detail.svg"})
@@ -284,35 +300,38 @@ class ImportTests(unittest.TestCase):
         (output / "index.html").write_text("previous publication")
         return output
 
-    def test_build_imports_two_groups_and_writes_source_report(self):
+    def first_archive(self, groups):
+        """Import into a new archive and build its site, as a first run does."""
+        output = self.prepare_build(groups)
+        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
+            report = prepare_archive(groups, empty_archive(self.root / "empty-archive"), self.root / "archive",
+                                     client_factory=self.api.client)
+        return output, report
+
+    def test_first_archive_imports_two_groups_and_builds_them(self):
         self.api.add("course/alpha")
         self.api.add("course/beta")
-        output = self.prepare_build([self.group(), self.group("beta")])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
-        self.assertEqual(json.loads((output / "entries.json").read_text()), ["alpha", "beta"])
+        output, report = self.first_archive([self.group(), self.group("beta")])
+        self.assertEqual(entry_slugs(output), ["alpha", "beta"])
         self.assertEqual((output / "alpha/media/detail.svg").read_bytes(), SVG)
         self.assertEqual((output / "index.html").read_text(), "trusted site")
         self.assertFalse((self.root / "alpha").exists())
-        report = json.loads((self.root / ".scratch/group-import-report.json").read_text())
         self.assertEqual([g["status"] for g in report["groups"]], ["imported", "imported"])
 
-    def test_first_publication_skips_invalid_group_after_fetching_other_groups(self):
+    def test_first_archive_skips_invalid_group_after_fetching_other_groups(self):
         self.api.add("course/beta")
-        output = self.prepare_build([self.group(), self.group("beta")])
-        with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
-            build_site.main(import_remote=True, client_factory=self.api.client, first_publication=True)
-        self.assertEqual(json.loads((output / "entries.json").read_text()), ["beta"])
-        report = json.loads((self.root / ".scratch/group-import-report.json").read_text())
+        output, report = self.first_archive([self.group(), self.group("beta")])
+        self.assertEqual(entry_slugs(output), ["beta"])
         self.assertEqual([g["status"] for g in report["groups"]], ["failed", "imported"])
         self.assertEqual([g["publication_status"] for g in report["groups"]], ["skipped", "updated"])
 
-    def test_local_path_collision_is_rejected_before_network_or_build_changes(self):
+    def test_local_path_collision_is_rejected_by_the_offline_build(self):
         output = self.prepare_build([self.group()])
         (self.root / "alpha").mkdir()
+        (self.root / "alpha/text.md").write_text("Local entry")
         with patch.object(build_site, "ROOT", self.root), patch.object(build_site, "OUTPUT", output):
             with self.assertRaisesRegex(ValueError, "collides"):
-                build_site.main(import_remote=True, client_factory=self.api.client)
+                build_site.main()
         self.assertEqual(self.api.calls, [])
         self.assertEqual((output / "index.html").read_text(), "previous publication")
 
@@ -391,9 +410,11 @@ class TransportTests(unittest.TestCase):
 
     def test_full_cohort_metadata_budget_is_independent_of_file_count(self):
         api = FixtureAPI()
-        groups = [Group(f"group-{i}", f"course/group-{i}", "main", True, require_visual=False) for i in range(15)]
+        groups = [Group(f"group-{i}", f"course/group-{i}", "main", "live") for i in range(15)]
         for group in groups:
-            api.add(group.repository, {"text.md": b"Fixture", **{f"media/{i}.png": b"image" for i in range(99)}})
+            # 97 media + text.md + visual.svg + media.csv fill the 100-file limit.
+            api.add(group.repository, {"text.md": b"Fixture", "visual.svg": SVG,
+                                       **{f"media/{i}.png": b"image" for i in range(97)}})
         requests = 0
         with tempfile.TemporaryDirectory() as temporary:
             for cycle in range(6):

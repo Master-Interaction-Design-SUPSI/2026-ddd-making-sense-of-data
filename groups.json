@@ -1,24 +1,76 @@
 {
   "groups": [
     {
-      "slug": "dust",
-      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-alpha",
+      "slug": "group-01",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
       "branch": "main",
       "state": "hidden"
     },
     {
-      "slug": "pilot-beta",
-      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta",
+      "slug": "group-02",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-02",
       "branch": "main",
       "state": "hidden"
     },
     {
-      "slug": "ddd-abstract",
-      "repository": "ginevraterenghi/ddd-abstract",
+      "slug": "group-03",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-03",
       "branch": "main",
-      "state": "live",
-      "exclude": ["media/12.mov", "media/4.mov"],
-      "require_visual": false
+      "state": "hidden"
+    },
+    {
+      "slug": "group-04",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-04",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-05",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-05",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-06",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-06",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-07",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-08",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-09",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-10",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-10",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-11",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-11",
+      "branch": "main",
+      "state": "hidden"
+    },
+    {
+      "slug": "group-12",
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-12",
+      "branch": "main",
+      "state": "hidden"
     }
   ]
 }

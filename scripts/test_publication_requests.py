@@ -6,11 +6,11 @@ from group_registry import Group
 from publication_requests import (LABEL, MARKER, MAX_BATCH, answer_batch, capture_batch, parse_group,
                                   refresh_allowed, response, validate_batch, RequestAPI)
 from github_content import GitHubClient, ImportFailure
-from publication_state import RecoveryError
+from release import PublicationError
 
 REPOSITORY = 'course/site'
 CUTOFF = '2026-10-14T12:00:00Z'
-REGISTRY = [Group('alpha', 'course/alpha', 'main', True)]
+REGISTRY = [Group('alpha', 'course/alpha', 'main', 'live')]
 
 
 def issue(number=1, body='### Group\n\nalpha', **extra):
@@ -146,7 +146,7 @@ class RequestTests(unittest.TestCase):
             if mutate == 'repo': changed['repository'] = 'attacker/course'
             if mutate == 'duplicate': changed['requests'] += changed['requests']
             if mutate == 'slug': changed['requests'][0]['slug'] = 'attacker'
-            with self.assertRaises(RecoveryError): validate_batch(changed, REPOSITORY, REGISTRY)
+            with self.assertRaises(PublicationError): validate_batch(changed, REPOSITORY, REGISTRY)
 
     def test_cooldown_switch_quota_and_trusted_events(self):
         recent = '2026-10-14T11:59:59Z'
