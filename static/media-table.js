@@ -91,13 +91,20 @@
       });
   }
 
-  function unresolved(body) {
-    return Array.from(body.matchAll(NAMED), match => match[1].trim());
+  // Split text into plain strings and the [[name]]s that expand() left unresolved: ["a ", { name: "x" }].
+  function splitNames(text) {
+    const parts = [];
+    let last = 0;
+    for (const match of text.matchAll(NAMED)) {
+      parts.push(text.slice(last, match.index), { name: match[1].trim() });
+      last = match.index + match[0].length;
+    }
+    parts.push(text.slice(last));
+    return parts.filter(part => part !== "");
   }
 
-  // Replace each [[name]] that expand() left unresolved.
-  function replaceUnresolved(body, replacer) {
-    return body.replace(NAMED, (match, name) => replacer(name.trim()));
+  function unresolved(body) {
+    return splitNames(body).filter(part => typeof part !== "string").map(part => part.name);
   }
 
   function sources(table) {
@@ -121,7 +128,7 @@
       .map(fields => fields.map(quote).join(",")).join("\n") + "\n";
   }
 
-  const api = { read, expand, unresolved, replaceUnresolved, sources, warnings, serialize };
+  const api = { read, expand, splitNames, unresolved, sources, warnings, serialize };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CourseMediaTable = api;
 })(globalThis);

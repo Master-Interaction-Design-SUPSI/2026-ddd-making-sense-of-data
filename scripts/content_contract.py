@@ -64,9 +64,8 @@ def select_content_files(file_sizes, *, required=REQUIRED_FILES):
         path = PurePosixPath(name)
         if len(parts) == 1 and path.stem.lower() == "visual" and name != "visual.svg":
             raise ValueError(f"{name}: use exactly visual.svg for the main visual")
-        root_file = name in {"text.md", "visual.svg"}
+        root_file = name in REQUIRED_FILES
         media = path.suffix.lower() in MEDIA_EXTENSIONS and (len(parts) == 1 or parts[0] == "media")
-        # Selected whenever present; import admission is where media.csv becomes mandatory.
         table = name == MEDIA_TABLE
         if not root_file and not media and not table:
             continue

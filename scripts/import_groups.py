@@ -15,6 +15,7 @@ from github_content import GitHubClient, ImportFailure
 
 
 LINK_CHECKER = Path(__file__).with_name("check_content_links.js")
+MAX_WARNINGS = 20  # Keeps every group's report entry small; the page shows each missing item.
 MAX_TREE_ENTRIES = 2000
 SVG_NAMESPACE = "http://www.w3.org/2000/svg"
 
@@ -102,7 +103,10 @@ def validate_references(text, files, table=None):
             named = message.startswith(("text.md:", MEDIA_TABLE))
             raise ValueError(message if named else "text.md: " + message) from error
         raise RuntimeError("Text validator failed; check the local Node/Markdown setup") from error
-    return json.loads(checked.stdout)["warnings"]
+    warnings = [message[:300] for message in json.loads(checked.stdout)["warnings"]]
+    if len(warnings) > MAX_WARNINGS:
+        warnings[MAX_WARNINGS:] = [f"text.md: {len(warnings) - MAX_WARNINGS} more references do not resolve"]
+    return warnings
 
 
 def validate_content(folder, files):

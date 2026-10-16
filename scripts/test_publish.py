@@ -11,7 +11,7 @@ import archive_git
 import archive_transaction
 import publish as controller
 from release import PublicationError
-from test_fixtures import SVG, TEXT, URL, Course
+from test_fixtures import SVG, TEXT, URL, Course, entry_slugs
 from test_publication_requests import API, issue
 
 
@@ -45,7 +45,7 @@ class SplitPublisherTests(unittest.TestCase):
         self.patch('publish.STATE', self.fixture.root / '.scratch/build-state.json')
         self.patch('publish.revision', side_effect=lambda ref: self.main if ref == 'HEAD' else self.tree)
         self.patch('publish.utc_now', return_value='2026-10-14T12:00:00Z')
-        self.patch('release.worktree_clean', return_value=True)
+        self.patch('publish.worktree_clean', return_value=True)
         self.patch('release.time.sleep')
         self.patch('archive_git.init_remote', side_effect=self.init_remote)
         self.patch('archive_git.read_remote_snapshot', side_effect=lambda repository, commit, destination:
@@ -154,7 +154,7 @@ class SplitPublisherTests(unittest.TestCase):
                          {'version': 2, 'groups': {}})
         self.assertEqual(self.latest['payload']['archive_commit'], head)
         self.assertEqual(self.verified, self.latest)
-        self.assertEqual(json.loads((self.fixture.live / 'entries.json').read_text()), [])
+        self.assertEqual(entry_slugs(self.fixture.live), [])
 
     def test_first_run_publishes_a_live_group_and_answers_its_request(self):
         self.fixture.registry('alpha')
@@ -162,7 +162,7 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertEqual(controller.state()['status'], 'verified')
         self.assertEqual(self.archive_parents(), [])
         self.assertEqual((self.fixture.live / 'alpha/text.md').read_bytes(), TEXT)
-        self.assertEqual(json.loads((self.fixture.live / 'entries.json').read_text()), ['alpha'])
+        self.assertEqual(entry_slugs(self.fixture.live), ['alpha'])
         self.assertEqual(self.api.issues[1]['state'], 'open')
         controller.answer(self.api, result, checksum, self.records)
         self.assertEqual(self.api.issues[1]['state'], 'closed')
@@ -421,7 +421,7 @@ class SplitPublisherTests(unittest.TestCase):
         archive = self.read_archive(self.folder('after-removal'))
         self.assertEqual(set(archive.groups), {'alpha'})
         self.assertFalse((self.fixture.live / 'beta').exists())
-        self.assertEqual(json.loads((self.fixture.live / 'entries.json').read_text()), ['alpha'])
+        self.assertEqual(entry_slugs(self.fixture.live), ['alpha'])
 
 
 if __name__ == '__main__':

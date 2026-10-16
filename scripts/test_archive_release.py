@@ -87,7 +87,7 @@ class ReleasePairTests(unittest.TestCase):
         for slug in served:
             self.assertEqual(served[slug]['files'], self.archive.served()[slug]['files'])
         records.client.raw_file.assert_called_once_with('course/site', 'c' * 40, 'publication.json',
-                                                        archive_release.MAX_MANIFEST_BYTES)
+                                                        archive_release.MAX_ARCHIVE_MANIFEST_BYTES)
 
         records.client.raw_file.reset_mock()
         self.assertIsNone(archive_release.verified_previous_groups(records, 'course/site', None))

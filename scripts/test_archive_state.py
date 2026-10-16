@@ -13,7 +13,7 @@ import build_site
 from archive_state import ArchiveSnapshot, blob_sha, decode_archive, encode_archive, reconcile, unpack_snapshot
 from group_registry import Group
 from release import PublicationError
-from test_fixtures import SVG, archived_group
+from test_fixtures import SVG, archived_group, entry_slugs
 
 
 class ArchiveTests(unittest.TestCase):
@@ -194,7 +194,7 @@ class ArchiveTests(unittest.TestCase):
             files = {path.relative_to(output).as_posix(): path.read_bytes()
                      for path in output.rglob('*') if path.is_file()}
             self.assertFalse((output / 'hidden').exists())
-            self.assertEqual(json.loads((output / 'entries.json').read_text()), ['alpha'])
+            self.assertEqual(entry_slugs(output), ['alpha'])
             self.assertEqual(set(json.loads((output / 'publication.json').read_text())['groups']), {'alpha'})
             shutil.rmtree(output)
             self.assertEqual(first, build_site.build_archive(folder, 'b' * 40))

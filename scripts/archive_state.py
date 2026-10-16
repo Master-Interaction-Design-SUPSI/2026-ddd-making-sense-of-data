@@ -15,8 +15,8 @@ from release import PublicationError, unique_keys
 MANIFEST = 'publication.json'
 SHA = re.compile(r'[0-9a-f]{40}')
 DIGEST = re.compile(r'[0-9a-f]{64}')
-MAX_MANIFEST_BYTES = 8 * 1024 * 1024
-MAX_TRANSFER_BYTES = MAX_SITE_BYTES + MAX_MANIFEST_BYTES + 16 * 1024 * 1024
+MAX_ARCHIVE_MANIFEST_BYTES = 8 * 1024 * 1024
+MAX_TRANSFER_BYTES = MAX_SITE_BYTES + MAX_ARCHIVE_MANIFEST_BYTES + 16 * 1024 * 1024
 
 
 class BoundedTarInfo(tarfile.TarInfo):
@@ -64,7 +64,7 @@ def served_entry(entry):
 def decode_archive(payload):
     """Reject unknown schema/fields, unsafe paths and ambiguous provenance."""
     try:
-        if len(payload) > MAX_MANIFEST_BYTES:
+        if len(payload) > MAX_ARCHIVE_MANIFEST_BYTES:
             raise ValueError('archive manifest exceeds its byte limit')
         manifest = json.loads(payload, object_pairs_hook=unique_keys)
         if (not isinstance(manifest, dict) or set(manifest) != {'version', 'groups'}
@@ -170,7 +170,7 @@ class ArchiveSnapshot:
         if self.folder.is_symlink() or not self.folder.is_dir():
             raise PublicationError('snapshot root must be a regular directory')
         manifest = self.folder / MANIFEST
-        if manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MAX_MANIFEST_BYTES:
+        if manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MAX_ARCHIVE_MANIFEST_BYTES:
             raise PublicationError('missing/unsafe archive manifest')
         self.payload = manifest.read_bytes()
         self.groups = decode_archive(self.payload)
@@ -255,13 +255,13 @@ def unpack_snapshot(archive, destination, expected_digest, *, git_directories=Fa
                 raise PublicationError('unexpected archive member')
             names.add(member.name)
             total += member.size
-            if total > MAX_SITE_BYTES + MAX_MANIFEST_BYTES or len(names) > 10000:
+            if total > MAX_SITE_BYTES + MAX_ARCHIVE_MANIFEST_BYTES or len(names) > 10000:
                 raise PublicationError('archive expanded size/member limit exceeded')
             members.append(member)
         if MANIFEST not in names:
             raise PublicationError('archive has no manifest')
         manifest_member = next(member for member in members if member.name == MANIFEST)
-        if manifest_member.size > MAX_MANIFEST_BYTES:
+        if manifest_member.size > MAX_ARCHIVE_MANIFEST_BYTES:
             raise PublicationError('archive manifest exceeds byte limit')
         groups = decode_archive(stream.extractfile(manifest_member).read())
         expected = {MANIFEST} | {f'{slug}/{name}' for slug, entry in groups.items()

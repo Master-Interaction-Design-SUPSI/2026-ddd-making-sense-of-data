@@ -9,7 +9,15 @@ async page => {
     await target.emulateMedia({ reducedMotion: 'reduce' });
     await target.route(origin + prefix + '**', async route => {
       let resource = route.request().url().slice((origin + prefix).length).split(/[?#]/)[0];
-      if (resource === 'entries.json') { await route.fulfill({ json: [slug] }); return; }
+      if (resource === 'entries.json') {
+        const template = await (await route.fetch({ url: origin + '/editor/template.json' })).json();
+        await route.fulfill({ json: [{ slug, files: Object.keys(template.files) }] }); return;
+      }
+      if (resource === 'editor/groups.json') {
+        const policy = await (await route.fetch({ url: origin + '/editor/groups.json' })).json();
+        policy.groups = [{ slug, repository: 'course/' + slug, branch: 'main', exclude: [], state: 'live', editable: true, contract_version: 2 }];
+        await route.fulfill({ json: policy }); return;
+      }
       if (resource.startsWith(slug + '/')) resource = 'editor/template/' + resource.slice(slug.length + 1);
       const requestHeaders = { ...route.request().headers(), 'cache-control': 'no-cache' };
       delete requestHeaders['if-modified-since']; delete requestHeaders['if-none-match'];

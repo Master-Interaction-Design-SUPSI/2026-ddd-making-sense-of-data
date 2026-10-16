@@ -15,7 +15,7 @@ from content_contract import MAX_MEDIA_BYTES
 from github_content import GitHubClient, ImportFailure
 from group_registry import Group
 from import_groups import import_groups, validate_references
-from test_fixtures import FixtureAPI, Response, SVG, TEXT, with_table
+from test_fixtures import FixtureAPI, Response, SVG, TEXT, with_table, entry_slugs
 
 
 class ImportTests(unittest.TestCase):
@@ -271,6 +271,13 @@ class ImportTests(unittest.TestCase):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_references(f"[link]({target})", {"media/detail.svg"})
 
+    def test_warnings_are_bounded(self):
+        text = " ".join(f"[[name {i}]]" for i in range(50)) + " [[" + "x" * 400 + "]]"
+        warnings = validate_references(text, set())
+        self.assertEqual(len(warnings), 21)
+        self.assertEqual(warnings[-1], "text.md: 31 more references do not resolve")
+        self.assertTrue(all(len(warning) <= 300 for warning in warnings))
+
     def test_typed_annotation_references_share_the_renderer_parser(self):
         validate_references("[[detail|media/detail.svg|style=italic;color=crimson]] "
                             "[[source|https://example.org|type=bibliography]] "
@@ -305,7 +312,7 @@ class ImportTests(unittest.TestCase):
         self.api.add("course/alpha")
         self.api.add("course/beta")
         output, report = self.first_archive([self.group(), self.group("beta")])
-        self.assertEqual(json.loads((output / "entries.json").read_text()), ["alpha", "beta"])
+        self.assertEqual(entry_slugs(output), ["alpha", "beta"])
         self.assertEqual((output / "alpha/media/detail.svg").read_bytes(), SVG)
         self.assertEqual((output / "index.html").read_text(), "trusted site")
         self.assertFalse((self.root / "alpha").exists())
@@ -314,7 +321,7 @@ class ImportTests(unittest.TestCase):
     def test_first_archive_skips_invalid_group_after_fetching_other_groups(self):
         self.api.add("course/beta")
         output, report = self.first_archive([self.group(), self.group("beta")])
-        self.assertEqual(json.loads((output / "entries.json").read_text()), ["beta"])
+        self.assertEqual(entry_slugs(output), ["beta"])
         self.assertEqual([g["status"] for g in report["groups"]], ["failed", "imported"])
         self.assertEqual([g["publication_status"] for g in report["groups"]], ["skipped", "updated"])
 

@@ -4,7 +4,7 @@ import hashlib
 
 import build_site
 from content_contract import MEDIA_TABLE
-from archive_state import MAX_MANIFEST_BYTES, decode_archive, served_groups
+from archive_state import MAX_ARCHIVE_MANIFEST_BYTES, decode_archive, served_groups
 from release import MANIFEST, PublicationError, RELEASE, encode, site_digest, validate_release
 
 
@@ -45,7 +45,7 @@ def verified_previous_groups(records, repository, verified_record):
         return None
     release = validate_release(verified_record['payload'])
     payload = records.client.raw_file(repository, release['archive_commit'], 'publication.json',
-                                      MAX_MANIFEST_BYTES)
+                                      MAX_ARCHIVE_MANIFEST_BYTES)
     if hashlib.sha256(payload).hexdigest() != release['archive_manifest_sha256']:
         raise PublicationError('previous archive manifest differs from verified release pin')
     return served_groups(decode_archive(payload))

@@ -111,7 +111,7 @@ Paths:
 
 SVG: static UTF-8. Rejected: scripts, event handlers, foreign markup, links, animation, entities, processing instructions, external resources. Permitted: local paint references; embedded PNG/JPEG/WebP data images.
 
-References: Markdown links and images, including reference syntax, and annotation targets resolve to selected files. `./media/x.svg` and local fragments pass. A target that is missing, ignored or excluded, an unknown `[[name]]`, or a used file without a `media.csv` row is a warning: the update is accepted, the report lists it under `warnings`, and the page shows one mark, *missing: name or path*, in annotation styling. Targets that leave the group, bad encodings and schemes other than `http`, `https`, `mailto` reject the update. Files and text can therefore be committed in any order.
+References: Markdown links and images, including reference syntax, and annotation targets resolve to selected files. `./media/x.svg` and local fragments pass. A target that is missing, ignored or excluded, an unknown `[[name]]`, or a used file without a `media.csv` row is a warning: the update is accepted and the report lists it under `warnings` (at most 20, each ≤ 300 characters). The page shows an unknown `[[name]]` and an image, audio or video file that is not in the group as one mark, *missing: name or path*, in annotation styling; it knows each entry's files from `entries.json`. A link to an absent file loses its link; a file without a row renders without a source link. Targets that leave the group, bad encodings and schemes other than `http`, `https`, `mailto` reject the update. Files and text can therefore be committed in any order.
 
 Media table (`static/media-table.js`, shared by renderer, editor and importer): `[[name]]` expands to `[[name|file|source=url]]` before any other parsing. Names are unique case-insensitively. Every media file `text.md` uses, by name or path, should have a row; a missing row is a warning. Rows for files not yet uploaded pass. Empty source passes; the editor warns. A row's source also links path references and Markdown images.
 
@@ -381,7 +381,7 @@ actionlint .github/workflows/*.yml
 git diff --check
 ```
 
-- Browser: `scripts/check_editor_browser.js`, `check_editor_fallback.js`, `check_editor_fidelity.js`, in Chrome and WebKit. Rebuild `_site` first.
+- Browser: `scripts/check_editor_browser.js`, `check_editor_fallback.js`, `check_editor_fidelity.js`, in Chrome and WebKit. Rebuild `_site` first, serve it, open `editor/`, then run the three in this order in one browser session (`playwright-cli run-code --filename=…`); the fallback check reuses the draft the first one saves. Each supplies its own test group, so they work with an empty registry.
 - CI: `validate.yml` runs unit, Node and offline build on PRs. Publication reruns tests before import.
 
 For outstanding hosted, browser and student-account validation, use [acceptance checks](docs/2026-10-15_ddd_acceptance-checks.md). Past test counts and deployment observations are retained in [publication evidence](docs/2026-10-15_ddd_publication-evidence.md); rerun checks for the revision being reviewed.

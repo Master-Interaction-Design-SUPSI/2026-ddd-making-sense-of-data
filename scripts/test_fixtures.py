@@ -93,6 +93,10 @@ def archived_group(files, repository='course/alpha', state='live'):
                          'files': {name: file_record(data) for name, data in files.items()}}}
 
 
+def entry_slugs(site):
+    return [item['slug'] for item in json.loads((site / 'entries.json').read_text())]
+
+
 class PublishedHTTP:
     """A deployed folder served independently of disposable build directories."""
 

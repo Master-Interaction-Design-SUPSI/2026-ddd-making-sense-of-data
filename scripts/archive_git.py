@@ -7,7 +7,7 @@ import time
 import base64
 from pathlib import Path
 
-from archive_state import ArchiveSnapshot, SHA, MAX_MANIFEST_BYTES, MAX_TRANSFER_BYTES, decode_archive, empty_archive, unpack_snapshot
+from archive_state import ArchiveSnapshot, SHA, MAX_ARCHIVE_MANIFEST_BYTES, MAX_TRANSFER_BYTES, decode_archive, empty_archive, unpack_snapshot
 from group_registry import REPOSITORY
 from release import PublicationError
 
@@ -188,7 +188,7 @@ def snapshot_from_git(repository, commit, destination):
         listing = Path(temporary) / 'inventory'
         with listing.open('xb') as output:
             bounded_process(repository, ['ls-tree', '-r', '-z', '-l', '--full-tree', commit],
-                            listing, stdout=output, limit=MAX_MANIFEST_BYTES)
+                            listing, stdout=output, limit=MAX_ARCHIVE_MANIFEST_BYTES)
         records = {}
         for row in listing.read_bytes().split(b'\0'):
             if not row:
@@ -203,7 +203,7 @@ def snapshot_from_git(repository, commit, destination):
             except (ValueError, UnicodeError) as error:
                 raise PublicationError('invalid archive Git inventory') from error
         manifest = records.get('publication.json')
-        if not manifest or manifest['size'] > MAX_MANIFEST_BYTES:
+        if not manifest or manifest['size'] > MAX_ARCHIVE_MANIFEST_BYTES:
             raise PublicationError('missing/oversized archive Git manifest')
         payload = git(repository, 'cat-file', 'blob', commit + ':publication.json')
         groups = decode_archive(payload)

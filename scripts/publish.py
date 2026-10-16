@@ -15,14 +15,14 @@ from pathlib import Path
 
 import archive_git
 import archive_release
-import release
 import build_site
 from archive_state import MANIFEST, ArchiveSnapshot, MAX_TRANSFER_BYTES, empty_archive, unpack_snapshot
 from archive_transaction import admit_candidate, pack_snapshot, prepare_archive
 from deployment_records import DeploymentRecords
 from group_registry import REPOSITORY, load_registry
 from publication_requests import RequestAPI, body_hash, capture_batch, parse_group, refresh_allowed, validate_batch, answer_batch, LABEL
-from release import MAX_MANIFEST_BYTES, RELEASE, PublicationError, encode, output, served_release, site_digest, unique_keys, validate_release
+from release import (MAX_MANIFEST_BYTES, RELEASE, PublicationError, encode, output, require_publication_active,
+                     served_release, site_digest, unique_keys, validate_release, worktree_clean)
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE = ROOT / '.scratch/build-state.json'
@@ -110,7 +110,7 @@ def identity():
 
 
 def require_main(records):
-    release.require_publication_active()
+    require_publication_active()
     context = identity()
     if records.main_commit() != context['main_commit']:
         raise PublicationError('main changed; this run is superseded')
@@ -300,7 +300,7 @@ def prepare(records, url, admission, checksum, destination):
                                  allow_idle=bool(same_main and verified
                                      and verified['payload']['main_tree'] == context['main_tree']
                                      and verified['payload']['archive_commit'] == previous.commit
-                                     and release.worktree_clean()))
+                                     and worktree_clean()))
         report['groups'] = result['groups']
         report['transport']['import'] = result['transport']
         data['source_checked'] = True
@@ -477,7 +477,7 @@ def finalize(source, checksum, destination):
 
 
 def answer(api, source, checksum, records=None):
-    release.require_publication_active()
+    require_publication_active()
     context = identity()
     if records is not None and records.main_commit() != context['main_commit']:
         return

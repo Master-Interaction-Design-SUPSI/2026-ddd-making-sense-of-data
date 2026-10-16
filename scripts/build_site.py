@@ -105,9 +105,14 @@ def write_site(sources, snapshots=None):
         shutil.copy2(ROOT / "index.html", candidate / "index.html")
         shutil.copytree(ROOT / "static", candidate / "static")
         write_editor(candidate)
+        listing = []
         for name in entries:
             shutil.copytree(sources[name], candidate / name)
-        (candidate / "entries.json").write_text(json.dumps(entries, ensure_ascii=False) + "\n", encoding="utf-8")
+            # The page marks a referenced file as missing when it is not in this list.
+            files = sorted(path.relative_to(candidate / name).as_posix()
+                           for path in (candidate / name).rglob("*") if path.is_file())
+            listing.append({"slug": name, "files": files})
+        (candidate / "entries.json").write_text(json.dumps(listing, ensure_ascii=False) + "\n", encoding="utf-8")
         if snapshots is not None:
             (candidate / MANIFEST).write_bytes(encode_manifest(snapshots))
         enforce_site_budget(candidate)

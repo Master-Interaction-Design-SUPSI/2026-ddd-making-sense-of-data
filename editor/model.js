@@ -95,7 +95,7 @@
       // Names and files that do not resolve yet are notes: the page shows them as missing.
       const checked = references.validate(this.text, result.files.keys(), this.contract.reference_schemes, table);
       const used = new Set(checked.used);
-      const fixed = ['text.md', 'visual.svg', this.contract.media_table];
+      const fixed = [...this.contract.required_files, this.contract.media_table];
       return { ...result, orphans: [...result.files.keys()].filter(name => !fixed.includes(name) && !used.has(name)),
                notes: [...checked.warnings, ...(table ? media.warnings(table, result.files.keys()) : [])] };
     }
@@ -116,7 +116,7 @@
      Without media it needs no table: null. */
   function startingTable(files, contract) {
     const taken = new Set();
-    const mediaFiles = [...files.keys()].filter(file => !['text.md', 'visual.svg', contract.media_table].includes(file));
+    const mediaFiles = [...files.keys()].filter(file => ![...contract.required_files, contract.media_table].includes(file));
     if (!mediaFiles.length) return null;
     const rows = mediaFiles.sort().map(file => {
       const base = file.split('/').pop();

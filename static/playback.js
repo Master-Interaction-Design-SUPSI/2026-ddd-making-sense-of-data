@@ -95,7 +95,6 @@
       wrapper.rel = "noopener noreferrer";
       if (media.tagName === "AUDIO") {
         wrapper.className = "inline-audio";
-        wrapper.dataset.file = media.getAttribute("src");
         wrapper.setAttribute("aria-label", `Open audio source: ${name}`);
         const icon = document.createElement("span");
         icon.textContent = "▶";

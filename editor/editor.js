@@ -297,6 +297,7 @@
   }
 
   const noTable = 'No media yet. media.csv is created with the first attached file.';
+  const tableText = () => draft.table ?? CourseMediaTable.serialize([]);
 
   function tableStatus() {
     if (draft.table === null) { $('table-status').textContent = noTable; return; }
@@ -429,8 +430,8 @@
     tableRows.push({ name: '', source: '', file: 'media/' }); storeRows(); renderRows();
     $('media-rows').lastElementChild.querySelector('input').focus();
   });
-  $('download-table').addEventListener('click', () => download(new Blob([draft.table ?? CourseMediaTable.serialize([])], { type: 'text/csv' }), tableName));
-  $('copy-table').addEventListener('click', () => run(async () => { await navigator.clipboard.writeText(draft.table ?? CourseMediaTable.serialize([])); $('table-status').textContent = 'media.csv copied. Paste it into media.csv on GitHub.'; }));
+  $('download-table').addEventListener('click', () => download(new Blob([tableText()], { type: 'text/csv' }), tableName));
+  $('copy-table').addEventListener('click', () => run(async () => { await navigator.clipboard.writeText(tableText()); $('table-status').textContent = 'media.csv copied. Paste it into media.csv on GitHub.'; }));
   $('attach').addEventListener('click', () => run(attach));
   $('check').addEventListener('click', () => run(check));
   function download(blob, name) {
@@ -456,7 +457,8 @@
     if (saved.baseId !== baseId) throw new Error('The saved draft has a different base. Download or reconcile it before replacing the newer version.');
     const restored = new CourseDraft.Draft(active.base, config, contract);
     restored.text = saved.text;
-    restored.table = typeof saved.table === 'string' ? saved.table : active.table;
+    // A saved null means the draft had no media.csv; drafts saved before the table existed lack the key.
+    restored.table = typeof saved.table === 'string' || saved.table === null ? saved.table : active.table;
     const missing = new Set(saved.version === 1 ? saved.paths || [] : saved.missingPaths || []);
     if (saved.version === 2) {
       if (!Array.isArray(saved.assets) || saved.assets.length > contract.limits.files) throw new Error('Invalid saved attachment inventory');
