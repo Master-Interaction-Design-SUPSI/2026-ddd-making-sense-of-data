@@ -180,8 +180,8 @@ jobs:
 
   publish:
     needs: [pin, prepare, accept]
-    # Runs unless an earlier job failed: after accept, or straight after prepare when there is no candidate.
-    if: ${{ !failure() && !cancelled() }}
+    # Requires prepared input; accept may be skipped when there is no candidate.
+    if: ${{ !failure() && !cancelled() && needs.prepare.result == 'success' }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
