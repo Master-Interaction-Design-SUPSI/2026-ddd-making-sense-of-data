@@ -408,7 +408,10 @@ function buildNav(entries) {
     a.dataset.folder = entry.folder;
     const idx = document.createElement("span");
     idx.className = "nav-index";
-    idx.textContent = pad(i + 1);
+    const group = /^group-(\d+)$/.exec(entry.folder);
+    idx.textContent = entry.folder === "materialities-of-ai"
+      ? "M-AI"
+      : group ? `G-${pad(Number(group[1]))}` : pad(i + 1);
     a.append(idx, ` ${entry.title}`);
     nav.appendChild(a);
   });
