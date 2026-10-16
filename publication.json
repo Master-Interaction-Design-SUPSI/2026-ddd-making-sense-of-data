@@ -1,0 +1,629 @@
+{
+  "groups": {
+    "group-01": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
+      "snapshot": {
+        "commit": "8836424e1d2095b603393760c744ea6f76346fd7",
+        "committed_at": "2026-10-16T17:49:20Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "00cf603cc61291cf22c3990965628029cd2093fc",
+            "sha256": "5fea489f0011de389c3c345a564841ff0698588beaca595a254cfd79827a5fb5",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "d11a17dee5c7c7b4a8e7861cba88c81254653ff3"
+      },
+      "state": "live"
+    },
+    "group-02": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-02",
+      "snapshot": {
+        "commit": "e5a017b595a02b2ec85c6603e81a4dd518d55c1c",
+        "committed_at": "2026-10-16T17:49:37Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "66eb730a3a40e16cb8a7b09925ca4baecf22e36b",
+            "sha256": "de0829c40ada49ddc7c4e5b02a6bb245847ed30f80d1cf91d83bf52028e02e48",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "3aece122c16abb66b377bbf1af8d7129f9cabbc3"
+      },
+      "state": "live"
+    },
+    "group-03": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-03",
+      "snapshot": {
+        "commit": "365f4b2687547ea8bde33e18b77cac36c19bc78a",
+        "committed_at": "2026-10-16T17:49:38Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "ec09b4d3f9602e716b3d237e41f0ffddea2a5cbe",
+            "sha256": "4429d56eceb10d0cdc6f73e1b249fb572ee517d11b2497cee73366a6abba19e6",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "1cc3a5378758af360e76264d7659395c75be0fc2"
+      },
+      "state": "live"
+    },
+    "group-04": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-04",
+      "snapshot": {
+        "commit": "d210e7a3ca89e4641d7d58ff830a69bde37db1cf",
+        "committed_at": "2026-10-16T17:49:40Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "2012438b68774cd4de15e8ace457bfd4e9370bd2",
+            "sha256": "b3cc2c3c768e5618c2acd8a9465aab2c5f16fee0519173744a29634231dcd95a",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "e70a9a624910e8df771671b34b700c7f48730b20"
+      },
+      "state": "live"
+    },
+    "group-05": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-05",
+      "snapshot": {
+        "commit": "08bb4a34a4c4330c3318a24cfca70d2957b80e0a",
+        "committed_at": "2026-10-16T17:49:42Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "59524c3b6db9822cb67af6a23d5913794930f8c9",
+            "sha256": "0693189cd8bcfe22bad4f112076ee594f073e183cf2f06d34f590e5526f314e8",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "50e0cfa1d9b97b8e9a80022c976b7c06d5ea8a11"
+      },
+      "state": "live"
+    },
+    "group-06": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-06",
+      "snapshot": {
+        "commit": "4af899fc4e8347a0877f2d123479e69ba1f25351",
+        "committed_at": "2026-10-16T17:49:43Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "c3a2efd23016ff6f485c772c38950dba876eb1a6",
+            "sha256": "64e0faab17651dc0dcbd91db04f7d45a860a7be6b28827138a78983b6d7f2eae",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "7c48fbc218f1d5a633b836cec49907ba07c2a10d"
+      },
+      "state": "live"
+    },
+    "group-07": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
+      "snapshot": {
+        "commit": "b63529f4b7779b62f42f6798b08ed7aa7e186dda",
+        "committed_at": "2026-10-16T17:49:45Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "42c6b87bbcc5e8a1d95bac45ee1c178ea12ef1f0",
+            "sha256": "69541c54762f81adcae049b1f3461355d51b10f56ec91cd5a6faa05e27b51d78",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "33e9537ebfe82f8b6030f0e75d5187905f20952a"
+      },
+      "state": "live"
+    },
+    "group-08": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
+      "snapshot": {
+        "commit": "9740e97ea1d4425762b15715aea866e2424ebf3f",
+        "committed_at": "2026-10-16T17:49:47Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "ab85ed32db156058d0d7b3ec81a7762375ae78a7",
+            "sha256": "923d9693434f47a2299a492bfce6fa3454b12b2131afa21bf3153e8548245fdb",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "419b3e4a016aa66f22963e1ada92420fdf288b42"
+      },
+      "state": "live"
+    },
+    "group-09": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
+      "snapshot": {
+        "commit": "b3e6d28b0c809b2198e8dd480fcb80c69ed81102",
+        "committed_at": "2026-10-16T17:49:49Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "aa685df833e141620cd609d991637c48d514901b",
+            "sha256": "3704542d450f6d440788e849cabd29c268e62dcb702097b7fe1fbfc4c53bee6f",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "6ed96874e3cb9881a7f6cc8096d3293afc487dce"
+      },
+      "state": "live"
+    },
+    "group-10": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-10",
+      "snapshot": {
+        "commit": "1fbd0557a50e939627d261a66b6c98034fcc06e1",
+        "committed_at": "2026-10-16T17:49:50Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "faee3685e83f7484c3186a01ad282c68ac56e94c",
+            "sha256": "50b38c460426b7168dba5fec69a6d8af136bec101af6c119a1ae316bafadb8cc",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "0c39912d721b592db3effdd6dc32a3af23f51cf1"
+      },
+      "state": "live"
+    },
+    "group-11": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-11",
+      "snapshot": {
+        "commit": "934d2ac32b8e58fdc526e003006a940f75a1cf03",
+        "committed_at": "2026-10-16T17:49:52Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "fe83e68acdc054abeb02b3ee46c4a7d67e609af7",
+            "sha256": "2b91561adeec200ede6ddd2028c729255b6502750007dc974fde5a987923ccc9",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "0f12999b652652994191651101f931a9f11de7cf"
+      },
+      "state": "live"
+    },
+    "group-12": {
+      "branch": "main",
+      "exclude": [],
+      "problem": null,
+      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-12",
+      "snapshot": {
+        "commit": "5cbdf22a4768db0544bcdb0589dce7ead8ec13af",
+        "committed_at": "2026-10-16T17:49:54Z",
+        "contract_version": 2,
+        "exclude": [],
+        "excluded": {},
+        "files": {
+          "media.csv": {
+            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
+            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
+            "size": 339
+          },
+          "media/example-detail.svg": {
+            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
+            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
+            "size": 415
+          },
+          "media/example-motion.mp4": {
+            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
+            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
+            "size": 471087
+          },
+          "media/example-tall.svg": {
+            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
+            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
+            "size": 294
+          },
+          "media/example-tone.mp3": {
+            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
+            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
+            "size": 20393
+          },
+          "text.md": {
+            "blob_sha": "6dba9538e1c694280b1634a87b1ed971a2cba676",
+            "sha256": "5ea3e310751cf551f1ebca6871e622018880564f9975c7535f6c46f446648cfb",
+            "size": 1961
+          },
+          "visual.svg": {
+            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
+            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
+            "size": 832
+          }
+        },
+        "tree": "052c3d1d0d2cbc7513f8e5cef7fb34dd9afad833"
+      },
+      "state": "live"
+    }
+  },
+  "version": 2
+}

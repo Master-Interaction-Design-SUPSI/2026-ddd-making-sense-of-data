@@ -1,0 +1,5 @@
+name,source,file
+wide detail,https://example.org/wide-detail,media/example-detail.svg
+tall transparent detail,https://example.org/tall-detail,media/example-tall.svg
+five-second demonstration tone,https://example.org/demonstration-tone,media/example-tone.mp3
+generated test pattern,https://example.org/test-pattern,media/example-motion.mp4

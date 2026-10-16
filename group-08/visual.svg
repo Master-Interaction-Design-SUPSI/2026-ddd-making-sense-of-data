@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1920" height="1080" viewBox="0 0 1920 1080">
+  <title>Demonstration — invented values: 20, 35 and 50</title>
+  <rect width="1920" height="1080" fill="#f7f6f2"/>
+  <g fill="#202724" font-family="sans-serif">
+    <text x="120" y="140" font-size="58">DEMONSTRATION — INVENTED DATA</text>
+    <text x="120" y="210" font-size="32">Replace this visual with your group's own work.</text>
+  </g>
+  <g fill="#116964">
+    <rect x="300" y="650" width="300" height="200"/>
+    <rect x="800" y="500" width="300" height="350"/>
+    <rect x="1300" y="350" width="300" height="500"/>
+  </g>
+  <g fill="#202724" font-family="sans-serif" font-size="42" text-anchor="middle">
+    <text x="450" y="920">20</text>
+    <text x="950" y="920">35</text>
+    <text x="1450" y="920">50</text>
+  </g>
+</svg>
