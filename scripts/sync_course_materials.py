@@ -1,14 +1,11 @@
 """Generate checked-in course copies from the canonical templates/group files.
 
 Run without arguments to check drift; use --write after editing the canonical
-student guide or demonstration. The root README introduction/layout stay local.
+student guide. The root README introduction/layout stay local.
 """
 
 import argparse
 from pathlib import Path
-import re
-
-from content_contract import select_content_files
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -31,33 +28,12 @@ def expected_copies(root):
     _, after = remainder.split(END)
     expected = {Path('README.md'): (before + START + '\n\n' + guide.rstrip()
                                   + '\n\n' + END + after).encode('utf-8')}
-    sizes = {path.relative_to(template).as_posix(): path.stat().st_size
-             for path in template.rglob('*') if path.is_file()}
-    for name in select_content_files(sizes):
-        payload = (template / name).read_bytes()
-        if name == 'text.md':
-            # Only these display labels differ; all demonstration prose is shared.
-            text = payload.decode('utf-8')
-            front, body = text.removeprefix('---\n').split('\n---\n', 1)
-            for key, value in {'title': 'Example: Three Values', 'authors': 'Course team'}.items():
-                front, count = re.subn(rf'^{key}:.*$', f'{key}: {value}', front, flags=re.M)
-                if count != 1:
-                    raise ValueError(f'Canonical demonstration needs one {key}')
-            payload = ('---\n' + front + '\n---\n' + body).encode('utf-8')
-        expected[Path('example') / name] = payload
     return expected
 
 
 def sync(root=ROOT, *, write=False):
     root = Path(root)
     expected = expected_copies(root)
-    # An obsolete demo asset needs deliberate removal, rather than being left
-    # silently published or deleted by a general-purpose synchronization command.
-    extras = sorted(path.relative_to(root) for path in (root / 'example').rglob('*')
-                    if path.is_file() and path.relative_to(root) not in expected)
-    if extras:
-        raise ValueError('Unexpected example files; review/remove explicitly: '
-                         + ', '.join(map(str, extras)))
     stale = []
     for name, payload in expected.items():
         path = root / name

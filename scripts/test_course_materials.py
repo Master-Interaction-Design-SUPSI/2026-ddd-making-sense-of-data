@@ -21,7 +21,7 @@ class CourseMaterialTests(unittest.TestCase):
         media = self.root / 'templates/group/media/example-tone.mp3'
         media.write_bytes(b'updated demonstration audio')
         before = (self.root / 'README.md').read_bytes()
-        self.assertEqual(set(sync(self.root)), {Path('README.md'), Path('example/media/example-tone.mp3')})
+        self.assertEqual(set(sync(self.root)), {Path('README.md')})
         self.assertEqual((self.root / 'README.md').read_bytes(), before)
         sync(self.root, write=True)
         readme = (self.root / 'README.md').read_text()
@@ -30,14 +30,9 @@ class CourseMaterialTests(unittest.TestCase):
         self.assertIn('New canonical instructions.', readme)
         self.assertEqual(sync(self.root), [])
 
-    def test_missing_copy_is_reported_and_obsolete_asset_needs_explicit_removal(self):
-        (self.root / 'example/media/example-detail.svg').unlink()
-        self.assertIn(Path('example/media/example-detail.svg'), sync(self.root))
-        extra = self.root / 'example/media/obsolete.svg'
-        extra.write_text('preserve until reviewed')
-        with self.assertRaisesRegex(ValueError, 'Unexpected example files'):
-            sync(self.root, write=True)
-        self.assertEqual(extra.read_text(), 'preserve until reviewed')
+    def test_sync_does_not_create_a_standalone_example(self):
+        sync(self.root, write=True)
+        self.assertFalse((self.root / 'example').exists())
 
     def test_missing_markers_do_not_overwrite_root_readme(self):
         path = self.root / 'README.md'

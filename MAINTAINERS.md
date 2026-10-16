@@ -11,7 +11,7 @@ Use this manual for current operating instructions. [Acceptance checks](docs/202
 
 Publication goes through the archive. On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
 
-The registry (`groups.json`) contains twelve prepared repositories, `2026-ddd-group-01` through `2026-ddd-group-12`, with slugs `group-01` through `group-12`. They are `live`, so their sample entries appear on the website and in the editor. The course-team pages `materialities-of-ai` and `example` are local folders (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
+The registry (`groups.json`) contains twelve prepared repositories, `2026-ddd-group-01` through `2026-ddd-group-12`, with slugs `group-01` through `group-12`. They are `live`, so their sample entries appear on the website and in the editor. The course-team page `materialities-of-ai` is a local folder (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
 
 Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule remains in `pages.yml` until request-pilot acceptance. First-run, student-account, request-pilot and device checks are on the [acceptance checklist](docs/2026-10-16_ddd_acceptance-checks.md).
 
@@ -84,7 +84,7 @@ Exclusion never alters the source repository.
 
 ### 4.1 Course-team pages
 
-Course-team pages are folders at the repository root, published with every build: `materialities-of-ai` (the opening brief, generated once from `ginevraterenghi/multimodal-abstract-ddd` at `1c07295`), `example` (generated from `templates/group/`, §10.2). Edit them by reviewed PR. `build_site.py` gives each folder the content checks of an import; only the main visual is optional. Order on the site: `materialities-of-ai`, `example`, then alphabetical.
+The course-team page is a folder at the repository root, published with every build: `materialities-of-ai` (the opening brief, generated once from `ginevraterenghi/multimodal-abstract-ddd` at `1c07295`). Edit it by reviewed PR. `build_site.py` gives each course-team folder the content checks of an import; only the main visual is optional. Order on the site: `materialities-of-ai`, then alphabetical. Each individual starter repository provides the demonstration content; there is no separate example entry.
 
 ## 5. Content contract
 
@@ -335,7 +335,7 @@ python3 scripts/sync_course_materials.py --write
 python3 scripts/sync_course_materials.py
 ```
 
-The script generates the marked student-guide section of the root README and all files in `example/`. Only the example title/authors differ; prose, visual, media table and media come from the template. The root introduction and repository layout remain separately maintained. The editor template is already generated directly from `templates/group/` at build time. CI rejects stale checked-in copies. Unexpected example files require explicit review/removal; synchronization does not delete them.
+The script generates the marked student-guide section of the root README. The root introduction and repository layout remain separately maintained. Demonstration content lives in the individual starter repositories. The editor template is generated directly from `templates/group/` at build time. CI rejects a stale checked-in guide.
 
 The remote template repository is a distribution copy of `templates/group/`, never an upstream editing source. After an authorized template update, compare its full file inventory and bytes with the canonical folder; do not copy remote edits back automatically. Local generation and CI do not synchronize or verify that remote repository.
 
