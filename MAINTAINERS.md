@@ -11,7 +11,7 @@ Use this manual for current operating instructions. [Acceptance checks](docs/202
 
 Publication goes through the archive. On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
 
-The registry (`groups.json`) starts empty. The course-team pages `materialities-of-ai`, `example` and `ddd-abstract` are local folders (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
+The registry (`groups.json`) contains twelve prepared repositories, `2026-ddd-group-01` through `2026-ddd-group-12`, with slugs `group-01` through `group-12`. They start `hidden` until assigned and ready to publish. The course-team pages `materialities-of-ai`, `example` and `ddd-abstract` are local folders (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
 
 Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule remains in `pages.yml` until request-pilot acceptance. First-run, student-account, request-pilot and device checks are on the [acceptance checklist](docs/2026-10-16_ddd_acceptance-checks.md).
 
@@ -319,7 +319,7 @@ Keep outside this repository, maintainer-controlled. Per group: name, slug, repo
 ### 10.2 Provisioning
 
 1. Confirm owner and username mapping.
-2. Create one public repository, default branch `main`, from the template repository [`2026-ddd-pilot-beta`](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta) (**Use this template**), or copy the **contents** of `templates/group/` to its root. No Pages, secrets or workflows. Personal repositories accepted; private rejected.
+2. Assign one of the twelve prepared public repositories, `2026-ddd-group-01` through `2026-ddd-group-12`. Their default branch is `main` and their initial contents come from `templates/group/`. For additional groups, copy the **contents** of that folder to a public repository's root. No Pages, secrets or workflows. Personal repositories accepted; private rejected.
 3. Owner adds teammates with **Write** (**Settings → Collaborators and teams**). Track acceptance; an invitation is not access.
 4. Audit effective permissions: organization base permission, team grants including parent teams, direct grants, custom roles. Organization-wide Write, Maintain or Admin breaks isolation. A lower direct grant does not cancel a higher inherited one. Changing organization defaults affects other projects; assess first. Record results.
 5. Check rulesets on the group's `main`: direct commits, no mandatory PR or approval.

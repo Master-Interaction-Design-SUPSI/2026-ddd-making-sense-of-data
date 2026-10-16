@@ -16,7 +16,7 @@ Each group edits its own public repository. This repository imports the register
 ## 1. Prerequisites
 
 - A GitHub account and a browser. Nothing to install.
-- One repository per group. One member opens the [group template](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta) → **Use this template → Create a new repository**. Owner: your account. Visibility: **Public**. Then **Settings → Collaborators → Add people** for each teammate. Send the repository link to the course team.
+- One repository per group. Open the repository assigned by the course team and accept your GitHub invitation. The course team adds each teammate with Write access. If you have not received a repository link, ask the course team before creating another repository.
 - The course team sends you your group identifier (slug) and the website link, and tells you when publication starts.
 - Edit only your group repository, never the course repository.
 - The text, visual, `media.csv` and `media/example-*` files you start with are demonstrations with invented numbers. Replace them.
@@ -171,3 +171,22 @@ Nothing is published until the commits are on GitHub. After the last one, look a
 | `scripts/` | Build, import, publication, tests. |
 
 Edit shared instructions and demonstration files in `templates/group/`, then run `python3 scripts/sync_course_materials.py --write`. CI checks the generated copies; see the [operating manual](MAINTAINERS.md#102-provisioning) for the distribution workflow.
+
+## 11. Prepared group repositories
+
+Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `hidden`; the course team assigns members and switches each group to `live` when ready. The samples do not appear as student work on the course website.
+
+| Group | Repository |
+| --- | --- |
+| 01 | [2026-ddd-group-01](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-01) |
+| 02 | [2026-ddd-group-02](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-02) |
+| 03 | [2026-ddd-group-03](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-03) |
+| 04 | [2026-ddd-group-04](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-04) |
+| 05 | [2026-ddd-group-05](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-05) |
+| 06 | [2026-ddd-group-06](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-06) |
+| 07 | [2026-ddd-group-07](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-07) |
+| 08 | [2026-ddd-group-08](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-08) |
+| 09 | [2026-ddd-group-09](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-09) |
+| 10 | [2026-ddd-group-10](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-10) |
+| 11 | [2026-ddd-group-11](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-11) |
+| 12 | [2026-ddd-group-12](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-12) |

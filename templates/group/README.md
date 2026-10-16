@@ -7,7 +7,7 @@ Your group's public repository. You write your text and add your media here. The
 ## 1. Prerequisites
 
 - A GitHub account and a browser. Nothing to install.
-- One repository per group. One member opens the [group template](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta) → **Use this template → Create a new repository**. Owner: your account. Visibility: **Public**. Then **Settings → Collaborators → Add people** for each teammate. Send the repository link to the course team.
+- One repository per group. Open the repository assigned by the course team and accept your GitHub invitation. The course team adds each teammate with Write access. If you have not received a repository link, ask the course team before creating another repository.
 - The course team sends you your group identifier (slug) and the website link, and tells you when publication starts.
 - Edit only your group repository, never the course repository.
 - The text, visual, `media.csv` and `media/example-*` files you start with are demonstrations with invented numbers. Replace them.
