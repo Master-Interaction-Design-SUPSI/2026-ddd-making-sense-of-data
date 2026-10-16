@@ -29,14 +29,14 @@ class EntryValidationTests(unittest.TestCase):
             (folder / filename).write_text(visual)
         return folder
 
-    def test_accepts_svg_exports_and_orders_example_first(self):
+    def test_accepts_svg_exports_and_orders_alphabetically(self):
         for name, attributes in (
             ("zebra", ''),
             ("alpha", 'width="1920px" height="1080px"'),
             ("example", 'width="1920.0" height="1080"'),
         ):
             self.entry(name, SVG.format(attributes=attributes))
-        self.assertEqual(build_site.find_entries(), ["example", "alpha", "zebra"])
+        self.assertEqual(build_site.find_entries(), ["alpha", "example", "zebra"])
 
     def test_accepts_comma_separated_viewbox(self):
         self.entry(visual=SVG.format(attributes="").replace("0 0 1920 1080", "0,0,1920,1080"))

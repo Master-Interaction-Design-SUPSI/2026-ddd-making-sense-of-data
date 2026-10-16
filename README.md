@@ -164,7 +164,6 @@ Nothing is published until the commits are on GitHub. After the last one, look a
 | --- | --- |
 | `groups.json` | Registry of group repositories. |
 | `materialities-of-ai/` | Course-team pages, published as they are. |
-| `example/` | Demonstration generated from `templates/group/`. |
 | `templates/group/` | Canonical student guide and demonstration. Copy its contents, not the folder. |
 | `editor/` | Entry editor. |
 | `static/` | Renderer, styles, content contract. |

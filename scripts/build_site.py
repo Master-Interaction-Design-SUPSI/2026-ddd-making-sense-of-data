@@ -94,7 +94,7 @@ def find_entries():
         for note in notes:
             warnings.warn(f"{folder.name}: {note}")
         entries.append(folder.name)
-    return sorted(entries, key=lambda name: (name != "example", name.casefold()))
+    return sorted(entries, key=str.casefold)
 
 
 def write_site(sources, snapshots=None, statuses=None):
@@ -102,7 +102,7 @@ def write_site(sources, snapshots=None, statuses=None):
     with only a problem get an entry too, so a first commit that fails is visible."""
     statuses = statuses or {}
     entries = sorted(set(sources) | set(statuses),
-                     key=lambda name: (name != "materialities-of-ai", name != "example", name.casefold()))
+                     key=lambda name: (name != "materialities-of-ai", name.casefold()))
     with tempfile.TemporaryDirectory(prefix=".site-build-", dir=OUTPUT.parent) as temporary:
         candidate = Path(temporary) / "candidate"
         candidate.mkdir()
