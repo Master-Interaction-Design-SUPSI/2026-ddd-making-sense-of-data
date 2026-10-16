@@ -5,7 +5,7 @@ Open checks for the new course repository, as of 2026-10-16. Procedures are in [
 ## Before and at the first run
 
 - [ ] `main` ruleset: pull request, the `validate` check, up-to-date branch, resolved threads, no deletion, no non-fast-forward. `student-work` ruleset: no deletion, no non-fast-forward. The `github-pages` environment is restricted to `main`. No Actions variables are set (requests off, not paused).
-- [ ] First run (**Run workflow → main**): `student-work` is created as a root commit, the release is recorded and verified, and the site shows the three course-team pages and the editor. A second run reports `unchanged`.
+- [ ] First run (**Run workflow → main**): `student-work` is created as a root commit, the release is recorded and verified, and the site shows the local course-team pages and the editor. A second run reports `unchanged`.
 
 ## Student accounts
 

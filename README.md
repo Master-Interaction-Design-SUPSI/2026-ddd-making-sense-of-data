@@ -163,7 +163,7 @@ Nothing is published until the commits are on GitHub. After the last one, look a
 | Path | Content |
 | --- | --- |
 | `groups.json` | Registry of group repositories. |
-| `materialities-of-ai/`, `ddd-abstract/` | Course-team pages, published as they are. |
+| `materialities-of-ai/` | Course-team pages, published as they are. |
 | `example/` | Demonstration generated from `templates/group/`. |
 | `templates/group/` | Canonical student guide and demonstration. Copy its contents, not the folder. |
 | `editor/` | Entry editor. |
@@ -174,7 +174,7 @@ Edit shared instructions and demonstration files in `templates/group/`, then run
 
 ## 11. Prepared group repositories
 
-Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `hidden`; the course team assigns members and switches each group to `live` when ready. The samples do not appear as student work on the course website.
+Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `live`; their sample entries appear on the course website and can be opened in the editor. The course team assigns repository access to group members.
 
 | Group | Repository |
 | --- | --- |
