@@ -394,8 +394,9 @@ def build(records, url, source, checksum):
             if data['mode'] == 'retry':
                 release = archive_release.reconstruct(data['previous_release'], archive, context['main_commit'], context['main_tree'])
             else:
-                previous_groups = archive_release.verified_previous_groups(
-                    records, context['repository'], records.latest_verified())
+                # No visible snapshots means there are no changed-group probes to compare.
+                previous_groups = (archive_release.verified_previous_groups(
+                    records, context['repository'], records.latest_verified()) if archive.served() else None)
                 release = archive_release.make_release(context['main_commit'], context['main_tree'], archive,
                                                        context['run_id'], context['run_attempt'],
                                                        previous_groups=previous_groups)

@@ -168,6 +168,22 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertEqual(self.api.issues[1]['state'], 'closed')
         self.assertIn('is published', self.api.comments[1][0]['body'])
 
+    def test_release_without_visible_groups_does_not_read_previous_group_inventory(self):
+        self.fixture.registry()
+        self.publish()
+        self.next_run(61)
+        # A code change requires a fresh release, even with no visible student groups.
+        self.main = archive_git.git(self.remote, 'commit-tree', self.tree, '-p', self.main,
+                                    input=b'New trusted code\n').decode().strip()
+        archive_git.git(self.remote, 'update-ref', archive_git.MAIN_REF, self.main)
+        self.records.main_commit.return_value = self.main
+        os.environ['MAIN_COMMIT'] = self.main
+        with patch.object(controller.archive_release, 'verified_previous_groups',
+                          side_effect=AssertionError('no group probes need a previous inventory')):
+            self.publish()
+        self.assertEqual(controller.state()['status'], 'verified')
+        self.assertEqual(self.latest['payload']['probes'], [])
+
     def test_record_without_archive_branch_stops_before_import(self):
         self.latest = {'id': 7, 'payload': {
             'version': 2, 'run_id': '50', 'run_attempt': '1', 'main_commit': self.main, 'main_tree': self.tree,
