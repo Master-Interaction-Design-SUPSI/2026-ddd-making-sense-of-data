@@ -224,7 +224,7 @@ An unverified release is retried from the recorded code/archive pair before any 
 | Switch | Effect when set |
 | --- | --- |
 | Variable `DDD_REQUESTS_ENABLED=true` | Issue requests admitted; job `answer` runs. Stop switch for requests. |
-| Variable `DDD_PUBLICATION_PAUSED=true` | Stops publication jobs and controller mutations/answers. Changing it is an operator action. |
+| Variable `DDD_PUBLICATION_PAUSED=true` | Job `pin` skips, so a run ends at once; controller mutations and answers also refuse. Changing it is an operator action. |
 | `.github/publishing.json` `requests_enabled` | Editor shows the request step. UI only. |
 
 **CAUTION**: Disabling the issue form does not block API-created issues. Use `DDD_REQUESTS_ENABLED`.
@@ -242,7 +242,7 @@ An unverified release is retried from the recorded code/archive pair before any 
 
 All checkouts at the pinned commit, `persist-credentials: false`. Imported content never runs.
 
-Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `batch.json`, `report.json`, optional `candidate.tar`. Extra members and links rejected. Reports ≤ 8 MiB; metadata ≤ 2 MiB. `EXPECTED_PRODUCER_ATTEMPT` admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
+Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `batch.json`, `report.json`, optional `candidate.tar`. Extra members and links rejected. Reports ≤ 8 MiB; metadata ≤ 2 MiB. Each job outputs `state`, `<artifact>:<metadata sha256>`; the next job reads it as `INPUT_STATE`, downloads that artifact and admits it only with that digest. The attempt in the name admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
 
 ### 9.3 Modes
 

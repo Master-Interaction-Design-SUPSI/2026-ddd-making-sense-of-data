@@ -15,13 +15,23 @@ permissions:
 env:
   DDD_PUBLICATION_PAUSED: ${{ vars.DDD_PUBLICATION_PAUSED }}
 
+# A publication run uses queue `pages`; an issue that is not an eligible publication request gets its own queue.
 concurrency:
-  group: ${{ vars.DDD_PUBLICATION_PAUSED == 'true' && format('publication-paused-{0}', github.run_id) || (github.event_name != 'issues' && 'pages') || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request') && 'pages') || format('ignored-issue-{0}', github.event.issue.number) }}
+  group: >-
+    ${{ (github.event_name != 'issues'
+         || vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request'))
+        && 'pages' || format('ignored-issue-{0}', github.event.issue.number) }}
   cancel-in-progress: false
 
+# Each job seals its result as an artifact and outputs `state` (`<artifact>:<metadata sha256>`).
+# The next job reads it as INPUT_STATE, downloads that artifact and admits it only with that digest.
 jobs:
   pin:
-    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main' && (github.event_name != 'issues' || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request')))
+    # Not paused, on main, and either not an issue or an eligible publication request.
+    if: >-
+      vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main'
+      && (github.event_name != 'issues'
+          || vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request'))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -53,9 +63,7 @@ jobs:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       REQUESTS_ENABLED: ${{ vars.DDD_REQUESTS_ENABLED == 'true' }}
     outputs:
-      metadata_sha256: ${{ steps.admit.outputs.metadata_sha256 }}
-      artifact_attempt: ${{ steps.admit.outputs.artifact_attempt }}
-      mode: ${{ steps.admit.outputs.mode }}
+      state: ${{ steps.admit.outputs.state }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -71,7 +79,7 @@ jobs:
         run: python3 scripts/publish.py admit
       - uses: actions/upload-artifact@v4
         with:
-          name: admission-${{ github.run_id }}-${{ steps.admit.outputs.artifact_attempt }}
+          name: ${{ steps.admit.outputs.artifact }}
           path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
@@ -87,12 +95,9 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      EXPECTED_METADATA_SHA256: ${{ needs.admit.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.admit.outputs.artifact_attempt }}
+      INPUT_STATE: ${{ needs.admit.outputs.state }}
     outputs:
-      metadata_sha256: ${{ steps.prepare.outputs.metadata_sha256 }}
-      artifact_attempt: ${{ steps.prepare.outputs.artifact_attempt }}
-      mode: ${{ steps.prepare.outputs.mode }}
+      state: ${{ steps.prepare.outputs.state }}
       archive: ${{ steps.prepare.outputs.archive }}
     steps:
       - uses: actions/checkout@v6
@@ -109,9 +114,11 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify browser contracts and renderer lifecycle
         run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
+      - id: input
+        run: echo "artifact=${INPUT_STATE%%:*}" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
-          name: admission-${{ github.run_id }}-${{ needs.admit.outputs.artifact_attempt }}
+          name: ${{ steps.input.outputs.artifact }}
           path: .scratch/job-input
       - id: prepare
         name: Prepare candidate or pending pair
@@ -120,7 +127,7 @@ jobs:
         run: python3 scripts/publish.py prepare
       - uses: actions/upload-artifact@v4
         with:
-          name: prepared-${{ github.run_id }}-${{ steps.prepare.outputs.artifact_attempt }}
+          name: ${{ steps.prepare.outputs.artifact }}
           path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
@@ -128,6 +135,7 @@ jobs:
 
   accept:
     needs: [pin, prepare]
+    # Only a prepared candidate is written to student-work.
     if: needs.prepare.outputs.archive == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -136,11 +144,9 @@ jobs:
       deployments: read
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
-      EXPECTED_METADATA_SHA256: ${{ needs.prepare.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.prepare.outputs.artifact_attempt }}
+      INPUT_STATE: ${{ needs.prepare.outputs.state }}
     outputs:
-      metadata_sha256: ${{ steps.accept.outputs.metadata_sha256 }}
-      artifact_attempt: ${{ steps.accept.outputs.artifact_attempt }}
+      state: ${{ steps.accept.outputs.state }}
       archive_commit: ${{ steps.accept.outputs.archive_commit }}
     steps:
       - uses: actions/checkout@v6
@@ -153,9 +159,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - id: input
+        run: echo "artifact=${INPUT_STATE%%:*}" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
-          name: prepared-${{ github.run_id }}-${{ needs.prepare.outputs.artifact_attempt }}
+          name: ${{ steps.input.outputs.artifact }}
           path: .scratch/job-input
       - id: accept
         name: Revalidate policy and accept by expected-parent fast-forward
@@ -164,7 +172,7 @@ jobs:
         run: python3 scripts/publish.py accept
       - uses: actions/upload-artifact@v4
         with:
-          name: accepted-${{ github.run_id }}-${{ steps.accept.outputs.artifact_attempt }}
+          name: ${{ steps.accept.outputs.artifact }}
           path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
@@ -172,7 +180,8 @@ jobs:
 
   publish:
     needs: [pin, prepare, accept]
-    if: always() && needs.prepare.result == 'success' && (needs.prepare.outputs.archive != 'true' || needs.accept.result == 'success')
+    # Runs unless an earlier job failed: after accept, or straight after prepare when there is no candidate.
+    if: ${{ !failure() && !cancelled() }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -186,11 +195,9 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      EXPECTED_METADATA_SHA256: ${{ needs.accept.outputs.metadata_sha256 || needs.prepare.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.accept.outputs.artifact_attempt || needs.prepare.outputs.artifact_attempt }}
+      INPUT_STATE: ${{ needs.accept.outputs.state || needs.prepare.outputs.state }}
     outputs:
-      metadata_sha256: ${{ steps.finalize.outputs.metadata_sha256 }}
-      artifact_attempt: ${{ steps.finalize.outputs.artifact_attempt }}
+      state: ${{ steps.finalize.outputs.state }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -202,9 +209,11 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - id: input
+        run: echo "artifact=${INPUT_STATE%%:*}" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.accept.outputs.metadata_sha256 && format('accepted-{0}-{1}', github.run_id, needs.accept.outputs.artifact_attempt) || format('prepared-{0}-{1}', github.run_id, needs.prepare.outputs.artifact_attempt) }}
+          name: ${{ steps.input.outputs.artifact }}
           path: .scratch/job-input
       - id: build
         name: Build accepted pair or reconstruct exact pending release
@@ -244,9 +253,9 @@ jobs:
         name: Export bounded truthful result for the answer job
         run: python3 scripts/publish.py finalize
       - uses: actions/upload-artifact@v4
-        if: always() && steps.finalize.outputs.metadata_sha256 != ''
+        if: always() && steps.finalize.outputs.artifact != ''
         with:
-          name: result-${{ github.run_id }}-${{ steps.finalize.outputs.artifact_attempt }}
+          name: ${{ steps.finalize.outputs.artifact }}
           path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
@@ -257,7 +266,8 @@ jobs:
 
   answer:
     needs: [pin, admit, prepare, accept, publish]
-    if: always() && needs.admit.result == 'success' && vars.DDD_REQUESTS_ENABLED == 'true'
+    # Requests are on and admission ran: answer from the newest state any later job sealed.
+    if: ${{ !cancelled() && needs.admit.result == 'success' && vars.DDD_REQUESTS_ENABLED == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -266,8 +276,9 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      EXPECTED_METADATA_SHA256: ${{ needs.publish.outputs.metadata_sha256 || needs.accept.outputs.metadata_sha256 || needs.prepare.outputs.metadata_sha256 || needs.admit.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.publish.outputs.artifact_attempt || needs.accept.outputs.artifact_attempt || needs.prepare.outputs.artifact_attempt || needs.admit.outputs.artifact_attempt }}
+      INPUT_STATE: >-
+        ${{ needs.publish.outputs.state || needs.accept.outputs.state
+            || needs.prepare.outputs.state || needs.admit.outputs.state }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -276,9 +287,11 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: '3.12'
+      - id: input
+        run: echo "artifact=${INPUT_STATE%%:*}" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.publish.outputs.metadata_sha256 && format('result-{0}-{1}', github.run_id, needs.publish.outputs.artifact_attempt) || (needs.accept.outputs.metadata_sha256 && format('accepted-{0}-{1}', github.run_id, needs.accept.outputs.artifact_attempt)) || (needs.prepare.outputs.metadata_sha256 && format('prepared-{0}-{1}', github.run_id, needs.prepare.outputs.artifact_attempt)) || format('admission-{0}-{1}', github.run_id, needs.admit.outputs.artifact_attempt) }}
+          name: ${{ steps.input.outputs.artifact }}
           path: .scratch/job-input
       - name: Repair one bot-owned status comment and close only verified checks
         env:

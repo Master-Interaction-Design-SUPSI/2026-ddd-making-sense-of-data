@@ -146,8 +146,10 @@ def seal(folder, kind, data, files):
                 'files': {name: sha_file(folder / name, limits.get(name, MAX_MANIFEST_BYTES)) for name in files}}
     (folder / 'metadata.json').write_bytes(encode(metadata))
     checksum = sha_file(folder / 'metadata.json', MAX_MANIFEST_BYTES)
-    output('metadata_sha256', checksum)
-    output('artifact_attempt', context['run_attempt'])
+    # The next job downloads this artifact by name and admits it only with this exact metadata digest.
+    artifact = f"{kind}-{context['run_id']}-{context['run_attempt']}"
+    output('artifact', artifact)
+    output('state', f'{artifact}:{checksum}')
     output('mode', data['mode'])
     output('archive', 'true' if 'candidate.tar' in files else 'false')
     return checksum
@@ -527,6 +529,18 @@ def summary():
             stream.write(text)
 
 
+def input_state():
+    """Read INPUT_STATE, '<kind>-<run>-<attempt>:<metadata sha256>', sealed by the job that ran before.
+
+    Returns the digest; the attempt pins the producing attempt for load(), so a rerun of a later
+    job can use an artifact from an earlier successful attempt of the same run.
+    """
+    artifact, _, checksum = os.environ.get('INPUT_STATE', '').partition(':')
+    if artifact:
+        os.environ['EXPECTED_PRODUCER_ATTEMPT'] = artifact.rsplit('-', 1)[-1]
+    return checksum
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('command', choices=('admit', 'prepare', 'accept', 'build', 'record', 'authorize', 'verify',
@@ -534,7 +548,7 @@ def main():
     args = parser.parse_args()
     context = identity()
     source = ROOT / '.scratch/job-input'
-    checksum = os.environ.get('EXPECTED_METADATA_SHA256', '')
+    checksum = input_state()
     destination = ROOT / '.scratch/job-output'
     url = os.environ.get('PAGES_URL', '')
     if args.command == 'admit':

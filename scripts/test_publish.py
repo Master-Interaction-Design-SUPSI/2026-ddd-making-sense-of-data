@@ -452,6 +452,14 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertIn('&#124;', text)
         self.assertIn('| alpha | failed | — | fffffff |', text)
 
+    def test_input_state_names_the_artifact_digest_and_producing_attempt(self):
+        admitted, checksum = self.admission()
+        with patch.dict(os.environ, INPUT_STATE=f'admission-60-1:{checksum}', GITHUB_RUN_ATTEMPT='2'):
+            self.assertEqual(controller.input_state(), checksum)
+            self.assertEqual(os.environ['EXPECTED_PRODUCER_ATTEMPT'], '1')
+            controller.load(admitted, checksum, {'admission'})
+        os.environ.pop('EXPECTED_PRODUCER_ATTEMPT', None)
+
     def test_removed_registry_row_leaves_the_archive_and_the_site(self):
         self.publish()
         self.fixture.registry('alpha')
