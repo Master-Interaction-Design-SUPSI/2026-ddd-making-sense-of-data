@@ -26,6 +26,16 @@ test('unknown [[name]]s stay literal text, escaped, for the page to mark as miss
   assert.deepEqual(mediaTable.splitNames('no names, [[a|pair]]'), ['no names, [[a|pair]]']);
 });
 
+test('a group entry says which commit is online, or which commit was not published and why', () => {
+  const online = { commit: 'd5b5fd7', committed_at: '2026-10-16T12:20:00Z' };
+  assert.equal(context.statusLine({ online }), 'Online: commit d5b5fd7, 16 Oct 14:20');
+  assert.equal(context.statusLine({ online, problem: { commit: 'e1f2a3b', message: 'visual.svg: export a valid SVG.' } }),
+    'Your commit e1f2a3b was not published: visual.svg: export a valid SVG. The page shows d5b5fd7.');
+  assert.equal(context.statusLine({ problem: { commit: 'e1f2a3b', message: 'text.md: invalid' } }),
+    'Your commit e1f2a3b was not published: text.md: invalid.');
+  assert.equal(context.statusLine({}), null);
+});
+
 test('semantic type, style and color are independent and order does not matter', () => {
   for (const modifiers of ['type=quote;style=italic;color=crimson', 'color=crimson;type=quote;style=italic']) {
     const [annotation] = annotations.parseAll(`[[the quote|Quoted words|${modifiers}]]`);

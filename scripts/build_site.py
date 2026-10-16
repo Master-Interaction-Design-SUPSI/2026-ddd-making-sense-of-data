@@ -97,8 +97,12 @@ def find_entries():
     return sorted(entries, key=lambda name: (name != "example", name.casefold()))
 
 
-def write_site(sources, snapshots=None):
-    entries = sorted(sources, key=lambda name: (name != "materialities-of-ai", name != "example", name.casefold()))
+def write_site(sources, snapshots=None, statuses=None):
+    """statuses: per group, which commit is online and which was not published; groups
+    with only a problem get an entry too, so a first commit that fails is visible."""
+    statuses = statuses or {}
+    entries = sorted(set(sources) | set(statuses),
+                     key=lambda name: (name != "materialities-of-ai", name != "example", name.casefold()))
     with tempfile.TemporaryDirectory(prefix=".site-build-", dir=OUTPUT.parent) as temporary:
         candidate = Path(temporary) / "candidate"
         candidate.mkdir()
@@ -107,11 +111,13 @@ def write_site(sources, snapshots=None):
         write_editor(candidate)
         listing = []
         for name in entries:
-            shutil.copytree(sources[name], candidate / name)
-            # The page marks a referenced file as missing when it is not in this list.
-            files = sorted(path.relative_to(candidate / name).as_posix()
-                           for path in (candidate / name).rglob("*") if path.is_file())
-            listing.append({"slug": name, "files": files})
+            files = []
+            if name in sources:
+                shutil.copytree(sources[name], candidate / name)
+                # The page marks a referenced file as missing when it is not in this list.
+                files = sorted(path.relative_to(candidate / name).as_posix()
+                               for path in (candidate / name).rglob("*") if path.is_file())
+            listing.append({"slug": name, "files": files, **statuses.get(name, {})})
         (candidate / "entries.json").write_text(json.dumps(listing, ensure_ascii=False) + "\n", encoding="utf-8")
         if snapshots is not None:
             (candidate / MANIFEST).write_bytes(encode_manifest(snapshots))
@@ -128,6 +134,22 @@ def write_site(sources, snapshots=None):
     print(f"Prepared {len(entries)} entries: {', '.join(entries)}")
 
 
+def group_statuses(groups):
+    """From the archive alone, so an exact retry rebuilds the same entries.json."""
+    statuses = {}
+    for slug, entry in groups.items():
+        if entry['state'] == 'hidden':
+            continue
+        status = {}
+        if entry['snapshot']:
+            status['online'] = {'commit': entry['snapshot']['commit'][:7], 'committed_at': entry['snapshot']['committed_at']}
+        if entry['problem'] and entry['state'] == 'live':
+            status['problem'] = {'commit': entry['problem']['commit'][:7], 'message': entry['problem']['message']}
+        if status:
+            statuses[slug] = status
+    return statuses
+
+
 def build_archive(folder, commit=None):
     """Build from archived bytes and trusted current site code; no source or Pages reads."""
     archive = ArchiveSnapshot(folder, commit)
@@ -136,7 +158,7 @@ def build_archive(folder, commit=None):
     if set(snapshots) & set(sources):
         raise ValueError('archive group collides with a local entry')
     sources.update({slug: archive.folder / slug for slug in snapshots})
-    write_site(sources, snapshots)
+    write_site(sources, snapshots, group_statuses(archive.groups))
     return {'archive_commit': archive.commit,
             'archive_manifest_sha256': hashlib.sha256(archive.payload).hexdigest(),
             'served_manifest_sha256': hashlib.sha256((OUTPUT / MANIFEST).read_bytes()).hexdigest()}

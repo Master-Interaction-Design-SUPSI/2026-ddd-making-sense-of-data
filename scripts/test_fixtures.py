@@ -18,6 +18,7 @@ from github_content import GitHubClient
 from group_registry import load_registry
 
 URL = 'https://site.test/course/'
+COMMITTED_AT = '2026-10-14T10:00:00Z'
 SVG = b'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080"><rect width="10" height="10"/></svg>'
 TEXT = b'---\ntitle: Fixture\nauthors: Test group\n---\n*Italic* and {crimson|color}. [[Detail|media/detail.svg]]'
 
@@ -42,7 +43,7 @@ class FixtureAPI:
         self.routes = {}
         self.calls = []
 
-    def add(self, repository, files=None, branch="main", table=True, commit=None):
+    def add(self, repository, files=None, branch="main", table=True, commit=None, committed_at=COMMITTED_AT):
         """Make files the branch head at commit; by default one fixed commit per repository."""
         files = files or {"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}
         if table:
@@ -52,7 +53,8 @@ class FixtureAPI:
         tree = hashlib.sha1((repository + "tree").encode()).hexdigest()
         self.routes[base] = dict(private=False, visibility="public", full_name=repository)
         self.routes[base + "/git/ref/heads/" + branch] = {"ref": "refs/heads/" + branch, "object": {"type": "commit", "sha": commit}}
-        self.routes[base + "/git/commits/" + commit] = {"sha": commit, "tree": {"sha": tree}}
+        self.routes[base + "/git/commits/" + commit] = {"sha": commit, "tree": {"sha": tree},
+                                                        "committer": {"date": committed_at}}
         nodes = []
         for name, data in files.items():
             sha = hashlib.sha1(f"blob {len(data)}\0".encode() + data).hexdigest()
@@ -87,9 +89,9 @@ class FixtureAPI:
 
 def archived_group(files, repository='course/alpha', state='live'):
     """One archive row whose accepted snapshot holds these files."""
-    return {'repository': repository, 'branch': 'main', 'state': state, 'exclude': [],
-            'snapshot': {'commit': 'a' * 40, 'tree': 'b' * 40, 'contract_version': CONTRACT_VERSION,
-                         'exclude': [], 'excluded': {},
+    return {'repository': repository, 'branch': 'main', 'state': state, 'exclude': [], 'problem': None,
+            'snapshot': {'commit': 'a' * 40, 'tree': 'b' * 40, 'committed_at': COMMITTED_AT,
+                         'contract_version': CONTRACT_VERSION, 'exclude': [], 'excluded': {},
                          'files': {name: file_record(data) for name, data in files.items()}}}
 
 

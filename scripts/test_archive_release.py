@@ -7,6 +7,7 @@ from unittest.mock import Mock, patch
 
 import archive_release
 import archive_transaction
+from archive_state import ArchiveSnapshot, encode_archive
 from deployment_records import DeploymentRecords, ENVIRONMENT, TASK
 from release import PublicationError, served_release, validate_release
 from test_fixtures import URL, Course
@@ -45,6 +46,30 @@ class ReleasePairTests(unittest.TestCase):
         path.write_bytes(b'X' * path.stat().st_size)
         with self.assertRaisesRegex(PublicationError, 'content probe'):
             served_release(URL, self.release, attempts=1)
+
+    def test_entries_say_which_commit_is_online_or_what_to_fix(self):
+        groups = copy.deepcopy(self.archive.groups)
+        groups['alpha']['problem'] = {'commit': 'e' * 40, 'message': 'visual.svg: export a valid SVG'}
+        groups['gamma'] = {'repository': 'course/gamma', 'branch': 'main', 'state': 'live', 'exclude': [],
+                           'snapshot': None, 'problem': {'commit': 'f' * 40, 'message': 'text.md: invalid UTF-8'}}
+        groups['hidden'] = {'repository': 'course/hidden', 'branch': 'main', 'state': 'hidden', 'exclude': [],
+                            'snapshot': None, 'problem': {'commit': 'd' * 40, 'message': 'not shown'}}
+        (self.archive.folder / 'publication.json').write_bytes(encode_archive(groups))
+        archive = ArchiveSnapshot(self.archive.folder, 'c' * 40)
+        release = archive_release.make_release('a' * 40, 'b' * 40, archive, '50', '1')
+        entries = {item['slug']: item for item in json.loads((self.fixture.output / 'entries.json').read_text())}
+        self.assertEqual(list(entries), ['alpha', 'beta', 'gamma'])
+        commit = archive.groups['alpha']['snapshot']['commit']
+        self.assertEqual(entries['alpha']['online'], {'commit': commit[:7], 'committed_at': '2026-10-14T10:00:00Z'})
+        self.assertEqual(entries['alpha']['problem'], {'commit': 'e' * 7, 'message': 'visual.svg: export a valid SVG'})
+        self.assertNotIn('problem', entries['beta'])
+        self.assertEqual(entries['gamma'], {'slug': 'gamma', 'files': [],
+                                            'problem': {'commit': 'f' * 7, 'message': 'text.md: invalid UTF-8'}})
+        # The status comes from the archive alone, so an exact retry rebuilds the same bytes.
+        expected = self.fixture.bytes_at(self.fixture.output)
+        shutil.rmtree(self.fixture.output)
+        archive_release.reconstruct(release, archive, 'a' * 40, 'b' * 40)
+        self.assertEqual(self.fixture.bytes_at(self.fixture.output), expected)
 
     def test_served_verification_has_one_overall_deadline_across_retries(self):
         clock = {'seconds': 0}

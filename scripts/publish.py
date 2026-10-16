@@ -2,6 +2,7 @@
 
 import argparse
 import hashlib
+import html
 import json
 import os
 import re
@@ -492,9 +493,44 @@ def answer(api, source, checksum, records=None):
     print(encode({'issue_transport': api.client.metrics}).decode())
 
 
+def summary():
+    """The maintainers' "Course publication" step summary: one row per group. Students read their entry."""
+    try:
+        current = state()
+    except (PublicationError, OSError, ValueError, KeyError):
+        current = None
+
+    def cell(value):
+        escaped = html.escape(str(value)).replace('\n', ' ').replace('\r', ' ')
+        for character in '|[]`*_\\':
+            escaped = escaped.replace(character, f'&#{ord(character)};')
+        return escaped
+
+    lines = ['## Course publication', '']
+    if current is None:
+        lines.append('Build stage did not complete; see the failed job.')
+    else:
+        lines += ['Result: **' + cell(current['status']) + '**.', '',
+                  '| Group | Status | Online | Attempted | Detail |', '| --- | --- | --- | --- | --- |']
+        for result in current['report'].get('groups', []):
+            online = (result.get('selected_source') or {}).get('commit')
+            detail = result.get('error') or '; '.join(result.get('warnings', []))
+            values = (result['slug'], result.get('publication_status', result['status']),
+                      online[:7] if online else '—', (result.get('commit') or '—')[:7], detail)
+            lines.append('| ' + ' | '.join(cell(value) for value in values) + ' |')
+        if current.get('error'):
+            lines += ['', cell(current['error'])]
+    text = '\n'.join(lines) + '\n'
+    print(text)
+    if os.environ.get('GITHUB_STEP_SUMMARY'):
+        with open(os.environ['GITHUB_STEP_SUMMARY'], 'a', encoding='utf-8') as stream:
+            stream.write(text)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('admit', 'prepare', 'accept', 'build', 'record', 'authorize', 'verify', 'finalize', 'answer'))
+    parser.add_argument('command', choices=('admit', 'prepare', 'accept', 'build', 'record', 'authorize', 'verify',
+                                            'finalize', 'answer', 'summary'))
     args = parser.parse_args()
     context = identity()
     source = ROOT / '.scratch/job-input'
@@ -514,6 +550,8 @@ def main():
         build(DeploymentRecords(context['repository']), url, source, checksum)
     elif args.command == 'finalize':
         finalize(source, checksum, destination)
+    elif args.command == 'summary':
+        summary()
     elif args.command == 'answer':
         answer(RequestAPI(context['repository']), source, checksum, DeploymentRecords(context['repository']))
     else:

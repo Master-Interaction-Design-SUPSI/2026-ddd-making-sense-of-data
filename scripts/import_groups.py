@@ -60,7 +60,10 @@ def validate_svg_content(path):
         raise ValueError(f"{path.name}: SVG document types and entities are not supported")
     if re.search(r"<\?(?!xml\s)", source, re.I):
         raise ValueError(f"{path.name}: SVG processing instructions are not supported")
-    svg = ET.fromstring(source)
+    try:
+        svg = ET.fromstring(source)
+    except ET.ParseError as error:
+        raise ValueError(f"{path.name}: export a valid SVG file ({error})") from error
     if svg.tag != f"{{{SVG_NAMESPACE}}}svg":
         raise ValueError(f"{path.name}: expected an SVG image")
     blocked = {"script", "foreignobject", "a", "animate", "animatemotion", "animatetransform", "set", "discard"}
@@ -138,9 +141,20 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
         raise ImportFailure("missing_branch", "GitHub did not return the exact configured branch")
     commit = object_sha(reference["object"]["sha"])
     result["commit"] = commit
+    base = previous.groups.get(group.slug) if previous else None
+    same_identity = (base and base["repository"] == group.repository and base["branch"] == group.branch)
+    problem = previous.problem(group) if previous else None
+    if allow_unchanged and problem and problem["commit"] == commit:
+        # Already rejected with this code; checking it again would only repeat the reason.
+        result.update(status="rejected", error_code="invalid_content", error=problem["message"])
+        return
     commit_data = client.json(repository + "/git/commits/" + commit)
     if commit_data["sha"] != commit:
         raise ImportFailure("invalid_response", "GitHub returned a different commit")
+    committed_at = commit_data["committer"]["date"]
+    if not isinstance(committed_at, str) or not re.fullmatch(r"\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z", committed_at):
+        raise ImportFailure("invalid_response", "GitHub returned an invalid commit date")
+    result["committed_at"] = committed_at
     tree_sha = object_sha(commit_data["tree"]["sha"])
     result['tree'] = tree_sha
     tree = client.json(repository + "/git/trees/" + tree_sha + "?recursive=1")
@@ -153,8 +167,6 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
         if node['path'] == name and node.get('type') == 'blob'
         and isinstance(node.get('sha'), str) and re.fullmatch(r'[0-9a-f]{40}', node['sha'])), None)
         for name in group.exclude}
-    base = previous.groups.get(group.slug) if previous else None
-    same_identity = (base and base["repository"] == group.repository and base["branch"] == group.branch)
     if allow_unchanged and same_identity and base["commit"] == commit and previous.can_skip(group, files):
         result.update(status="unchanged", files=list(files))
         return

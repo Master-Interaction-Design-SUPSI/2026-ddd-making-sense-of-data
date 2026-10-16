@@ -15,6 +15,8 @@ from release import PublicationError, unique_keys
 MANIFEST = 'publication.json'
 SHA = re.compile(r'[0-9a-f]{40}')
 DIGEST = re.compile(r'[0-9a-f]{64}')
+TIMESTAMP = re.compile(r'\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z')
+MAX_PROBLEM = 300  # characters of the reason a rejected commit shows on the page
 MAX_ARCHIVE_MANIFEST_BYTES = 8 * 1024 * 1024
 MAX_TRANSFER_BYTES = MAX_SITE_BYTES + MAX_ARCHIVE_MANIFEST_BYTES + 16 * 1024 * 1024
 
@@ -76,9 +78,16 @@ def decode_archive(payload):
             if not isinstance(slug, str) or len(slug) > 63 or not SLUG.fullmatch(slug) or slug in RESERVED_SLUGS:
                 raise ValueError('invalid archive slug')
             if not isinstance(entry, dict) or set(entry) != {
-                'repository', 'branch', 'state', 'exclude', 'snapshot'
+                'repository', 'branch', 'state', 'exclude', 'snapshot', 'problem'
             }:
                 raise ValueError(f'{slug}: invalid archive group record')
+            # Display text the writer cannot re-derive: only its shape and length are checked.
+            problem = entry['problem']
+            if problem is not None and (
+                    not isinstance(problem, dict) or set(problem) != {'commit', 'message'}
+                    or not isinstance(problem['commit'], str) or not SHA.fullmatch(problem['commit'])
+                    or not isinstance(problem['message'], str) or len(problem['message']) > MAX_PROBLEM):
+                raise ValueError(f'{slug}: invalid problem record')
             if (not isinstance(entry['repository'], str) or not REPOSITORY.fullmatch(entry['repository'])
                     or entry['repository'].endswith('.git')):
                 raise ValueError(f'{slug}: invalid repository')
@@ -92,11 +101,13 @@ def decode_archive(payload):
                     raise ValueError(f'{slug}: frozen group needs an accepted snapshot')
                 continue
             if not isinstance(snapshot, dict) or set(snapshot) != {
-                'commit', 'tree', 'contract_version', 'exclude', 'files', 'excluded'
+                'commit', 'tree', 'committed_at', 'contract_version', 'exclude', 'files', 'excluded'
             }:
                 raise ValueError(f'{slug}: invalid snapshot')
             if not isinstance(snapshot['commit'], str) or not SHA.fullmatch(snapshot['commit']):
                 raise ValueError(f'{slug}: invalid source commit')
+            if not isinstance(snapshot['committed_at'], str) or not TIMESTAMP.fullmatch(snapshot['committed_at']):
+                raise ValueError(f'{slug}: invalid commit date')
             if not isinstance(snapshot['tree'], str) or not SHA.fullmatch(snapshot['tree']):
                 raise ValueError(f'{slug}: invalid source tree')
             if type(snapshot['contract_version']) is not int or snapshot['contract_version'] != CONTRACT_VERSION:
@@ -140,7 +151,7 @@ def encode_archive(groups):
 
 def group_record(group):
     return {'repository': group.repository, 'branch': group.branch, 'state': group.state,
-            'exclude': list(group.exclude), 'snapshot': None}
+            'exclude': list(group.exclude), 'snapshot': None, 'problem': None}
 
 
 def reconcile(groups, registry):
@@ -150,7 +161,7 @@ def reconcile(groups, registry):
         entry = groups.get(group.slug)
         result[group.slug] = group_record(group)
         if entry and (entry['repository'].casefold(), entry['branch']) == (group.repository.casefold(), group.branch):
-            result[group.slug]['snapshot'] = entry['snapshot']
+            result[group.slug].update(snapshot=entry['snapshot'], problem=entry['problem'])
         elif entry and group.state == 'frozen':
             raise PublicationError(f'{group.slug}: a frozen group keeps its accepted snapshot; change its repository '
                                 'or branch only while it is live or hidden')

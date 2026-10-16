@@ -8,7 +8,7 @@ import time
 from pathlib import Path
 
 import build_site
-from archive_state import ArchiveSnapshot, encode_archive, file_record, reconcile, served_entry
+from archive_state import MAX_PROBLEM, ArchiveSnapshot, encode_archive, file_record, reconcile, served_entry
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES
 from github_content import GitHubClient, ImportFailure
 from import_groups import import_groups
@@ -41,6 +41,13 @@ class ArchiveBase:
         # Corrupt archived bytes stop the run; they never silently change what was accepted.
         return self.read_file(slug, name)
 
+    def problem(self, group):
+        """The rejected newest commit recorded for this group's source, if any."""
+        entry = self.archive.groups.get(group.slug)
+        if entry and (entry['repository'].casefold(), entry['branch']) == (group.repository.casefold(), group.branch):
+            return entry['problem']
+        return None
+
     def can_skip(self, group, files):
         snapshot = self.archive.groups[group.slug]['snapshot']
         return (snapshot['exclude'] == list(group.exclude)
@@ -69,19 +76,22 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
         results = import_groups(registry, imported, client_factory=client_factory, previous=base,
                                 allow_unchanged=allow_unchanged)
         by_slug = {result['slug']: result for result in results}
+        # A known rejected commit is not imported again, so it keeps a run idle.
         idle_eligible = (allow_idle
             and encode_archive(groups) == previous.payload
-            and all(group.state != 'live' or groups[group.slug]['snapshot'] for group in registry)
+            and all(group.state != 'live' or groups[group.slug]['snapshot'] or groups[group.slug]['problem']
+                    for group in registry)
             and len(by_slug) == len(registry)
-            and all(by_slug.get(group.slug, {}).get('status') ==
-                    ('unchanged' if group.state == 'live' else 'disabled')
+            and all(by_slug.get(group.slug, {}).get('status') in
+                    ({'unchanged', 'rejected'} if group.state == 'live' else {'disabled'})
                     for group in registry))
         if idle_eligible:
             for result in results:
                 entry = groups[result['slug']]
                 state = entry['state']
                 result['publication_status'] = (state if state != 'live' and entry['snapshot'] else
-                    'hidden' if state == 'hidden' else 'skipped' if state != 'live' else 'unchanged')
+                    'hidden' if state == 'hidden' else 'skipped' if state != 'live' or not entry['snapshot'] else
+                    'unchanged' if result['status'] == 'unchanged' else 'retained')
                 selected = served_entry(entry)
                 result['selected_source'] = ({key: selected[key] for key in ('repository', 'branch', 'commit')}
                                              if selected and state != 'hidden' else None)
@@ -93,11 +103,15 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
         for slug, entry in groups.items():
             result = by_slug.get(slug)
             state = entry['state']
+            if result and state == 'live' and result.get('error_code') == 'invalid_content' and result['commit']:
+                # The newest commit was rejected for its content: the page says so; the snapshot stays.
+                entry['problem'] = {'commit': result['commit'], 'message': result['error'][:MAX_PROBLEM]}
             if result and state == 'live' and result['status'] == 'imported':
                 files = {name: file_record((imported / slug / name).read_bytes()) for name in result['files']}
                 entry['snapshot'] = {'commit': result['commit'], 'tree': result['tree'],
-                    'contract_version': CONTRACT_VERSION,
+                    'committed_at': result['committed_at'], 'contract_version': CONTRACT_VERSION,
                     'exclude': entry['exclude'], 'excluded': result['excluded_blobs'], 'files': files}
+                entry['problem'] = None
                 shutil.copytree(imported / slug, staged / slug)
                 result['publication_status'] = ('unchanged' if entry['snapshot'] == previous.groups.get(slug, {}).get('snapshot')
                                                 else 'updated')
@@ -136,8 +150,8 @@ def admit_candidate(candidate, registry, previous):
         raise PublicationError('candidate added or removed an unapproved archive row')
     for slug, entry in candidate.groups.items():
         target = expected[slug]
-        if {key: value for key, value in entry.items() if key != 'snapshot'} != {
-                key: value for key, value in target.items() if key != 'snapshot'}:
+        if {key: value for key, value in entry.items() if key not in {'snapshot', 'problem'}} != {
+                key: value for key, value in target.items() if key not in {'snapshot', 'problem'}}:
             raise PublicationError(f'{slug}: candidate identity/state/settings differ from trusted registry')
         if entry['snapshot'] == target['snapshot']:
             continue

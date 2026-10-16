@@ -25,7 +25,7 @@ Outstanding validation as of 2026-10-15. V2 deployment and archive cutover are r
 
 **Deferred by the user on 2026-10-14:** selection of two non-admin student pilot accounts and a Safari device/version. Do not request these details again during the current implementation. `lucadra` and `ginevraterenghi` have maintainer privileges and cannot establish student isolation. No pilot access changes were made for this deferred item.
 
-- [ ] With each of two ordinary student accounts, edit text, upload media, delete an unreferenced file and submit a publication request. Verify the published revision and access to the **Course publication** summary.
+- [ ] With each of two ordinary student accounts, edit text, upload media, delete an unreferenced file and submit a publication request. Verify that the entry's status line names the published commit, then that a rejected commit shows its reason.
 - [ ] Verify each pilot has Write access to its own group and less than Write to every other group repository and the course repository, including inherited grants.
 - [ ] Pilot issue eligibility, answers, failed/transient requests, cooldown and close repair. Enable Issues, label, editor UI policy and request switches only through the authorized settings change.
 - [ ] After pilot acceptance, complete the access cutover by reviewing/removing student course-repository grants. Retain the effective-access audit.

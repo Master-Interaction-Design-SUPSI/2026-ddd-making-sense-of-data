@@ -413,6 +413,45 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertEqual([self.api.issues[n]['state'] for n in (1, 2, 3)], ['closed', 'closed', 'closed'])
         self.assertEqual((self.fixture.live / 'alpha/text.md').read_bytes(), b'Late committed content')
 
+    def test_rejected_commit_shows_on_the_page_with_the_commit_still_online(self):
+        self.publish()
+        online = self.read_archive(self.folder('first')).groups['alpha']['snapshot']['commit']
+        rejected = self.fixture.update('alpha', b'new alpha', visual=b'broken SVG')
+        self.next_run(61)
+        self.publish()
+        self.assertEqual(controller.state()['status'], 'verified')
+        entries = {item['slug']: item for item in json.loads((self.fixture.live / 'entries.json').read_text())}
+        self.assertEqual(entries['alpha']['online']['commit'], online[:7])
+        self.assertEqual(entries['alpha']['problem']['commit'], rejected[:7])
+        self.assertIn('visual.svg', entries['alpha']['problem']['message'])
+        self.assertNotIn('problem', entries['beta'])
+
+        summary = self.root / 'summary.md'
+        with patch.dict(os.environ, GITHUB_STEP_SUMMARY=str(summary)):
+            controller.summary()
+        text = summary.read_text()
+        self.assertIn('## Course publication', text)
+        self.assertIn('| alpha | retained | ' + online[:7] + ' | ' + rejected[:7] + ' | visual.svg', text)
+        self.assertIn('| beta | unchanged |', text)
+
+    def test_summary_escapes_cells_and_survives_a_build_that_never_started(self):
+        summary = self.root / 'summary.md'
+        with patch.dict(os.environ, GITHUB_STEP_SUMMARY=str(summary)):
+            controller.summary()
+        self.assertIn('Build stage did not complete', summary.read_text())
+        STATE = controller.STATE
+        STATE.parent.mkdir(parents=True, exist_ok=True)
+        STATE.write_text(json.dumps({'identity': controller.identity(), 'status': 'failed', 'error': '<b>|x',
+            'report': {'groups': [{'slug': 'alpha', 'status': 'failed', 'commit': 'f' * 40,
+                                   'error': 'text.md: [x](y) | *bad*'}]}}))
+        summary.unlink()
+        with patch.dict(os.environ, GITHUB_STEP_SUMMARY=str(summary)):
+            controller.summary()
+        text = summary.read_text()
+        self.assertNotIn('<b>', text)
+        self.assertIn('&#124;', text)
+        self.assertIn('| alpha | failed | — | fffffff |', text)
+
     def test_removed_registry_row_leaves_the_archive_and_the_site(self):
         self.publish()
         self.fixture.registry('alpha')

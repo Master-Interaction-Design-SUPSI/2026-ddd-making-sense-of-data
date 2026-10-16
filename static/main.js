@@ -255,13 +255,28 @@ function siteResolver(entries) {
 
 /* ---------- loading ---------- */
 
-async function loadEntry({ slug, files }) {
+async function loadEntry({ slug, files, online, problem }) {
   const present = new Set(files);
-  const [text, table] = await Promise.all([
-    fetch(`${slug}/text.md`).then((r) => (r.ok ? r.text() : null)).catch(() => null),
-    present.has("media.csv") ? fetch(`${slug}/media.csv`).then((r) => (r.ok ? r.text() : null)).catch(() => null) : null,
-  ]);
-  return { folder: slug, files: present, text, table, visual: present.has("visual.svg") ? `${slug}/visual.svg` : null };
+  const read = name => present.has(name) ? fetch(`${slug}/${name}`).then((r) => (r.ok ? r.text() : null)).catch(() => null) : null;
+  const [text, table] = await Promise.all([read("text.md"), read("media.csv")]);
+  return { folder: slug, files: present, text, table, visual: present.has("visual.svg") ? `${slug}/visual.svg` : null,
+           online, problem };
+}
+
+const COMMIT_TIME = new Intl.DateTimeFormat("en-GB", {
+  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Zurich",
+});
+
+/* One quiet line under a group's title: which commit is online, or which
+   commit was not published and why. Course-team pages have neither. */
+function statusLine({ online, problem }) {
+  if (problem) {
+    const reason = problem.message.replace(/[.\s]+$/, "");
+    return `Your commit ${problem.commit} was not published: ${reason}.` + (online ? ` The page shows ${online.commit}.` : "");
+  }
+  if (!online) return null;
+  const time = Object.fromEntries(COMMIT_TIME.formatToParts(new Date(online.committed_at)).map(part => [part.type, part.value]));
+  return `Online: commit ${online.commit}, ${time.day} ${time.month} ${time.hour}:${time.minute}`;
 }
 
 /* ---------- rendering ---------- */
@@ -296,6 +311,13 @@ function renderEntry(entry) {
 
   const template = document.createElement("template");
   template.innerHTML = html;
+  const status = statusLine(entry);
+  if (status) {
+    const line = document.createElement("p");
+    line.className = "entry-authors entry-status";
+    line.textContent = status;
+    template.content.querySelector(".entry-caption > div").append(line);
+  }
 
   /* One resolution pass: every relative path in the rendered text —
      annotation resources and markdown-native ones (e.g. ![…](photo.jpg)) —
@@ -683,7 +705,7 @@ function render(entries) {
   if (!playback) playback = CoursePlayback.setup();
   const position = { x: window.scrollX, y: window.scrollY };
   disposeRender();
-  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null);
+  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null || entry.problem);
   document.getElementById("entries").replaceChildren(...shown.map(renderEntry));
   buildNav(shown);
   buildMarkers(shown);

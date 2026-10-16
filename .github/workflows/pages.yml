@@ -251,6 +251,9 @@ jobs:
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
+      - name: Summarize group results for maintainers
+        if: always()
+        run: python3 scripts/publish.py summary
 
   answer:
     needs: [pin, admit, prepare, accept, publish]

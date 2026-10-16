@@ -182,7 +182,7 @@ body.lightbox-open {
 .entry-caption {
   display: grid;
   grid-template-columns: minmax(0, calc(var(--entry-author-offset, 70%) - var(--space))) minmax(0, 1fr);
-  gap: var(--space);
+  gap: 0.4em var(--space);
   overflow-wrap: anywhere;
   align-items: start;
   margin-block-end: var(--u);
@@ -201,6 +201,11 @@ body.lightbox-open {
 .entry-authors {
   margin: 0;
   color: var(--mid);
+}
+
+/* Which commit is online: the author line's style, on its own row below title and authors. */
+.entry-status {
+  grid-column: 1 / -1;
 }
 
 .entry-text {

@@ -5,6 +5,7 @@ import shutil
 import unittest
 from dataclasses import replace
 from unittest.mock import patch
+from urllib.error import URLError
 
 import archive_transaction
 import build_site
@@ -39,6 +40,57 @@ class TransactionTests(unittest.TestCase):
         self.assertEqual(report['transport']['rest_requests'], 8)
         self.assertTrue(candidate.groups['alpha']['snapshot']['tree'])
         self.assertEqual(candidate.groups['alpha']['snapshot']['contract_version'], 2)
+
+    def test_rejected_commit_is_recorded_as_a_problem_while_the_old_snapshot_stays_online(self):
+        online = self.previous.groups['alpha']['snapshot']
+        rejected = self.fixture.update('alpha', b'new alpha', visual=b'broken SVG')
+        report = self.prepare(unchanged=True)
+        candidate = ArchiveSnapshot(self.candidate)
+        archive_transaction.admit_candidate(candidate, self.registry, self.previous)
+        problem = candidate.groups['alpha']['problem']
+        self.assertEqual(problem['commit'], rejected)
+        self.assertIn('visual.svg', problem['message'])
+        self.assertLessEqual(len(problem['message']), 300)
+        self.assertEqual(candidate.groups['alpha']['snapshot'], online)
+        self.assertEqual(report['groups'][0]['publication_status'], 'retained')
+
+        # The same rejected commit is not downloaded again and does not block an idle run.
+        self.previous = candidate
+        self.fixture.api.calls.clear()
+        report = self.prepare(unchanged=True, idle=True, destination=self.fixture.workspace / 'known-problem')
+        self.assertTrue(report['idle'])
+        self.assertFalse(any('/git/trees/' in call or 'raw' in call for call in self.fixture.api.calls
+                             if '/course/alpha' in call))
+        self.assertEqual(report['groups'][0]['status'], 'rejected')
+        self.assertEqual(report['groups'][0]['error'], problem['message'])
+
+        # A later accepted commit clears the problem.
+        fixed = self.fixture.update('alpha', b'fixed alpha')
+        destination = self.fixture.workspace / 'fixed'
+        self.prepare(unchanged=True, idle=True, destination=destination)
+        accepted = ArchiveSnapshot(destination)
+        self.assertIsNone(accepted.groups['alpha']['problem'])
+        self.assertEqual(accepted.groups['alpha']['snapshot']['commit'], fixed)
+
+    def test_first_commit_rejected_records_only_the_problem(self):
+        self.fixture.api.add('course/gamma', {'text.md': b'text', 'visual.svg': b'not an SVG'})
+        registry = self.registry + [replace(self.registry[0], slug='gamma', repository='course/gamma')]
+        self.prepare(registry)
+        candidate = ArchiveSnapshot(self.candidate)
+        self.assertIsNone(candidate.groups['gamma']['snapshot'])
+        self.assertEqual(candidate.groups['gamma']['problem']['commit'], hashlib.sha1(b'course/gamma').hexdigest())
+
+    def test_transport_failure_is_not_a_problem(self):
+        self.fixture.update('alpha', b'new alpha')
+        self.fixture.api.routes['/repos/course/alpha'] = URLError('temporary outage')
+        with patch('github_content.time.sleep'):
+            report = self.prepare()
+        candidate = ArchiveSnapshot(self.candidate)
+        self.assertEqual(report['groups'][0]['error_code'], 'network_error')
+        self.assertIsNone(candidate.groups['alpha']['problem'])
+
+    def test_snapshot_records_its_commit_date(self):
+        self.assertEqual(self.previous.groups['alpha']['snapshot']['committed_at'], '2026-10-14T10:00:00Z')
 
     def test_frozen_hidden_and_removed_groups_do_not_read_source_and_preserve_bytes(self):
         registry = [replace(self.registry[0], state='frozen'), replace(self.registry[1], state='hidden')]

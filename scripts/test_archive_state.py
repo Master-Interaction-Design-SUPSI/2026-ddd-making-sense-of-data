@@ -84,7 +84,8 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(renamed['alpha']['snapshot'], self.groups['alpha']['snapshot'])
 
     def test_schema_paths_contract_and_exclusion_provenance(self):
-        for mutation in ('schema', 'path', 'blob', 'contract', 'old-contract', 'unknown-tree', 'exclusions'):
+        for mutation in ('schema', 'path', 'blob', 'contract', 'old-contract', 'unknown-tree', 'exclusions',
+                         'committed-at', 'problem-shape', 'problem-commit', 'problem-length'):
             with self.subTest(mutation=mutation):
                 manifest = {'version': 2, 'groups': copy.deepcopy(self.groups)}
                 snapshot = manifest['groups']['alpha']['snapshot']
@@ -94,8 +95,13 @@ class ArchiveTests(unittest.TestCase):
                 if mutation == 'contract': snapshot['contract_version'] = 999
                 if mutation == 'old-contract': snapshot['contract_version'] = 1
                 if mutation == 'unknown-tree': snapshot['tree'] = None
+                if mutation == 'committed-at': snapshot['committed_at'] = 'yesterday'
+                if mutation == 'problem-shape': manifest['groups']['alpha']['problem'] = 'broken'
+                if mutation == 'problem-commit': manifest['groups']['alpha']['problem'] = {'commit': 'x', 'message': 'm'}
+                if mutation == 'problem-length': manifest['groups']['alpha']['problem'] = {'commit': 'c' * 40, 'message': 'm' * 301}
                 if mutation == 'exclusions': snapshot['exclude'] = ['media/original.mov']
                 with self.assertRaises(PublicationError): decode_archive(json.dumps(manifest).encode())
+        self.groups['alpha']['problem'] = {'commit': 'c' * 40, 'message': 'visual.svg: export a valid SVG'}
         snapshot = self.groups['alpha']['snapshot']
         snapshot['exclude'] = ['media/original.mov']
         snapshot['excluded'] = {'media/original.mov': None}

@@ -95,24 +95,7 @@ SVG: static, self-contained. No scripts, links, animation or external files. Onl
 
 ## 6. Check publication
 
-Valid commits publish automatically, without approval. The site collects new commits on a schedule that GitHub runs irregularly, so an update usually appears within a few hours, not minutes.
-
-Open the website and look at your entry.
-
-| You see | Meaning | Next |
-| --- | --- | --- |
-| Your latest version | Published. | Nothing. |
-| Your previous version | Not collected yet, or the update was not accepted. The previous version stays online meanwhile. | Wait a few hours. Still old: check the list below, correct, commit to **main**. |
-| No entry | Nothing published yet. | Check the list below. Still missing: ask the course team. |
-| *missing: …* in your text | That name has no row in `media.csv`, or its file is not uploaded yet. | Upload the file, or correct the name or path. Match case exactly. |
-
-Common reasons an update is not accepted:
-
-| Problem | Fix |
-| --- | --- |
-| Wrong SVG size | Re-export the whole 1920 × 1080 frame. |
-
-The course team can see the exact reason for every group. Ask when the list does not help.
+Open the site and look at your entry: it says which commit is online, or what to fix. Commits publish automatically, usually within a few hours.
 
 ## 7. Syntax
 

@@ -169,7 +169,7 @@ Hand-off, generated per draft, in any order (until every commit is in, the page 
 2. Upload new media; commit. Replace referenced media under a new name.
 3. Paste text into `text.md`; commit.
 4. Delete removed files.
-5. Submit request (if enabled) or read the run summary.
+5. Submit request (if enabled), then look at the entry on the site.
 
 The final file set is checked against the limits. Names and files that do not resolve are notes, not errors.
 
@@ -190,11 +190,11 @@ Bounds: 15 s socket timeout; 3 attempts; 180 s per group; 15 min per run. JSON �
 
 Early exit: all inputs equal the verified release → `unchanged`, without rebuilding the site.
 
-Report: `report.json` in each run's job artifacts (§9.2).
+Report: `report.json` in each run's job artifacts (§9.2). The last step of job `publish` writes it as the run's **Course publication** step summary: per group, status, online commit, attempted commit and the error or warnings. The summary is for maintainers; students read their entry's status line (§9.4).
 
 | Field | Values |
 | --- | --- |
-| `status` | `imported`, `unchanged`, `failed`, `disabled` (not `live`) |
+| `status` | `imported`, `unchanged`, `rejected` (newest commit already rejected; not downloaded again), `failed`, `disabled` (not `live`) |
 | `publication_status` | `updated`, `unchanged`, `retained`, `skipped`, `hidden`, `frozen` |
 | `selected_source` | Repository, branch, commit actually published; may differ from attempt. |
 | `warnings` | References that do not resolve; the page shows each as missing. |
@@ -260,7 +260,9 @@ Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-
 ### 9.4 Archive
 
 - Orphan branch `student-work`. Layout `<slug>/…` plus manifest v2 `publication.json` (≤ 8 MiB).
-- Manifest records per group: state, repository, branch, source commit and tree, contract version, registry settings, files (size, SHA-256, Git blob SHA), excluded paths and blob IDs when observed. Unknown IDs stay explicit unknowns.
+- Manifest records per group: state, repository, branch, registry settings, and `problem`; per accepted snapshot: source commit, tree and commit date (`committed_at`), contract version, files (size, SHA-256, Git blob SHA), excluded paths and blob IDs when observed. Unknown IDs stay explicit unknowns.
+- `problem` is `null` or `{commit, message}`: the group's newest commit was rejected for its content (a validation error, never a transport failure). The message is at most 300 characters; the writer checks only its shape. A later accepted commit clears it. With unchanged `main`, the same rejected commit is not downloaded again, so it does not block an idle run.
+- `entries.json` gives each visible group `online` (short commit, commit date) and, for a `live` group with a problem, `problem` (short commit, message). The page shows one line under the title: *Online: commit d5b5fd7, 16 Oct 14:20*, or *Your commit e1f2a3b was not published: reason. The page shows d5b5fd7.* A group whose first commit was rejected gets an entry with only that line. Both come from the archive, so `retry` rebuilds them exactly.
 - Commit only on content, provenance or state change. Expected parent; no force; sole writable ref `student-work`. Push credentials ephemeral, GitHub-only.
 - First run: no `student-work` branch and no deployment record. The archive starts empty and the first accept writes a root commit, even for an empty registry, so every release names an archive commit. The writer requires the branch to be absent, so a concurrent first run cannot replace it. A deployment record without the branch stops the run. A branch without a record (a first run that failed after accepting) is published by the next ordinary refresh.
 - Commit trailer `Main-Commit:` records the accepting code. Protection against branch deletion/non-fast-forward remains a required live invariant.
@@ -321,7 +323,7 @@ Keep outside this repository, maintainer-controlled. Per group: name, slug, repo
 4. Audit effective permissions: organization base permission, team grants including parent teams, direct grants, custom roles. Organization-wide Write, Maintain or Admin breaks isolation. A lower direct grant does not cancel a higher inherited one. Changing organization defaults affects other projects; assess first. Record results.
 5. Check rulesets on the group's `main`: direct commits, no mandatory PR or approval.
 6. Register as `hidden` through a reviewed PR; `python3 scripts/build_site.py` must pass. Switch to `live` by reviewed PR when ready.
-7. Hand over: repository link, slug, site link, editor link, [publication results](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml). Confirm an ordinary account can read a run's **Course publication** summary.
+7. Hand over: repository link, slug, site link, editor link. The group's entry on the site says which commit is online, or what to fix.
 
 **WARNING**: A `live` group still holding template content publishes it.
 
@@ -343,7 +345,7 @@ Complete the [ordinary student-account acceptance checks](docs/2026-10-15_ddd_ac
 - Rename, transfer or branch change: update the row by reviewed PR and keep the slug. The snapshot starts over: the group is skipped until the first good import from the new source.
 - Membership: verify username; invite to the correct repository only. Review direct and inherited grants of departing members. Removing access does not unpublish.
 - Unpublish: set `hidden` by reviewed PR; confirm the next verified release omits the entry. Never delete `text.md` or `visual.svg` to unpublish: an incomplete update retains the previous snapshot.
-- Failed import: students correct content from the run summary; maintainers correct address, branch, quota and publication faults.
+- Failed import: students correct content from their entry's status line; maintainers correct address, branch, quota and publication faults from the run's **Course publication** summary.
 
 ### 10.4 Course repository
 
