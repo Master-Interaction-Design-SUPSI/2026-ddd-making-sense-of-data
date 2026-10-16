@@ -165,7 +165,7 @@ class GroupContractTests(unittest.TestCase):
         self.assertIn("invented", text)
         self.assertIn("[[wide detail]]", text)
         # The template passes the same admission check as a student repository.
-        validate_content(template, select_content_files(files), require_table=True)
+        self.assertEqual(validate_content(template, select_content_files(files)), [])
         self.assertNotIn("templates", build_site.find_entries())
         load_registry(ROOT / "groups.json")
 

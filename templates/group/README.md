@@ -17,7 +17,7 @@ Your group's public repository. You write your text and add your media here. The
 | Path | Role | Rule |
 | --- | --- | --- |
 | `text.md` | Text | Required. Front matter: title, authors. |
-| `media.csv` | Media table | Required. First line `name,source,file`; one row per media file used in `text.md`. |
+| `media.csv` | Media table | When you use media. First line `name,source,file`; one row per media file used in `text.md`. |
 | `visual.svg` | Main visual | Required. 1920 × 1080 SVG. |
 | `media/…` | Extra images, audio, video | Optional. Listed in `media.csv`, named in `text.md`. |
 
@@ -69,7 +69,7 @@ If GitHub offers only a fork or a proposed change, you are in the wrong reposito
 
 Commit in any order. Until a file is there, your page shows *missing: its name* in its place.
 
-`media.csv` is required, even without media: then it holds only its first line. Names: unique, ignoring case; no `[`, `]` or `|`. Source: a full `https://` link, or empty for your own material. A spreadsheet can save it as **CSV UTF-8**; commas or semicolons both work. Typing in GitHub: put a value containing a comma in double quotes.
+List your media in `media.csv` when you use media. Names: unique, ignoring case; no `[`, `]` or `|`. Source: a full `https://` link, or empty for your own material. A spreadsheet can save it as **CSV UTF-8**; commas or semicolons both work. Typing in GitHub: put a value containing a comma in double quotes.
 
 Filenames: lowercase letters, digits, `.`, `_`, `-`. First character a letter or digit. No spaces. Example: `survey-photo.jpg`. References must match exactly, including case.
 
@@ -102,7 +102,6 @@ Common reasons an update is not accepted:
 | Problem | Fix |
 | --- | --- |
 | Wrong SVG size | Re-export the whole 1920 × 1080 frame. |
-| No `media.csv` | Create `media.csv` at the root; first line `name,source,file`. |
 
 The course team can see the exact reason for every group. Ask when the list does not help.
 

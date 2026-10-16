@@ -296,7 +296,10 @@
     });
   }
 
+  const noTable = 'No media yet. media.csv is created with the first attached file.';
+
   function tableStatus() {
+    if (draft.table === null) { $('table-status').textContent = noTable; return; }
     try {
       const table = CourseMediaTable.read(draft.table);
       const notes = CourseMediaTable.warnings(table, draft.files().keys());
@@ -305,6 +308,7 @@
   }
 
   function loadRows(started) {
+    if (draft.table === null) { tableRows = []; renderRows(); $('table-status').textContent = noTable; return; }
     try { tableRows = CourseMediaTable.read(draft.table).rows.map(({ name, source, file }) => ({ name, source, file })); }
     catch (error) {
       tableRows = [];
@@ -314,7 +318,8 @@
     if (started) $('table-status').textContent = 'No media.csv yet: one row per media file was added. Add the source links, then commit media.csv.';
   }
 
-  function storeRows() { draft.table = CourseMediaTable.serialize(tableRows); }
+  // A group needs media.csv only once it has a row, or when its repository already has one.
+  function storeRows() { draft.table = tableRows.length || draft.base.has(tableName) ? CourseMediaTable.serialize(tableRows) : null; }
 
   function renderRows() {
     $('media-rows').replaceChildren(...tableRows.map((entry, index) => {
@@ -424,8 +429,8 @@
     tableRows.push({ name: '', source: '', file: 'media/' }); storeRows(); renderRows();
     $('media-rows').lastElementChild.querySelector('input').focus();
   });
-  $('download-table').addEventListener('click', () => download(new Blob([draft.table], { type: 'text/csv' }), tableName));
-  $('copy-table').addEventListener('click', () => run(async () => { await navigator.clipboard.writeText(draft.table); $('table-status').textContent = 'media.csv copied. Paste it into media.csv on GitHub.'; }));
+  $('download-table').addEventListener('click', () => download(new Blob([draft.table ?? CourseMediaTable.serialize([])], { type: 'text/csv' }), tableName));
+  $('copy-table').addEventListener('click', () => run(async () => { await navigator.clipboard.writeText(draft.table ?? CourseMediaTable.serialize([])); $('table-status').textContent = 'media.csv copied. Paste it into media.csv on GitHub.'; }));
   $('attach').addEventListener('click', () => run(attach));
   $('check').addEventListener('click', () => run(check));
   function download(blob, name) {

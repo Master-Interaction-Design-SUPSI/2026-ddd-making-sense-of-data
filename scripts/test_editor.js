@@ -176,13 +176,25 @@ test('with media.csv, names resolve; unknown names, absent files and missing row
   assert.deepEqual(media.warnings(table, files), ['Rows without a source link: planned', 'Rows whose file is not in this group yet: media/later.mp4']);
 });
 
+test('a draft without media needs no media.csv', async () => {
+  const { startingTable } = require('../editor/model.js');
+  const base = new Map([['text.md', { size: 1, sha256: 'a'.repeat(64) }], ['visual.svg', { size: 1, sha256: 'b'.repeat(64) }]]);
+  assert.equal(startingTable(base, contract), null);
+  const draft = new Draft(base, config, contract);
+  draft.text = 'Only text.';
+  const result = draft.validate();
+  assert.deepEqual([...result.files.keys()].sort(), ['text.md', 'visual.svg']);
+  assert.deepEqual(result.notes, []);
+  assert.deepEqual((await draft.changes()).map(change => change.path), ['text.md']);
+});
+
 test('drafts carry media.csv, start one from existing media and note what does not resolve yet', async () => {
   const { startingTable } = require('../editor/model.js');
   const base = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/field-photo.jpg', { size: 3 }], ['media/field_photo.png', { size: 3 }]]);
   assert.equal(startingTable(base, contract), 'name,source,file\nfield photo,,media/field-photo.jpg\nfield_photo.png,,media/field_photo.png\n');
   const draft = new Draft(base, config, contract);
   draft.text = 'A [[field photo]]';
-  assert.throws(() => draft.validate(), /media.csv: add the media table/);
+  assert.deepEqual(draft.validate().notes, ['text.md: [[field photo]] is not a name in media.csv']);
   draft.table = startingTable(base, contract);
   const result = draft.validate();
   assert.deepEqual(result.orphans, ['media/field_photo.png']);

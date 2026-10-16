@@ -89,15 +89,15 @@
       return files;
     }
     validate() {
-      if (this.table === null) throw new Error('media.csv: add the media table');
-      const table = media.read(this.table);
+      // media.csv is optional: a draft without media has none.
+      const table = this.table === null ? null : media.read(this.table);
       const result = select(this.files(), this.contract);
       // Names and files that do not resolve yet are notes: the page shows them as missing.
       const checked = references.validate(this.text, result.files.keys(), this.contract.reference_schemes, table);
       const used = new Set(checked.used);
       const fixed = ['text.md', 'visual.svg', this.contract.media_table];
       return { ...result, orphans: [...result.files.keys()].filter(name => !fixed.includes(name) && !used.has(name)),
-               notes: [...checked.warnings, ...media.warnings(table, result.files.keys())] };
+               notes: [...checked.warnings, ...(table ? media.warnings(table, result.files.keys()) : [])] };
     }
     async changes() {
       const changes = [];
@@ -112,10 +112,13 @@
     }
   }
   /* A group without media.csv starts from one row per existing media file,
-     named after the file, so only the source links remain to be filled in. */
+     named after the file, so only the source links remain to be filled in.
+     Without media it needs no table: null. */
   function startingTable(files, contract) {
     const taken = new Set();
-    const rows = [...files.keys()].filter(file => !['text.md', 'visual.svg', contract.media_table].includes(file)).sort().map(file => {
+    const mediaFiles = [...files.keys()].filter(file => !['text.md', 'visual.svg', contract.media_table].includes(file));
+    if (!mediaFiles.length) return null;
+    const rows = mediaFiles.sort().map(file => {
       const base = file.split('/').pop();
       let name = base.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || base;
       if (taken.has(name.toLowerCase())) name = base;

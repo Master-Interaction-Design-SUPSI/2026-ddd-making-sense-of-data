@@ -105,9 +105,8 @@ def validate_references(text, files, table=None):
     return json.loads(checked.stdout)["warnings"]
 
 
-def validate_content(folder, files, *, require_table=False):
+def validate_content(folder, files):
     """Reject unsafe or malformed content; return warnings about references that do not resolve."""
-    # Only import admission requires media.csv; archive checks validate it when present.
     for name in files:
         if name.endswith(".svg"):
             validate_svg_content(folder / name)
@@ -120,9 +119,6 @@ def validate_content(folder, files, *, require_table=False):
             table = (folder / MEDIA_TABLE).read_bytes().decode("utf-8")
         except UnicodeDecodeError as error:
             raise ValueError(f"{MEDIA_TABLE}: save the table as a UTF-8 CSV file") from error
-    elif require_table:
-        raise ValueError(f"{MEDIA_TABLE}: required; list each media file as name,source,file "
-                         "(keep only that first line if the text uses no media)")
     return validate_references(text, files, table)
 
 
@@ -174,7 +170,7 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
             path = candidate / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        result["warnings"] = validate_content(candidate, files, require_table=True)
+        result["warnings"] = validate_content(candidate, files)
         client.remaining()
         candidate.rename(destination / group.slug)
     result.update(status="imported", files=list(files))

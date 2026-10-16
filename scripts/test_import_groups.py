@@ -133,10 +133,14 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(results[1]["status"], "imported")
         self.assertEqual([p.name for p in (self.root / "imports").iterdir()], ["beta"])
 
-    def test_media_table_is_required_on_import_and_resolves_names_with_warnings(self):
+    def test_media_table_is_optional_and_resolves_names_with_warnings(self):
         table = b'name,source,file\nthe detail,https://example.org/detail,media/detail.svg\n'
+        self.api.add("course/alpha", {"text.md": b"Only text and a visual.", "visual.svg": SVG}, table=False)
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported", result.get("error"))
+        self.assertEqual(sorted(result["files"]), ["text.md", "visual.svg"])
+        self.assertEqual(result["warnings"], [])
         cases = {
-            "missing": ({"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}, "media.csv: required"),
             "header": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"file,name\n"}, "media.csv: the first line"),
             "encoding": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n\xe9t\xe9,,media/x.svg\n"},
                          "media.csv: save the table as a UTF-8"),
@@ -145,12 +149,15 @@ class ImportTests(unittest.TestCase):
             with self.subTest(case=case):
                 self.api = FixtureAPI()
                 self.api.add("course/alpha", files, table=False)
+                shutil.rmtree(self.root / "imports", ignore_errors=True)
                 result = self.run_import()[0]
                 self.assertEqual(result["error_code"], "invalid_content")
                 self.assertTrue(result["error"].startswith(message), result["error"])
         warnings = {
             "unknown name": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG, "media.csv": table, "media/detail.svg": SVG},
                              "text.md: [[elsewhere]] is not a name in media.csv"),
+            "name without a table": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG},
+                                     "text.md: [[elsewhere]] is not a name in media.csv"),
             "unlisted media": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n", "media/detail.svg": SVG},
                                "text.md: media/detail.svg is used in the text but has no row in media.csv"),
         }
@@ -171,17 +178,6 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(result["warnings"], [])
         self.assertEqual((self.root / "imports/alpha/media.csv").read_bytes(), table)
 
-    def test_archive_checks_accept_snapshots_without_a_media_table(self):
-        from import_groups import validate_content
-        folder = self.root / "snapshot"
-        (folder / "media").mkdir(parents=True)
-        (folder / "text.md").write_bytes(TEXT)
-        (folder / "visual.svg").write_bytes(SVG)
-        (folder / "media/detail.svg").write_bytes(SVG)
-        files = ["text.md", "visual.svg", "media/detail.svg"]
-        validate_content(folder, files)
-        with self.assertRaisesRegex(ValueError, "media.csv: required"):
-            validate_content(folder, files, require_table=True)
 
     def test_rejects_private_and_missing_repositories_and_missing_branch(self):
         self.api.add("course/private")

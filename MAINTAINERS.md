@@ -92,7 +92,7 @@ Source: `static/contract.json` (v2). Python constants are adapters.
 | Class | Paths | Limit |
 | --- | --- | --- |
 | Text | Root `text.md`, UTF-8, title/authors front matter. Required. | 256 KiB |
-| Media table | Root `media.csv`, UTF-8 CSV, first line `name,source,file`; comma or semicolon. Required at import admission. | 64 KiB |
+| Media table | Root `media.csv`, UTF-8 CSV, first line `name,source,file`; comma or semicolon. Optional: needed when the text uses media by name. | 64 KiB |
 | Main visual | Root `visual.svg`. Required for every group; a course-team folder may omit it. `viewBox="0 0 1920 1080"`; optional width/height = 1920/1080 px. Other root `visual.*` rejects the entry. | 5 MiB |
 | Image | `.svg .png .jpg .jpeg .webp .gif .avif` | SVG 5 MiB; others 20 MiB |
 | Audio | `.mp3 .m4a .wav .ogg .aac .flac` | 20 MiB |
@@ -115,7 +115,7 @@ References: Markdown links and images, including reference syntax, and annotatio
 
 Media table (`static/media-table.js`, shared by renderer, editor and importer): `[[name]]` expands to `[[name|file|source=url]]` before any other parsing. Names are unique case-insensitively. Every media file `text.md` uses, by name or path, should have a row; a missing row is a warning. Rows for files not yet uploaded pass. Empty source passes; the editor warns. A row's source also links path references and Markdown images.
 
-`media.csv` is required only by `import_group` (`validate_content(require_table=True)`); archive verification and course-team folders check it when present.
+`media.csv` is optional. A missing table is no table: `[[name]]` is then an unknown name (a warning, shown as missing), and path references render without a source link. When present, every check reads it.
 
 Rejected update: previous snapshot retained. No previous snapshot: group skipped. Audio/video codecs are not validated; browser check required.
 
