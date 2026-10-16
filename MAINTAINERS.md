@@ -56,8 +56,8 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | `scripts/build_site.py` | Build `_site`. Offline by default. |
 | `scripts/import_groups.py`, `github_content.py` | Import; GitHub transport. |
 | `scripts/content_contract.py`, `check_content_links.js` | File selection; reference check. |
-| `scripts/publish_site.py`, `publication_state.py`, `deployment_records.py` | Release identity and served verification; served manifest and site reads; deployment records. |
-| `scripts/publish_archive.py` | Controller: `admit prepare accept build record authorize verify finalize answer`. |
+| `scripts/release.py`, `deployment_records.py` | Release identity, served manifest and served verification; deployment records. |
+| `scripts/publish.py` | Controller: `admit prepare accept build record authorize verify finalize answer`. |
 | `scripts/archive_state.py`, `archive_transaction.py`, `archive_git.py`, `archive_release.py` | Archive manifest; candidate transaction; Git transport and writer; release identity. |
 | `scripts/publication_requests.py` | Request capture and answers. |
 | `.github/workflows/pages.yml` | Publication jobs. |
@@ -233,15 +233,15 @@ An unverified release is retried from the recorded code/archive pair before any 
 | Job | Permissions | Function |
 | --- | --- | --- |
 | `pin` | contents read, pages read | Pin latest `main` at execution. |
-| `admission` | contents read, issues read, deployments write | Choose mode; capture request batch at cutoff; reserve cooldown. |
-| `prepare_archive` | contents read, deployments read | Run tests; read archive; import; emit candidate or retry pair. |
-| `archive` | contents write, deployments read | Revalidate registry, parent and verified release; expected-parent fast-forward of `student-work`. |
-| `publish_archive` | contents read, deployments write, pages write, id-token write | Build, record, authorize, deploy, verify, finalize. |
+| `admit` | contents read, issues read, deployments write | Choose mode; capture request batch at cutoff; reserve cooldown. |
+| `prepare` | contents read, deployments read | Run tests; read archive; import; emit candidate or retry pair. |
+| `accept` | contents write, deployments read | Revalidate registry, parent and verified release; expected-parent fast-forward of `student-work`. |
+| `publish` | contents read, deployments write, pages write, id-token write | Build, record, authorize, deploy, verify, finalize. |
 | `answer` | contents read, issues write | One bot comment per request; close where final. |
 
 All checkouts at the pinned commit, `persist-credentials: false`. Imported content never runs.
 
-Artifacts: `v2-{admission,prepared,accepted,result}-<run>-<attempt>`, `v2-pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `batch.json`, `report.json`, optional `candidate.tar`. Extra members and links rejected. Reports ≤ 8 MiB; metadata ≤ 2 MiB. `EXPECTED_PRODUCER_ATTEMPT` admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
+Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `batch.json`, `report.json`, optional `candidate.tar`. Extra members and links rejected. Reports ≤ 8 MiB; metadata ≤ 2 MiB. `EXPECTED_PRODUCER_ATTEMPT` admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
 
 ### 9.3 Modes
 

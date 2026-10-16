@@ -9,7 +9,7 @@ from pathlib import Path
 
 from archive_state import ArchiveSnapshot, SHA, MAX_MANIFEST_BYTES, MAX_TRANSFER_BYTES, decode_archive, empty_archive, unpack_snapshot
 from group_registry import REPOSITORY
-from publication_state import RecoveryError
+from release import PublicationError
 
 ARCHIVE_REF = 'refs/heads/student-work'
 MAIN_REF = 'refs/heads/main'
@@ -26,7 +26,7 @@ def environment(authenticated=False):
     if authenticated:
         token = os.environ.get('GITHUB_TOKEN')
         if not token:
-            raise RecoveryError('archive authentication token is unavailable')
+            raise PublicationError('archive authentication token is unavailable')
         credential = base64.b64encode(('x-access-token:' + token).encode()).decode()
         environment.update(GIT_CONFIG_COUNT='1', GIT_CONFIG_KEY_0='http.https://github.com/.extraheader',
                            GIT_CONFIG_VALUE_0='AUTHORIZATION: basic ' + credential)
@@ -41,7 +41,7 @@ def git(repository, *arguments, input=None, authenticated=False):
                             env=environment(authenticated), timeout=120, check=False)
     if result.returncode:
         # Avoid exposing remote URL credentials in error text.
-        raise RecoveryError('Archive Git operation failed: ' + arguments[0])
+        raise PublicationError('Archive Git operation failed: ' + arguments[0])
     return result.stdout
 
 
@@ -51,30 +51,30 @@ def remote_heads(repository):
     for line in output.decode('ascii').splitlines():
         parts = line.split('\t')
         if len(parts) != 2 or not SHA.fullmatch(parts[0]) or parts[1] not in {MAIN_REF, ARCHIVE_REF}:
-            raise RecoveryError('unexpected remote ref response')
+            raise PublicationError('unexpected remote ref response')
         if parts[1] in refs:
-            raise RecoveryError('ambiguous remote ref response')
+            raise PublicationError('ambiguous remote ref response')
         refs[parts[1]] = parts[0]
     return refs
 
 
 def require_heads(repository, expected_main, expected_parent):
     if not isinstance(expected_main, str) or not SHA.fullmatch(expected_main):
-        raise RecoveryError('main code must be pinned to a full commit')
+        raise PublicationError('main code must be pinned to a full commit')
     if expected_parent is not None and (not isinstance(expected_parent, str) or not SHA.fullmatch(expected_parent)):
-        raise RecoveryError('archive parent must be a full commit, or None on a first run')
+        raise PublicationError('archive parent must be a full commit, or None on a first run')
     refs = remote_heads(repository)
     if refs.get(MAIN_REF) != expected_main:
-        raise RecoveryError('main changed; archive candidate is superseded')
+        raise PublicationError('main changed; archive candidate is superseded')
     if refs.get(ARCHIVE_REF) != expected_parent:
-        raise RecoveryError('archive head changed; re-read and rebuild candidate')
+        raise PublicationError('archive head changed; re-read and rebuild candidate')
 
 
 def create_commit(repository, snapshot, expected_parent, *, main_commit):
     """Construct only manifest-listed regular blobs and a commit with one parent, or a root on a first run."""
     archive = ArchiveSnapshot(snapshot)
     if not isinstance(main_commit, str) or not SHA.fullmatch(main_commit):
-        raise RecoveryError('accepted snapshot needs an exact main code identity')
+        raise PublicationError('accepted snapshot needs an exact main code identity')
     with tempfile.TemporaryDirectory(prefix='archive-index-') as temporary:
         index = Path(temporary) / 'index'
         # A private index prevents inherited checkout files entering the archive tree.
@@ -99,7 +99,7 @@ def create_commit(repository, snapshot, expected_parent, *, main_commit):
                                         {'GIT_INDEX_FILE': str(index), 'GIT_CONFIG_GLOBAL': os.devnull,
                                          'GIT_CONFIG_NOSYSTEM': '1'}, timeout=120, check=False)
             if result.returncode:
-                raise RecoveryError('cannot construct archive tree')
+                raise PublicationError('cannot construct archive tree')
             return result.stdout
         indexed('read-tree', '--empty')
         indexed('update-index', '-z', '--index-info', input=b''.join(entries))
@@ -116,24 +116,24 @@ def create_commit(repository, snapshot, expected_parent, *, main_commit):
 def publish_commit(repository, commit, expected_main, expected_parent, *, authenticated=False):
     """Recheck identity and push normally: competing siblings cannot overwrite."""
     if not isinstance(commit, str) or not SHA.fullmatch(commit):
-        raise RecoveryError('invalid archive candidate commit')
+        raise PublicationError('invalid archive candidate commit')
     if commit != expected_parent:
         parents = git(repository, 'rev-list', '--parents', '-n', '1', commit).decode().strip().split()
         if parents != [commit] + ([expected_parent] if expected_parent else []):
-            raise RecoveryError('candidate does not have the expected archive parent')
+            raise PublicationError('candidate does not have the expected archive parent')
     require_heads(repository, expected_main, expected_parent)
     if commit != expected_parent:
         # No force and no broad refs: the only writable destination is student-work.
         git(repository, 'push', 'origin', commit + ':' + ARCHIVE_REF, authenticated=authenticated)
     refs = remote_heads(repository)
     if refs.get(ARCHIVE_REF) != commit:
-        raise RecoveryError('archive push could not be confirmed')
+        raise PublicationError('archive push could not be confirmed')
     return commit
 
 
 def init_remote(folder, repository):
     if not isinstance(repository, str) or not REPOSITORY.fullmatch(repository) or repository.endswith('.git'):
-        raise RecoveryError('archive remote must be the trusted course repository')
+        raise PublicationError('archive remote must be the trusted course repository')
     folder = Path(folder)
     folder.mkdir()
     git(folder, 'init', '--bare', '--quiet')
@@ -155,14 +155,14 @@ def bounded_process(repository, arguments, measured, *, stdout=None, limit=MAX_T
         try:
             while True:
                 if size() > limit or time.monotonic() - started > seconds:
-                    raise RecoveryError('archive transfer exceeded byte/time bounds')
+                    raise PublicationError('archive transfer exceeded byte/time bounds')
                 try:
                     status = process.wait(timeout=.1)
                     break
                 except subprocess.TimeoutExpired:
                     pass
             if status or size() > limit:
-                raise RecoveryError('archive transfer failed or exceeded byte bounds')
+                raise PublicationError('archive transfer failed or exceeded byte bounds')
         except BaseException:
             process.kill()
             process.wait()
@@ -172,17 +172,17 @@ def bounded_process(repository, arguments, measured, *, stdout=None, limit=MAX_T
 
 def fetch_commit(repository, commit):
     if not isinstance(commit, str) or not SHA.fullmatch(commit):
-        raise RecoveryError('archive transfer must use a full commit')
+        raise PublicationError('archive transfer must use a full commit')
     transferred = bounded_process(repository, ['fetch', '--depth=1', '--no-tags', 'origin', commit],
                                   Path(repository) / 'objects')
     if git(repository, 'rev-parse', 'FETCH_HEAD').decode().strip() != commit:
-        raise RecoveryError('fetched archive commit differs from pin')
+        raise PublicationError('fetched archive commit differs from pin')
     return transferred
 
 
 def snapshot_from_git(repository, commit, destination):
     if not isinstance(commit, str) or not SHA.fullmatch(commit):
-        raise RecoveryError('snapshot requires an exact archive commit')
+        raise PublicationError('snapshot requires an exact archive commit')
     destination = Path(destination)
     with tempfile.TemporaryDirectory(prefix='.archive-transfer-', dir=destination.parent) as temporary:
         listing = Path(temporary) / 'inventory'
@@ -201,10 +201,10 @@ def snapshot_from_git(repository, commit, destination):
                     raise ValueError('unexpected Git object')
                 records[name] = {'size': int(size), 'blob_sha': blob}
             except (ValueError, UnicodeError) as error:
-                raise RecoveryError('invalid archive Git inventory') from error
+                raise PublicationError('invalid archive Git inventory') from error
         manifest = records.get('publication.json')
         if not manifest or manifest['size'] > MAX_MANIFEST_BYTES:
-            raise RecoveryError('missing/oversized archive Git manifest')
+            raise PublicationError('missing/oversized archive Git manifest')
         payload = git(repository, 'cat-file', 'blob', commit + ':publication.json')
         groups = decode_archive(payload)
         expected = {'publication.json': manifest}
@@ -212,7 +212,7 @@ def snapshot_from_git(repository, commit, destination):
                          for slug, entry in groups.items() if entry['snapshot']
                          for name, record in entry['snapshot']['files'].items()})
         if records != expected:
-            raise RecoveryError('archive Git inventory differs before expansion')
+            raise PublicationError('archive Git inventory differs before expansion')
         tar = Path(temporary) / 'snapshot.tar'
         with tar.open('xb') as output:
             bounded_process(repository, ['archive', '--format=tar', commit], tar, stdout=output)

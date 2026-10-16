@@ -9,7 +9,7 @@ from unittest.mock import patch
 import archive_transaction
 import build_site
 from archive_state import ArchiveSnapshot, empty_archive, encode_archive, file_record, unpack_snapshot
-from publication_state import RecoveryError
+from release import PublicationError
 from test_fixtures import Course
 
 
@@ -29,7 +29,7 @@ class TransactionTests(unittest.TestCase):
     def test_valid_update_and_failed_source_retain_accepted_bytes_without_pages(self):
         self.fixture.update('alpha', b'new alpha')
         self.fixture.update('beta', visual=b'broken SVG')
-        with patch('publication_state.build_opener', side_effect=AssertionError('no Pages reads')):
+        with patch('release.build_opener', side_effect=AssertionError('no Pages reads')):
             report = self.prepare()
             candidate = ArchiveSnapshot(self.candidate, self.previous.commit)
             archive_transaction.admit_candidate(candidate, self.registry, self.previous)
@@ -194,27 +194,27 @@ class TransactionTests(unittest.TestCase):
         groups['alpha']['snapshot']['commit'] = 'd' * 40
         (self.candidate / 'publication.json').write_bytes(encode_archive(groups))
         candidate = ArchiveSnapshot(self.candidate, 'b' * 40)
-        with self.assertRaisesRegex(RecoveryError, 'hidden'):
+        with self.assertRaisesRegex(PublicationError, 'hidden'):
             archive_transaction.admit_candidate(candidate, registry, self.previous)
         groups['alpha']['snapshot'] = copy.deepcopy(self.previous.groups['alpha']['snapshot'])
         groups['beta']['repository'] = 'attacker/project'
         (self.candidate / 'publication.json').write_bytes(encode_archive(groups))
         candidate = ArchiveSnapshot(self.candidate, 'b' * 40)
-        with self.assertRaisesRegex(RecoveryError, 'identity'):
+        with self.assertRaisesRegex(PublicationError, 'identity'):
             archive_transaction.admit_candidate(candidate, registry, self.previous)
 
     def test_writer_admits_a_first_archive_only_against_the_registry(self):
         empty = empty_archive(self.fixture.workspace / 'empty-parent')
         archive_transaction.admit_candidate(self.previous, self.registry, empty)
-        with self.assertRaisesRegex(RecoveryError, 'unapproved archive row'):
+        with self.assertRaisesRegex(PublicationError, 'unapproved archive row'):
             archive_transaction.admit_candidate(self.previous, self.registry[:1], empty)
         hidden = [replace(self.registry[0], state='hidden'), self.registry[1]]
-        with self.assertRaisesRegex(RecoveryError, 'identity/state'):
+        with self.assertRaisesRegex(PublicationError, 'identity/state'):
             archive_transaction.admit_candidate(self.previous, hidden, empty)
         groups = copy.deepcopy(self.previous.groups)
         groups['alpha']['state'] = 'hidden'
         (self.snapshot / 'publication.json').write_bytes(encode_archive(groups))
-        with self.assertRaisesRegex(RecoveryError, 'hidden bytes'):
+        with self.assertRaisesRegex(PublicationError, 'hidden bytes'):
             archive_transaction.admit_candidate(ArchiveSnapshot(self.snapshot, None), hidden, empty)
 
     def test_projected_whole_site_failure_never_installs_candidate(self):

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files, validate_visual
 from group_registry import REPOSITORY, SITE_DIRECTORIES, load_registry
-from publication_state import MANIFEST, encode_manifest
+from release import MANIFEST, encode_manifest
 from archive_state import ArchiveSnapshot
 import multimodal_source
 

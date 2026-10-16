@@ -12,7 +12,7 @@ from unittest.mock import patch
 import build_site
 from archive_state import ArchiveSnapshot, blob_sha, decode_archive, encode_archive, reconcile, unpack_snapshot
 from group_registry import Group
-from publication_state import RecoveryError
+from release import PublicationError
 from test_fixtures import SVG, archived_group
 
 
@@ -69,11 +69,11 @@ class ArchiveTests(unittest.TestCase):
         groups = reconcile(self.groups, [self.group, pilot])
         self.assertIsNone(groups['pilot']['snapshot'])
         self.assertEqual(groups['alpha']['snapshot'], self.groups['alpha']['snapshot'])
-        with self.assertRaisesRegex(RecoveryError, 'frozen'):
+        with self.assertRaisesRegex(PublicationError, 'frozen'):
             reconcile(groups, [self.group, Group('pilot', 'course/pilot', 'main', 'frozen')])
         frozen = reconcile(groups, [Group('alpha', 'course/alpha', 'main', 'frozen'), pilot])
         self.assertEqual(frozen['alpha']['state'], 'frozen')
-        with self.assertRaisesRegex(RecoveryError, 'keeps its accepted snapshot'):
+        with self.assertRaisesRegex(PublicationError, 'keeps its accepted snapshot'):
             reconcile(frozen, [Group('alpha', 'new/alpha', 'main', 'frozen'), pilot])
         self.assertEqual(reconcile(frozen, [pilot]), {'pilot': groups['pilot']})
         self.assertEqual(encode_archive(groups), encode_archive(reconcile(groups, [self.group, pilot])))
@@ -84,7 +84,7 @@ class ArchiveTests(unittest.TestCase):
         self.assertEqual(renamed['alpha']['snapshot'], self.groups['alpha']['snapshot'])
 
     def test_schema_paths_contract_and_exclusion_provenance(self):
-        for mutation in ('schema', 'path', 'blob', 'contract', 'legacy-contract', 'unknown-tree', 'exclusions'):
+        for mutation in ('schema', 'path', 'blob', 'contract', 'old-contract', 'unknown-tree', 'exclusions'):
             with self.subTest(mutation=mutation):
                 manifest = {'version': 2, 'groups': copy.deepcopy(self.groups)}
                 snapshot = manifest['groups']['alpha']['snapshot']
@@ -92,10 +92,10 @@ class ArchiveTests(unittest.TestCase):
                 if mutation == 'path': snapshot['files']['../text.md'] = snapshot['files'].pop('text.md')
                 if mutation == 'blob': snapshot['files']['text.md']['blob_sha'] = 'wrong'
                 if mutation == 'contract': snapshot['contract_version'] = 999
-                if mutation == 'legacy-contract': snapshot['contract_version'] = 1
+                if mutation == 'old-contract': snapshot['contract_version'] = 1
                 if mutation == 'unknown-tree': snapshot['tree'] = None
                 if mutation == 'exclusions': snapshot['exclude'] = ['media/original.mov']
-                with self.assertRaises(RecoveryError): decode_archive(json.dumps(manifest).encode())
+                with self.assertRaises(PublicationError): decode_archive(json.dumps(manifest).encode())
         snapshot = self.groups['alpha']['snapshot']
         snapshot['exclude'] = ['media/original.mov']
         snapshot['excluded'] = {'media/original.mov': None}
@@ -122,10 +122,10 @@ class ArchiveTests(unittest.TestCase):
     def test_manifest_and_hashes_cannot_hide_extra_files_or_corruption(self):
         folder = self.snapshot()
         (folder / 'alpha/text.md').write_bytes(b'Wrong content')
-        with self.assertRaises(RecoveryError): ArchiveSnapshot(folder, 'b' * 40)
+        with self.assertRaises(PublicationError): ArchiveSnapshot(folder, 'b' * 40)
         (folder / 'alpha/text.md').write_bytes(b'Accepted text')
         (folder / 'script.py').write_text('untrusted')
-        with self.assertRaises(RecoveryError): ArchiveSnapshot(folder, 'b' * 40)
+        with self.assertRaises(PublicationError): ArchiveSnapshot(folder, 'b' * 40)
 
     def test_verified_artifact_reconstructs_exact_bytes(self):
         path, digest = self.artifact(self.valid_members())
@@ -147,10 +147,10 @@ class ArchiveTests(unittest.TestCase):
                 if mutation == 'corrupt': members[1] = ('alpha/text.md', b'X' * len(self.bytes['text.md']), tarfile.REGTYPE)
                 path, digest = self.artifact(members)
                 target = self.root / 'rejected'
-                with self.assertRaises(RecoveryError): unpack_snapshot(path, target, digest)
+                with self.assertRaises(PublicationError): unpack_snapshot(path, target, digest)
                 self.assertFalse(target.exists())
         path, digest = self.artifact(self.valid_members())
-        with self.assertRaises(RecoveryError): unpack_snapshot(path, self.root / 'wrong-digest', '0' * 64)
+        with self.assertRaises(PublicationError): unpack_snapshot(path, self.root / 'wrong-digest', '0' * 64)
 
     def test_active_svg_is_rejected_even_with_matching_file_and_transport_hashes(self):
         unsafe = SVG.replace(b'</svg>', b'<script>alert(1)</script></svg>')
@@ -158,7 +158,7 @@ class ArchiveTests(unittest.TestCase):
         record.update(size=len(unsafe), sha256=hashlib.sha256(unsafe).hexdigest(), blob_sha=blob_sha(unsafe))
         self.bytes['visual.svg'] = unsafe
         path, digest = self.artifact(self.valid_members())
-        with self.assertRaises(RecoveryError): unpack_snapshot(path, self.root / 'active', digest)
+        with self.assertRaises(PublicationError): unpack_snapshot(path, self.root / 'active', digest)
         self.assertFalse((self.root / 'active').exists())
 
     def test_oversized_extension_header_is_rejected_before_tarfile_reads_its_body(self):
@@ -167,11 +167,11 @@ class ArchiveTests(unittest.TestCase):
         member.size = 10_000_000
         path = self.root / 'oversized-header.tar'
         path.write_bytes(member.tobuf() + b'\0' * 10240)
-        with self.assertRaisesRegex(RecoveryError, 'archive header'):
+        with self.assertRaisesRegex(PublicationError, 'archive header'):
             unpack_snapshot(path, self.root / 'rejected-header', hashlib.sha256(path.read_bytes()).hexdigest())
         self.assertFalse((self.root / 'rejected-header').exists())
 
-    def test_shadow_build_is_exact_and_never_reads_source_or_served_recovery(self):
+    def test_shadow_build_is_exact_and_never_reads_source_or_served_site(self):
         groups = copy.deepcopy(self.groups)
         groups['hidden'] = copy.deepcopy(groups['alpha'])
         groups['hidden']['state'] = 'hidden'
@@ -188,7 +188,7 @@ class ArchiveTests(unittest.TestCase):
             {'slug': 'hidden', 'repository': 'course/hidden', 'state': 'hidden'}]}))
         output = self.root / 'site'
         with patch.object(build_site, 'ROOT', checkout), patch.object(build_site, 'OUTPUT', output), \
-                patch('publication_state.build_opener', side_effect=AssertionError('Pages must not be read')), \
+                patch('release.build_opener', side_effect=AssertionError('Pages must not be read')), \
                 patch('github_content.build_opener', side_effect=AssertionError('sources must not be read')):
             first = build_site.build_archive(folder, 'b' * 40)
             files = {path.relative_to(output).as_posix(): path.read_bytes()

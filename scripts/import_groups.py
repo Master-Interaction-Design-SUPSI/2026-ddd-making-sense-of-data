@@ -106,8 +106,7 @@ def validate_references(text, files, table=None):
 
 
 def validate_content(folder, files, *, require_visual=True, require_table=False):
-    # Only import admission requires media.csv; archive and recovery checks
-    # revalidate snapshots published before it existed.
+    # Only import admission requires media.csv; archive checks validate it when present.
     for name in files:
         if name.endswith(".svg"):
             validate_svg_content(folder / name)

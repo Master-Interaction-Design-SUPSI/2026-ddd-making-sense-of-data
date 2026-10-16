@@ -5,7 +5,7 @@ from unittest.mock import Mock, patch
 from urllib.error import HTTPError
 
 from archive_state import served_entry
-from publication_state import RecoveryError, SiteReader, decode_manifest, encode_manifest
+from release import PublicationError, SiteReader, decode_manifest, encode_manifest
 from test_fixtures import SVG, TEXT, Response, archived_group
 
 
@@ -28,9 +28,9 @@ class ServedManifestTests(unittest.TestCase):
                 entry["files"]["script.js"] = entry["files"]["text.md"]
             else:
                 manifest["groups"]["../escaped"] = entry
-            with self.subTest(mutation=mutation), self.assertRaises(RecoveryError):
+            with self.subTest(mutation=mutation), self.assertRaises(PublicationError):
                 decode_manifest(json.dumps(manifest))
-        with self.assertRaises(RecoveryError):
+        with self.assertRaises(PublicationError):
             decode_manifest(b'{"version":1,"groups":{},"groups":{}}')
 
 
@@ -40,14 +40,14 @@ class SiteReaderTests(unittest.TestCase):
             with self.subTest(url=url), self.assertRaises(ValueError):
                 SiteReader(url)
         opener = Mock()
-        with patch("publication_state.build_opener", return_value=opener), \
+        with patch("release.build_opener", return_value=opener), \
                 patch.dict("os.environ", {"GITHUB_TOKEN": "test-token"}):
             opener.open.side_effect = HTTPError("url", 302, "redirect", {}, None)
-            with self.assertRaises(RecoveryError):
+            with self.assertRaises(PublicationError):
                 SiteReader("https://site.test/").read("publication.json", 100)
             opener.open.side_effect = None
             opener.open.return_value = Response(b"x" * 101)
-            with self.assertRaisesRegex(RecoveryError, "byte limit"):
+            with self.assertRaisesRegex(PublicationError, "byte limit"):
                 SiteReader("https://site.test/").read("publication.json", 100)
             opener.open.return_value = Response(b"served")
             self.assertEqual(SiteReader("https://site.test/").read("publication.json", 100), b"served")

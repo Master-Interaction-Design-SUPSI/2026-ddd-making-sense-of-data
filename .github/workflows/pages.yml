@@ -41,7 +41,7 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
 
-  admission:
+  admit:
     needs: pin
     runs-on: ubuntu-latest
     timeout-minutes: 5
@@ -68,17 +68,17 @@ jobs:
         name: Capture request cutoff and reserve eligible refresh
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py admit
+        run: python3 scripts/publish.py admit
       - uses: actions/upload-artifact@v4
         with:
-          name: v2-admission-${{ github.run_id }}-${{ steps.admit.outputs.artifact_attempt }}
-          path: .scratch/v2-output
+          name: admission-${{ github.run_id }}-${{ steps.admit.outputs.artifact_attempt }}
+          path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
 
-  prepare_archive:
-    needs: [pin, admission]
+  prepare:
+    needs: [pin, admit]
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -87,8 +87,8 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      EXPECTED_METADATA_SHA256: ${{ needs.admission.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.admission.outputs.artifact_attempt }}
+      EXPECTED_METADATA_SHA256: ${{ needs.admit.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.admit.outputs.artifact_attempt }}
     outputs:
       metadata_sha256: ${{ steps.prepare.outputs.metadata_sha256 }}
       artifact_attempt: ${{ steps.prepare.outputs.artifact_attempt }}
@@ -111,24 +111,24 @@ jobs:
         run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
       - uses: actions/download-artifact@v4
         with:
-          name: v2-admission-${{ github.run_id }}-${{ needs.admission.outputs.artifact_attempt }}
-          path: .scratch/v2-input
+          name: admission-${{ github.run_id }}-${{ needs.admit.outputs.artifact_attempt }}
+          path: .scratch/job-input
       - id: prepare
-        name: Prepare candidate or durable recovery pair
+        name: Prepare candidate or pending pair
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py prepare
+        run: python3 scripts/publish.py prepare
       - uses: actions/upload-artifact@v4
         with:
-          name: v2-prepared-${{ github.run_id }}-${{ steps.prepare.outputs.artifact_attempt }}
-          path: .scratch/v2-output
+          name: prepared-${{ github.run_id }}-${{ steps.prepare.outputs.artifact_attempt }}
+          path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
 
-  archive:
-    needs: [pin, prepare_archive]
-    if: needs.prepare_archive.outputs.archive == 'true'
+  accept:
+    needs: [pin, prepare]
+    if: needs.prepare.outputs.archive == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -136,8 +136,8 @@ jobs:
       deployments: read
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
-      EXPECTED_METADATA_SHA256: ${{ needs.prepare_archive.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.prepare_archive.outputs.artifact_attempt }}
+      EXPECTED_METADATA_SHA256: ${{ needs.prepare.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.prepare.outputs.artifact_attempt }}
     outputs:
       metadata_sha256: ${{ steps.accept.outputs.metadata_sha256 }}
       artifact_attempt: ${{ steps.accept.outputs.artifact_attempt }}
@@ -155,24 +155,24 @@ jobs:
           node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          name: v2-prepared-${{ github.run_id }}-${{ needs.prepare_archive.outputs.artifact_attempt }}
-          path: .scratch/v2-input
+          name: prepared-${{ github.run_id }}-${{ needs.prepare.outputs.artifact_attempt }}
+          path: .scratch/job-input
       - id: accept
         name: Revalidate policy and accept by expected-parent fast-forward
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py accept
+        run: python3 scripts/publish.py accept
       - uses: actions/upload-artifact@v4
         with:
-          name: v2-accepted-${{ github.run_id }}-${{ steps.accept.outputs.artifact_attempt }}
-          path: .scratch/v2-output
+          name: accepted-${{ github.run_id }}-${{ steps.accept.outputs.artifact_attempt }}
+          path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
 
-  publish_archive:
-    needs: [pin, prepare_archive, archive]
-    if: always() && needs.prepare_archive.result == 'success' && (needs.prepare_archive.outputs.archive != 'true' || needs.archive.result == 'success')
+  publish:
+    needs: [pin, prepare, accept]
+    if: always() && needs.prepare.result == 'success' && (needs.prepare.outputs.archive != 'true' || needs.accept.result == 'success')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
@@ -186,8 +186,8 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      EXPECTED_METADATA_SHA256: ${{ needs.archive.outputs.metadata_sha256 || needs.prepare_archive.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.archive.outputs.artifact_attempt || needs.prepare_archive.outputs.artifact_attempt }}
+      EXPECTED_METADATA_SHA256: ${{ needs.accept.outputs.metadata_sha256 || needs.prepare.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.accept.outputs.artifact_attempt || needs.prepare.outputs.artifact_attempt }}
     outputs:
       metadata_sha256: ${{ steps.finalize.outputs.metadata_sha256 }}
       artifact_attempt: ${{ steps.finalize.outputs.artifact_attempt }}
@@ -204,17 +204,17 @@ jobs:
           node-version: '22'
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.archive.outputs.metadata_sha256 && format('v2-accepted-{0}-{1}', github.run_id, needs.archive.outputs.artifact_attempt) || format('v2-prepared-{0}-{1}', github.run_id, needs.prepare_archive.outputs.artifact_attempt) }}
-          path: .scratch/v2-input
+          name: ${{ needs.accept.outputs.metadata_sha256 && format('accepted-{0}-{1}', github.run_id, needs.accept.outputs.artifact_attempt) || format('prepared-{0}-{1}', github.run_id, needs.prepare.outputs.artifact_attempt) }}
+          path: .scratch/job-input
       - id: build
         name: Build accepted pair or reconstruct exact pending release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py build
+        run: python3 scripts/publish.py build
       - uses: actions/upload-pages-artifact@v4
         if: steps.build.outputs.deploy == 'true'
         with:
-          name: v2-pages-${{ github.run_id }}-${{ github.run_attempt }}
+          name: pages-${{ github.run_id }}-${{ github.run_attempt }}
           path: _site
           retention-days: 7
       - id: record
@@ -222,39 +222,39 @@ jobs:
         name: Record attempted release separately from verification
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py record
+        run: python3 scripts/publish.py record
       - id: authorize
         if: steps.record.outputs.deploy == 'true'
         name: Recheck main and deployment identity before Pages mutation
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py authorize
+        run: python3 scripts/publish.py authorize
       - id: deployment
         if: steps.authorize.outputs.deploy == 'true'
         uses: actions/deploy-pages@v4
         with:
-          artifact_name: v2-pages-${{ github.run_id }}-${{ github.run_attempt }}
+          artifact_name: pages-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Verify served release and content probes
         if: steps.authorize.outputs.deploy == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py verify
+        run: python3 scripts/publish.py verify
       - id: finalize
         if: always()
         name: Export bounded truthful result for the answer job
-        run: python3 scripts/publish_archive.py finalize
+        run: python3 scripts/publish.py finalize
       - uses: actions/upload-artifact@v4
         if: always() && steps.finalize.outputs.metadata_sha256 != ''
         with:
-          name: v2-result-${{ github.run_id }}-${{ steps.finalize.outputs.artifact_attempt }}
-          path: .scratch/v2-output
+          name: result-${{ github.run_id }}-${{ steps.finalize.outputs.artifact_attempt }}
+          path: .scratch/job-output
           include-hidden-files: true
           if-no-files-found: error
           retention-days: 7
 
   answer:
-    needs: [pin, admission, prepare_archive, archive, publish_archive]
-    if: always() && needs.admission.result == 'success' && vars.DDD_REQUESTS_ENABLED == 'true'
+    needs: [pin, admit, prepare, accept, publish]
+    if: always() && needs.admit.result == 'success' && vars.DDD_REQUESTS_ENABLED == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -263,8 +263,8 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      EXPECTED_METADATA_SHA256: ${{ needs.publish_archive.outputs.metadata_sha256 || needs.archive.outputs.metadata_sha256 || needs.prepare_archive.outputs.metadata_sha256 || needs.admission.outputs.metadata_sha256 }}
-      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.publish_archive.outputs.artifact_attempt || needs.archive.outputs.artifact_attempt || needs.prepare_archive.outputs.artifact_attempt || needs.admission.outputs.artifact_attempt }}
+      EXPECTED_METADATA_SHA256: ${{ needs.publish.outputs.metadata_sha256 || needs.accept.outputs.metadata_sha256 || needs.prepare.outputs.metadata_sha256 || needs.admit.outputs.metadata_sha256 }}
+      EXPECTED_PRODUCER_ATTEMPT: ${{ needs.publish.outputs.artifact_attempt || needs.accept.outputs.artifact_attempt || needs.prepare.outputs.artifact_attempt || needs.admit.outputs.artifact_attempt }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -275,9 +275,9 @@ jobs:
           python-version: '3.12'
       - uses: actions/download-artifact@v4
         with:
-          name: ${{ needs.publish_archive.outputs.metadata_sha256 && format('v2-result-{0}-{1}', github.run_id, needs.publish_archive.outputs.artifact_attempt) || (needs.archive.outputs.metadata_sha256 && format('v2-accepted-{0}-{1}', github.run_id, needs.archive.outputs.artifact_attempt)) || (needs.prepare_archive.outputs.metadata_sha256 && format('v2-prepared-{0}-{1}', github.run_id, needs.prepare_archive.outputs.artifact_attempt)) || format('v2-admission-{0}-{1}', github.run_id, needs.admission.outputs.artifact_attempt) }}
-          path: .scratch/v2-input
+          name: ${{ needs.publish.outputs.metadata_sha256 && format('result-{0}-{1}', github.run_id, needs.publish.outputs.artifact_attempt) || (needs.accept.outputs.metadata_sha256 && format('accepted-{0}-{1}', github.run_id, needs.accept.outputs.artifact_attempt)) || (needs.prepare.outputs.metadata_sha256 && format('prepared-{0}-{1}', github.run_id, needs.prepare.outputs.artifact_attempt)) || format('admission-{0}-{1}', github.run_id, needs.admit.outputs.artifact_attempt) }}
+          path: .scratch/job-input
       - name: Repair one bot-owned status comment and close only verified checks
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish_archive.py answer
+        run: python3 scripts/publish.py answer

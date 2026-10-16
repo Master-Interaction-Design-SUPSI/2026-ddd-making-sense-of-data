@@ -5,8 +5,7 @@ import hashlib
 import build_site
 from content_contract import MEDIA_TABLE
 from archive_state import MAX_MANIFEST_BYTES, decode_archive, served_groups
-from publication_state import MANIFEST, RecoveryError
-from publish_site import RELEASE, encode, site_digest, validate_release
+from release import MANIFEST, PublicationError, RELEASE, encode, site_digest, validate_release
 
 
 def probes_for(groups, previous=None):
@@ -20,14 +19,14 @@ def probes_for(groups, previous=None):
                 continue
             (text if name == 'text.md' else media).append(f'{slug}/{name}')
     if len(text) > 15:
-        raise RecoveryError('verification probe group limit exceeded')
+        raise PublicationError('verification probe group limit exceeded')
     # media.csv is probed only when no real media file changed.
     media.sort(key=lambda path: path.endswith('/' + MEDIA_TABLE))
     return text + media[:1]
 
 
 def make_release(main_commit, main_tree, archive, run_id, run_attempt, previous_groups=None):
-    """Build trusted site inputs with visible archived content; no source/Pages recovery."""
+    """Build trusted site inputs with visible archived content; no source or Pages reads."""
     identities = build_site.build_archive(archive.folder, archive.commit)
     release = validate_release({'version': 2, 'run_id': str(run_id), 'run_attempt': str(run_attempt),
         'main_commit': main_commit, 'main_tree': main_tree, 'archive_commit': archive.commit,
@@ -48,7 +47,7 @@ def verified_previous_groups(records, repository, verified_record):
     payload = records.client.raw_file(repository, release['archive_commit'], 'publication.json',
                                       MAX_MANIFEST_BYTES)
     if hashlib.sha256(payload).hexdigest() != release['archive_manifest_sha256']:
-        raise RecoveryError('previous archive manifest differs from verified release pin')
+        raise PublicationError('previous archive manifest differs from verified release pin')
     return served_groups(decode_archive(payload))
 
 
@@ -58,11 +57,11 @@ def reconstruct(release, archive, main_commit, main_tree):
     if (main_commit != release['main_commit'] or main_tree != release['main_tree']
             or archive.commit != release['archive_commit']
             or hashlib.sha256(archive.payload).hexdigest() != release['archive_manifest_sha256']):
-        raise RecoveryError('reconstruction requires the exact recorded main/archive pair')
+        raise PublicationError('reconstruction requires the exact recorded main/archive pair')
     build_site.build_archive(archive.folder, archive.commit)
     if (site_digest(build_site.OUTPUT) != release['site_sha256']
             or hashlib.sha256((build_site.OUTPUT / MANIFEST).read_bytes()).hexdigest() != release['served_manifest_sha256']):
-        raise RecoveryError('durable reconstruction differs from recorded release')
+        raise PublicationError('durable reconstruction differs from recorded release')
     (build_site.OUTPUT / RELEASE).write_bytes(encode(release))
     build_site.enforce_site_budget(build_site.OUTPUT)
     return release
@@ -75,7 +74,7 @@ def publication_strategy(latest, verified, main_commit):
     release = validate_release(latest['payload'])
     latest_verified = bool(verified and verified['id'] == latest['id'])
     if latest_verified and verified['payload'] != release:
-        raise RecoveryError('verified record payload differs from latest attempted release')
+        raise PublicationError('verified record payload differs from latest attempted release')
     if latest_verified or release['main_commit'] != main_commit:
         return {'mode': 'refresh'}
     return {'mode': 'verify_then_retry', 'deployment_id': latest['id'], 'release': release}

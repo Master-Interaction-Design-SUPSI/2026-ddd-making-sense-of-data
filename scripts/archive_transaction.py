@@ -12,7 +12,7 @@ from archive_state import ArchiveSnapshot, encode_archive, file_record, reconcil
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES
 from github_content import GitHubClient, ImportFailure
 from import_groups import import_groups
-from publication_state import MANIFEST, RecoveryError
+from release import MANIFEST, PublicationError
 
 RELEASE_RESERVE = 4096
 
@@ -38,7 +38,7 @@ class ArchiveBase:
         record = entry['snapshot']['files'].get(name) if entry and entry['snapshot'] else None
         if not record or record['blob_sha'] != node['sha'] or record['size'] != node['size']:
             return None
-        # Corruption is a recovery failure, never an excuse to silently change authority.
+        # Corrupt archived bytes stop the run; they never silently change what was accepted.
         return self.read_file(slug, name)
 
     def can_skip(self, group, files):
@@ -53,7 +53,7 @@ class ArchiveBase:
 def projected_site(folder):
     build_site.build_archive(folder)
     if build_site.enforce_site_budget(build_site.OUTPUT) + RELEASE_RESERVE > MAX_SITE_BYTES:
-        raise RecoveryError('projected visible site exceeds budget including release metadata')
+        raise PublicationError('projected visible site exceeds budget including release metadata')
 
 
 def prepare_archive(registry, previous, destination, *, client_factory=GitHubClient, allow_unchanged=False,
@@ -61,7 +61,7 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
     """Validate live updates, preserve every accepted snapshot, then check site budget."""
     destination = Path(destination)
     if destination.exists() or destination.is_symlink():
-        raise RecoveryError('archive preparation needs a new destination')
+        raise PublicationError('archive preparation needs a new destination')
     groups = reconcile(previous.groups, registry)
     base = ArchiveBase(previous)
     with tempfile.TemporaryDirectory(prefix='.archive-prepare-', dir=destination.parent) as temporary:
@@ -134,19 +134,19 @@ def admit_candidate(candidate, registry, previous):
     """
     expected = reconcile(previous.groups, registry)
     if candidate.groups.keys() != expected.keys():
-        raise RecoveryError('candidate added or removed an unapproved archive row')
+        raise PublicationError('candidate added or removed an unapproved archive row')
     for slug, entry in candidate.groups.items():
         target = expected[slug]
         if {key: value for key, value in entry.items() if key != 'snapshot'} != {
                 key: value for key, value in target.items() if key != 'snapshot'}:
-            raise RecoveryError(f'{slug}: candidate identity/state/settings differ from trusted registry')
+            raise PublicationError(f'{slug}: candidate identity/state/settings differ from trusted registry')
         if entry['snapshot'] == target['snapshot']:
             continue
         if target['state'] != 'live' or entry['snapshot'] is None:
-            raise RecoveryError(f'{slug}: candidate altered retained/frozen/hidden bytes')
+            raise PublicationError(f'{slug}: candidate altered retained/frozen/hidden bytes')
         snapshot = entry['snapshot']
         if snapshot['exclude'] != target['exclude'] or snapshot['require_visual'] != target['require_visual']:
-            raise RecoveryError(f'{slug}: new acceptance does not meet current policy')
+            raise PublicationError(f'{slug}: new acceptance does not meet current policy')
     # Independently validated content, registry and whole-site budget precede any Git write.
     candidate.verify()
     projected_site(candidate.folder)
@@ -157,7 +157,7 @@ def pack_snapshot(folder, output):
     snapshot = ArchiveSnapshot(folder)
     output = Path(output)
     if output.exists() or output.is_symlink():
-        raise RecoveryError('artifact destination must be new')
+        raise PublicationError('artifact destination must be new')
     with output.open('xb') as sink, tarfile.open(fileobj=sink, mode='w', format=tarfile.PAX_FORMAT) as stream:
         files = {MANIFEST: snapshot.payload}
         names = [f'{slug}/{name}' for slug, entry in snapshot.groups.items() if entry['snapshot']

@@ -7,7 +7,7 @@ from pathlib import Path
 from archive_git import (ARCHIVE_REF, MAIN_REF, bounded_process, create_commit,
                          git, publish_commit, remote_heads, fetch_commit, snapshot_from_git)
 from archive_state import decode_archive, empty_archive, encode_archive, file_record
-from publication_state import RecoveryError
+from release import PublicationError
 from test_fixtures import SVG, archived_group
 
 
@@ -61,27 +61,27 @@ class ArchiveGitTests(unittest.TestCase):
         self.change(b'Writer two')
         two = create_commit(self.writer, self.snapshot, first, main_commit=self.main)
         publish_commit(self.writer, one, self.main, first)
-        with self.assertRaises(RecoveryError): publish_commit(self.writer, two, self.main, first)
-        with self.assertRaises(RecoveryError): publish_commit(self.writer, first, self.main, None)
+        with self.assertRaises(PublicationError): publish_commit(self.writer, two, self.main, first)
+        with self.assertRaises(PublicationError): publish_commit(self.writer, first, self.main, None)
         self.assertEqual(remote_heads(self.writer)[ARCHIVE_REF], one)
 
     def test_main_change_and_wrong_parent_stop_mutation(self):
         first = self.accept_first()
         self.change(b'New content')
         candidate = create_commit(self.writer, self.snapshot, first, main_commit=self.main)
-        with self.assertRaises(RecoveryError): publish_commit(self.writer, candidate, self.main, None)
+        with self.assertRaises(PublicationError): publish_commit(self.writer, candidate, self.main, None)
         tree = git(self.writer, 'rev-parse', self.main + '^{tree}').decode().strip()
         newer_main = git(self.writer, 'commit-tree', tree, '-p', self.main, input=b'new main\n').decode().strip()
         git(self.writer, 'push', 'origin', newer_main + ':' + MAIN_REF)
-        with self.assertRaises(RecoveryError): publish_commit(self.writer, candidate, self.main, first)
+        with self.assertRaises(PublicationError): publish_commit(self.writer, candidate, self.main, first)
         self.assertEqual(remote_heads(self.writer)[ARCHIVE_REF], first)
 
     def test_unlisted_or_corrupt_bytes_cannot_enter_commit(self):
         (self.snapshot / 'alpha/unlisted.py').write_text('must never execute')
-        with self.assertRaises(RecoveryError): create_commit(self.writer, self.snapshot, None, main_commit=self.main)
+        with self.assertRaises(PublicationError): create_commit(self.writer, self.snapshot, None, main_commit=self.main)
         (self.snapshot / 'alpha/unlisted.py').unlink()
         (self.snapshot / 'alpha/text.md').write_bytes(b'wrong')
-        with self.assertRaises(RecoveryError): create_commit(self.writer, self.snapshot, None, main_commit=self.main)
+        with self.assertRaises(PublicationError): create_commit(self.writer, self.snapshot, None, main_commit=self.main)
 
     def test_pinned_shallow_transfer_reconstructs_without_sources_or_artifact(self):
         first = self.accept_first()
@@ -107,7 +107,7 @@ class ArchiveGitTests(unittest.TestCase):
     def test_transfer_is_bounded(self):
         commit = create_commit(self.writer, self.snapshot, None, main_commit=self.main)
         tar = self.root / 'bounded.tar'
-        with tar.open('wb') as sink, self.assertRaises(RecoveryError):
+        with tar.open('wb') as sink, self.assertRaises(PublicationError):
             bounded_process(self.writer, ['archive', '--format=tar', commit], tar, stdout=sink, limit=1)
         self.assertNotIn(ARCHIVE_REF, remote_heads(self.writer))
 

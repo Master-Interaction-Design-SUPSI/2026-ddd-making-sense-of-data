@@ -143,7 +143,7 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(result["status"], "imported", result.get("error"))
         self.assertEqual((self.root / "imports/alpha/media.csv").read_bytes(), table)
 
-    def test_archive_and_recovery_checks_accept_snapshots_without_a_media_table(self):
+    def test_archive_checks_accept_snapshots_without_a_media_table(self):
         from import_groups import validate_content
         folder = self.root / "snapshot"
         (folder / "media").mkdir(parents=True)

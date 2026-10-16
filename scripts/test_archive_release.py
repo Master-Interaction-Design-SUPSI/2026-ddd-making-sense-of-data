@@ -8,8 +8,7 @@ from unittest.mock import Mock, patch
 import archive_release
 import archive_transaction
 from deployment_records import DeploymentRecords, ENVIRONMENT, TASK
-from publication_state import RecoveryError
-from publish_site import served_release, validate_release
+from release import PublicationError, served_release, validate_release
 from test_fixtures import URL, Course
 
 
@@ -23,19 +22,19 @@ class ReleasePairTests(unittest.TestCase):
         expected = self.fixture.bytes_at(self.fixture.output)
         shutil.rmtree(self.fixture.output)
         with patch.object(archive_transaction, 'import_groups', side_effect=AssertionError('no source reads')), \
-                patch('publication_state.build_opener', side_effect=AssertionError('no Pages reads')):
+                patch('release.build_opener', side_effect=AssertionError('no Pages reads')):
             archive_release.reconstruct(self.release, self.archive, 'a' * 40, 'b' * 40)
         self.assertEqual(self.fixture.bytes_at(self.fixture.output), expected)
 
     def test_reconstruction_rejects_other_code_archive_or_changed_trusted_assets(self):
-        with self.assertRaises(RecoveryError):
+        with self.assertRaises(PublicationError):
             archive_release.reconstruct(self.release, self.archive, 'd' * 40, 'b' * 40)
         wrong = copy.deepcopy(self.release)
         wrong['archive_commit'] = 'd' * 40
-        with self.assertRaises(RecoveryError):
+        with self.assertRaises(PublicationError):
             archive_release.reconstruct(wrong, self.archive, 'a' * 40, 'b' * 40)
         (self.fixture.root / 'index.html').write_text('changed code even though caller supplied old pin')
-        with self.assertRaisesRegex(RecoveryError, 'differs'):
+        with self.assertRaisesRegex(PublicationError, 'differs'):
             archive_release.reconstruct(self.release, self.archive, 'a' * 40, 'b' * 40)
 
     def test_changed_text_and_representative_media_are_probed_on_served_site(self):
@@ -44,7 +43,7 @@ class ReleasePairTests(unittest.TestCase):
         served_release(URL, self.release, attempts=1)
         path = self.fixture.live / 'beta/text.md'
         path.write_bytes(b'X' * path.stat().st_size)
-        with self.assertRaisesRegex(RecoveryError, 'content probe'):
+        with self.assertRaisesRegex(PublicationError, 'content probe'):
             served_release(URL, self.release, attempts=1)
 
     def test_served_verification_has_one_overall_deadline_across_retries(self):
@@ -52,12 +51,12 @@ class ReleasePairTests(unittest.TestCase):
 
         def expired_read(*arguments):
             clock['seconds'] = 181
-            raise RecoveryError('stale release')
+            raise PublicationError('stale release')
 
-        with patch('publish_site.time.monotonic', side_effect=lambda: clock['seconds']), \
-                patch('publish_site.SiteReader') as reader, patch('publish_site.time.sleep') as sleep:
+        with patch('release.time.monotonic', side_effect=lambda: clock['seconds']), \
+                patch('release.SiteReader') as reader, patch('release.time.sleep') as sleep:
             reader.return_value.read.side_effect = expired_read
-            with self.assertRaisesRegex(RecoveryError, 'stale release'):
+            with self.assertRaisesRegex(PublicationError, 'stale release'):
                 served_release(URL, self.release)
         self.assertEqual(reader.call_count, 1)
         sleep.assert_not_called()
@@ -95,7 +94,7 @@ class ReleasePairTests(unittest.TestCase):
         records.client.raw_file.assert_not_called()
 
         records.client.raw_file.return_value = b'{}'
-        with self.assertRaisesRegex(RecoveryError, 'manifest differs'):
+        with self.assertRaisesRegex(PublicationError, 'manifest differs'):
             archive_release.verified_previous_groups(records, 'course/site', verified)
 
     def test_pending_pair_retry_precedes_import_and_code_change_explicitly_supersedes(self):
@@ -107,9 +106,9 @@ class ReleasePairTests(unittest.TestCase):
 
     def test_schema_rejects_missing_pins_and_unsafe_or_unbounded_probes(self):
         for probes in (['../escape'], ['alpha/text.md', 'alpha/text.md'], [None], [['alpha/text.md']], ['alpha/text.md'] * 17):
-            with self.subTest(probes=probes), self.assertRaises(RecoveryError):
+            with self.subTest(probes=probes), self.assertRaises(PublicationError):
                 validate_release(self.release | {'probes': probes})
-        with self.assertRaises(RecoveryError): validate_release(self.release | {'archive_commit': 'main'})
+        with self.assertRaises(PublicationError): validate_release(self.release | {'archive_commit': 'main'})
 
     def test_verified_history_distinguishes_failed_attempt_from_previous_success(self):
         records = DeploymentRecords('course/site')

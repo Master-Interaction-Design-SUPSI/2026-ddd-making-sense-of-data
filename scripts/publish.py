@@ -15,18 +15,17 @@ from pathlib import Path
 
 import archive_git
 import archive_release
-import publish_site
+import release
 import build_site
 from archive_state import MANIFEST, ArchiveSnapshot, MAX_TRANSFER_BYTES, empty_archive, unpack_snapshot
 from archive_transaction import admit_candidate, pack_snapshot, prepare_archive
 from deployment_records import DeploymentRecords
 from group_registry import REPOSITORY, load_registry
 from publication_requests import RequestAPI, body_hash, capture_batch, parse_group, refresh_allowed, validate_batch, answer_batch, LABEL
-from publication_state import MAX_MANIFEST_BYTES, RecoveryError, unique_keys
-from publish_site import RELEASE, encode, output, served_release, site_digest, validate_release
+from release import MAX_MANIFEST_BYTES, RELEASE, PublicationError, encode, output, served_release, site_digest, unique_keys, validate_release
 
 ROOT = Path(__file__).resolve().parent.parent
-STATE = ROOT / '.scratch/v2-build-state.json'
+STATE = ROOT / '.scratch/build-state.json'
 KINDS = {'admission', 'prepared', 'accepted', 'result'}
 MODES = {'refresh', 'unchanged', 'pending', 'retry', 'repair', 'deferred', 'invalid', 'superseded'}
 MEMBERS = {'batch.json', 'report.json', 'candidate.tar'}
@@ -81,7 +80,7 @@ def transport_stage(name, *, durable_state=False):
 def sha_file(path, limit=None):
     path = Path(path)
     if path.is_symlink() or not path.is_file() or limit is not None and path.stat().st_size > limit:
-        raise RecoveryError('missing/unsafe/oversized job artifact file')
+        raise PublicationError('missing/unsafe/oversized job artifact file')
     digest = hashlib.sha256()
     with path.open('rb') as stream:
         for chunk in iter(lambda: stream.read(65536), b''):
@@ -102,19 +101,19 @@ def identity():
     repository = os.environ['GITHUB_REPOSITORY']
     main = os.environ['MAIN_COMMIT']
     if not REPOSITORY.fullmatch(repository) or not re.fullmatch(r'[0-9a-f]{40}', main) or revision('HEAD') != main:
-        raise RecoveryError('job must execute the pinned trusted main checkout')
+        raise PublicationError('job must execute the pinned trusted main checkout')
     run, attempt = os.environ['GITHUB_RUN_ID'], os.environ['GITHUB_RUN_ATTEMPT']
     if not all(re.fullmatch(r'[1-9][0-9]*', value) for value in (run, attempt)):
-        raise RecoveryError('invalid immutable run/attempt identity')
+        raise PublicationError('invalid immutable run/attempt identity')
     return {'repository': repository, 'main_commit': main, 'main_tree': revision('HEAD^{tree}'),
             'run_id': run, 'run_attempt': attempt}
 
 
 def require_main(records):
-    publish_site.require_publication_active()
+    release.require_publication_active()
     context = identity()
     if records.main_commit() != context['main_commit']:
-        raise RecoveryError('main changed; this run is superseded')
+        raise PublicationError('main changed; this run is superseded')
     return context
 
 
@@ -127,10 +126,10 @@ def seal(folder, kind, data, files):
     folder = Path(folder)
     folder.mkdir(parents=True, exist_ok=True)
     if (folder / 'metadata.json').exists() or kind not in KINDS:
-        raise RecoveryError('job artifact identity must be immutable')
+        raise PublicationError('job artifact identity must be immutable')
     for name, source in files.items():
         if name not in MEMBERS:
-            raise RecoveryError('unexpected job artifact member')
+            raise PublicationError('unexpected job artifact member')
         target = folder / name
         if name == 'report.json' and isinstance(source, bytes):
             report = json.loads(source, object_pairs_hook=unique_keys)
@@ -156,16 +155,16 @@ def seal(folder, kind, data, files):
 def load(folder, expected_hash, kinds):
     folder = Path(folder)
     if folder.is_symlink() or not folder.is_dir():
-        raise RecoveryError('job artifact root must be a directory')
+        raise PublicationError('job artifact root must be a directory')
     if not isinstance(expected_hash, str) or not re.fullmatch(r'[0-9a-f]{64}', expected_hash):
-        raise RecoveryError('expected job artifact digest is missing')
+        raise PublicationError('expected job artifact digest is missing')
     if sha_file(folder / 'metadata.json', MAX_MANIFEST_BYTES) != expected_hash:
-        raise RecoveryError('job artifact metadata digest differs from trusted producing step')
+        raise PublicationError('job artifact metadata digest differs from trusted producing step')
     value = read_json(folder / 'metadata.json')
     context = identity()
     producer = os.environ.get('EXPECTED_PRODUCER_ATTEMPT', context['run_attempt'])
     if not re.fullmatch(r'[1-9][0-9]*', producer) or int(producer) > int(context['run_attempt']):
-        raise RecoveryError('invalid explicit producing attempt')
+        raise PublicationError('invalid explicit producing attempt')
     context['run_attempt'] = producer
     keys = {'version', 'kind', *context, 'registry_sha256', 'data', 'files'}
     if (not isinstance(value, dict) or set(value) != keys or type(value['version']) is not int or value['version'] != 1
@@ -175,17 +174,17 @@ def load(folder, expected_hash, kinds):
             or not isinstance(value['files'], dict)
             or not {'batch.json', 'report.json'} <= value['files'].keys()
             or value['files'].keys() - MEMBERS):
-        raise RecoveryError('job artifact code/registry/run/schema identity differs')
+        raise PublicationError('job artifact code/registry/run/schema identity differs')
     if {path.name for path in folder.iterdir()} != {'metadata.json', *value['files']}:
-        raise RecoveryError('job artifact contains unexpected files')
+        raise PublicationError('job artifact contains unexpected files')
     for name, digest in value['files'].items():
         limit = MAX_TRANSFER_BYTES if name == 'candidate.tar' else MAX_REPORT_BYTES if name == 'report.json' else MAX_MANIFEST_BYTES
         if sha_file(folder / name, limit) != digest:
-            raise RecoveryError('job artifact content changed: ' + name)
+            raise PublicationError('job artifact content changed: ' + name)
     batch = validate_batch(read_json(folder / 'batch.json'), context['repository'], registry())
     report = read_json(folder / 'report.json', MAX_REPORT_BYTES)
     if not isinstance(report, dict) or not isinstance(report.get('groups'), list):
-        raise RecoveryError('invalid trusted group report')
+        raise PublicationError('invalid trusted group report')
     return value, batch, report
 
 
@@ -199,12 +198,12 @@ class AdmissionRecords(DeploymentRecords):
     def last_refresh(self):
         rows = json.loads(self.client.get(self.base + '/deployments?task=course-refresh&environment=course-refresh-cooldown&per_page=1', MAX_MANIFEST_BYTES))
         if not isinstance(rows, list) or len(rows) > 1:
-            raise RecoveryError('invalid refresh reservation history')
+            raise PublicationError('invalid refresh reservation history')
         if not rows:
             return None
         row = rows[0]
         if row.get('task') != 'course-refresh' or row.get('environment') != 'course-refresh-cooldown':
-            raise RecoveryError('unexpected refresh reservation')
+            raise PublicationError('unexpected refresh reservation')
         return row['created_at']
 
     def reserve(self, context, cutoff, event):
@@ -220,7 +219,7 @@ def admit(records, api, destination, event, *, issue_number=None, requests_enabl
     groups = registry()
     mode = 'refresh'
     if event not in {'push', 'schedule', 'workflow_dispatch', 'issues'}:
-        raise RecoveryError('untrusted publication event')
+        raise PublicationError('untrusted publication event')
     batch = {'version': 1, 'repository': context['repository'], 'cutoff': cutoff, 'requests': []}
     if event == 'issues':
         if not requests_enabled or type(issue_number) is not int or issue_number <= 0:
@@ -276,20 +275,20 @@ def prepare(records, url, admission, checksum, destination):
     verified = latest if latest and records.is_verified(latest['id']) else None
     strategy = archive_release.publication_strategy(latest, verified, context['main_commit'])
     if strategy['mode'] == 'verify_then_retry':
-        release = strategy['release']
+        attempted = strategy['release']
         try:
-            served_release(url, release, attempts=1)
+            served_release(url, attempted, attempts=1)
             mode = 'repair'
-        except RecoveryError:
+        except PublicationError:
             mode = 'retry'
-        return finish(mode=mode, archive_commit=release['archive_commit'], previous_release=release,
+        return finish(mode=mode, archive_commit=attempted['archive_commit'], previous_release=attempted,
                       deployment_id=strategy['deployment_id'])
     head = records.archive_commit()
     if latest and head is None:
-        raise RecoveryError('a course-publication deployment record exists but the student-work branch is '
+        raise PublicationError('a course-publication deployment record exists but the student-work branch is '
                             'missing; restore the branch before publishing')
     same_main = bool(latest and latest['payload']['main_commit'] == context['main_commit'])
-    with tempfile.TemporaryDirectory(prefix='ddd-v2-prepare-') as temporary:
+    with tempfile.TemporaryDirectory(prefix='ddd-prepare-') as temporary:
         root = Path(temporary)
         # No branch and no record: the first run starts from the empty archive.
         previous, report['transport']['archive'] = _read_archive(root / 'previous', head)
@@ -301,7 +300,7 @@ def prepare(records, url, admission, checksum, destination):
                                  allow_idle=bool(same_main and verified
                                      and verified['payload']['main_tree'] == context['main_tree']
                                      and verified['payload']['archive_commit'] == previous.commit
-                                     and publish_site.worktree_clean()))
+                                     and release.worktree_clean()))
         report['groups'] = result['groups']
         report['transport']['import'] = result['transport']
         data['source_checked'] = True
@@ -319,8 +318,8 @@ def accept(records, preparation, checksum, destination):
     prepared, batch, report = load(preparation, checksum, {'prepared'})
     data = prepared['data']
     if data['mode'] != 'refresh' or 'candidate.tar' not in prepared['files']:
-        raise RecoveryError('only an independently admitted candidate may be accepted')
-    with tempfile.TemporaryDirectory(prefix='ddd-v2-writer-') as temporary:
+        raise PublicationError('only an independently admitted candidate may be accepted')
+    with tempfile.TemporaryDirectory(prefix='ddd-writer-') as temporary:
         root = Path(temporary)
         unpack_snapshot(Path(preparation) / 'candidate.tar', root / 'candidate', prepared['files']['candidate.tar'])
         candidate = ArchiveSnapshot(root / 'candidate')
@@ -359,7 +358,7 @@ def build(records, url, source, checksum):
             state['status'] = data['mode']
             return
         if data['mode'] == 'refresh' and payload['kind'] != 'accepted':
-            raise RecoveryError('unarchived candidate content cannot be deployed')
+            raise PublicationError('unarchived candidate content cannot be deployed')
         latest = None
         if data['mode'] in {'refresh', 'pending'}:
             latest = records.latest()
@@ -372,9 +371,9 @@ def build(records, url, source, checksum):
                     data.update(mode='retry', previous_release=attempted, deployment_id=latest['id'])
                     state['deployment_id'] = latest['id']
                 else:
-                    raise RecoveryError('another release superseded this accepted run')
+                    raise PublicationError('another release superseded this accepted run')
             elif (head := records.archive_commit()) != data['archive_commit']:
-                raise RecoveryError('the student-work branch is missing' if head is None
+                raise PublicationError('the student-work branch is missing' if head is None
                                     else 'archive advanced; this accepted run is superseded')
         if data['mode'] in {'repair', 'unchanged'}:
             state['release'] = validate_release(data['previous_release'])
@@ -382,11 +381,11 @@ def build(records, url, source, checksum):
             if data['mode'] == 'repair':
                 latest = records.latest()
                 if not latest or latest['id'] != data['deployment_id'] or latest['payload'] != state['release']:
-                    raise RecoveryError('pending record changed during verification repair')
+                    raise PublicationError('pending record changed during verification repair')
                 records.status(data['deployment_id'], 'success', _run_url())
             state['status'] = 'verified' if data['mode'] == 'unchanged' else 'recovered'
             return
-        with tempfile.TemporaryDirectory(prefix='ddd-v2-build-') as temporary:
+        with tempfile.TemporaryDirectory(prefix='ddd-build-') as temporary:
             archive, metrics = _read_archive(Path(temporary) / 'archive', data['archive_commit'])
             report['transport']['build_archive'] = metrics
             if data['mode'] == 'retry':
@@ -414,7 +413,7 @@ def _run_url():
 def state():
     value = read_json(STATE, MAX_REPORT_BYTES + MAX_MANIFEST_BYTES)
     if value['identity'] != identity():
-        raise RecoveryError('build state belongs to different code/run')
+        raise PublicationError('build state belongs to different code/run')
     return value
 
 
@@ -425,11 +424,11 @@ def record(records):
     release = validate_release(current['release'])
     if (current['status'] != 'prepared' or site_digest(build_site.OUTPUT) != release['site_sha256']
             or read_json(build_site.OUTPUT / RELEASE, 4096) != release):
-        raise RecoveryError('candidate changed or was not prepared')
+        raise PublicationError('candidate changed or was not prepared')
     if current['data']['mode'] == 'retry':
         latest = records.latest()
         if not latest or latest['id'] != current['deployment_id'] or latest['payload'] != release:
-            raise RecoveryError('retry no longer names the latest attempted release')
+            raise PublicationError('retry no longer names the latest attempted release')
     else:
         current['deployment_id'] = records.create(release)
     records.status(current['deployment_id'], 'in_progress', _run_url())
@@ -445,7 +444,7 @@ def authorize(records):
     latest = records.latest()
     if (current['status'] != 'awaiting_deployment' or not latest or latest['id'] != current['deployment_id']
             or latest['payload'] != current['release']):
-        raise RecoveryError('deployment identity changed before Pages mutation')
+        raise PublicationError('deployment identity changed before Pages mutation')
     output('deploy', 'true')
 
 
@@ -478,14 +477,14 @@ def finalize(source, checksum, destination):
 
 
 def answer(api, source, checksum, records=None):
-    publish_site.require_publication_active()
+    release.require_publication_active()
     context = identity()
     if records is not None and records.main_commit() != context['main_commit']:
         return
     payload, batch, report = load(source, checksum, {'admission', 'prepared', 'accepted', 'result'})
     mode = payload['data']['mode']
     stage = payload['data'].get('stage', mode if mode in {'deferred', 'invalid', 'superseded'} else 'failed')
-    # Recovery publishes previously accepted content; it did not check new source requests.
+    # A retry or repair publishes previously accepted content; it did not check new source requests.
     if stage == 'recovered':
         stage = 'deferred'
     answer_batch(api, batch, context['repository'], registry(), report['groups'], stage,
@@ -498,9 +497,9 @@ def main():
     parser.add_argument('command', choices=('admit', 'prepare', 'accept', 'build', 'record', 'authorize', 'verify', 'finalize', 'answer'))
     args = parser.parse_args()
     context = identity()
-    source = ROOT / '.scratch/v2-input'
+    source = ROOT / '.scratch/job-input'
     checksum = os.environ.get('EXPECTED_METADATA_SHA256', '')
-    destination = ROOT / '.scratch/v2-output'
+    destination = ROOT / '.scratch/job-output'
     url = os.environ.get('PAGES_URL', '')
     if args.command == 'admit':
         event = read_json(os.environ['GITHUB_EVENT_PATH'])

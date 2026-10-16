@@ -123,7 +123,7 @@ class Course:
         self.server = PublishedHTTP(self.live)
         self.api = FixtureAPI()
         for patcher in (patch.object(build_site, 'ROOT', self.root), patch.object(build_site, 'OUTPUT', self.output),
-                        patch('publication_state.build_opener', return_value=self.server)):
+                        patch('release.build_opener', return_value=self.server)):
             patcher.start()
             test.addCleanup(patcher.stop)
         (self.root / 'index.html').write_text('trusted code')

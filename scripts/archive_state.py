@@ -10,7 +10,7 @@ from pathlib import Path, PurePosixPath
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files
 from group_registry import REPOSITORY, RESERVED_SLUGS, SLUG, STATES, validate_branch, validate_exclusions
 from import_groups import validate_content
-from publication_state import RecoveryError, unique_keys
+from release import PublicationError, unique_keys
 
 MANIFEST = 'publication.json'
 SHA = re.compile(r'[0-9a-f]{40}')
@@ -29,7 +29,7 @@ class BoundedTarInfo(tarfile.TarInfo):
                 or self.type in metadata and self.size > 4096
                 or self.type == tarfile.DIRTYPE and self.size != 0
                 or self.type not in metadata | {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE}):
-            raise RecoveryError('unsafe or excessive archive header')
+            raise PublicationError('unsafe or excessive archive header')
         return super()._proc_member(stream)
 
 
@@ -133,7 +133,7 @@ def decode_archive(payload):
             raise ValueError('archive snapshot exceeds bounded transfer limit')
         return manifest['groups']
     except (ValueError, TypeError, KeyError, RecursionError) as error:
-        raise RecoveryError(f'Invalid archive manifest: {error}') from error
+        raise PublicationError(f'Invalid archive manifest: {error}') from error
 
 
 def encode_archive(groups):
@@ -156,7 +156,7 @@ def reconcile(groups, registry):
         if entry and (entry['repository'].casefold(), entry['branch']) == (group.repository.casefold(), group.branch):
             result[group.slug]['snapshot'] = entry['snapshot']
         elif entry and group.state == 'frozen':
-            raise RecoveryError(f'{group.slug}: a frozen group keeps its accepted snapshot; change its repository '
+            raise PublicationError(f'{group.slug}: a frozen group keeps its accepted snapshot; change its repository '
                                 'or branch only while it is live or hidden')
     encode_archive(result)
     return result
@@ -168,14 +168,14 @@ class ArchiveSnapshot:
     def __init__(self, folder, commit=None):
         # commit is set only for a snapshot read from student-work.
         if commit is not None and (not isinstance(commit, str) or not SHA.fullmatch(commit)):
-            raise RecoveryError('archive must be pinned to a full commit')
+            raise PublicationError('archive must be pinned to a full commit')
         self.folder = Path(folder)
         self.commit = commit
         if self.folder.is_symlink() or not self.folder.is_dir():
-            raise RecoveryError('snapshot root must be a regular directory')
+            raise PublicationError('snapshot root must be a regular directory')
         manifest = self.folder / MANIFEST
         if manifest.is_symlink() or not manifest.is_file() or manifest.stat().st_size > MAX_MANIFEST_BYTES:
-            raise RecoveryError('missing/unsafe archive manifest')
+            raise PublicationError('missing/unsafe archive manifest')
         self.payload = manifest.read_bytes()
         self.groups = decode_archive(self.payload)
         self.verify()
@@ -186,11 +186,11 @@ class ArchiveSnapshot:
         actual = set()
         for path in self.folder.rglob('*'):
             if path.is_symlink() or not (path.is_dir() or path.is_file()):
-                raise RecoveryError('archive contains links or special files')
+                raise PublicationError('archive contains links or special files')
             if path.is_file():
                 actual.add(path.relative_to(self.folder).as_posix())
         if actual != expected:
-            raise RecoveryError('archive inventory differs from manifest')
+            raise PublicationError('archive inventory differs from manifest')
         for slug, entry in self.groups.items():
             if not entry['snapshot']:
                 continue
@@ -200,16 +200,16 @@ class ArchiveSnapshot:
                 validate_content(self.folder / slug, entry['snapshot']['files'],
                                  require_visual=entry['snapshot']['require_visual'])
             except ValueError as error:
-                raise RecoveryError(f'{slug}: archive content is invalid: {error}') from error
+                raise PublicationError(f'{slug}: archive content is invalid: {error}') from error
 
     def read_file(self, slug, name):
         record = self.groups[slug]['snapshot']['files'][name]
         path = self.folder / slug / name
         if path.stat().st_size != record['size']:
-            raise RecoveryError(f'{slug}/{name}: archive size mismatch')
+            raise PublicationError(f'{slug}/{name}: archive size mismatch')
         content = path.read_bytes()
         if hashlib.sha256(content).hexdigest() != record['sha256'] or blob_sha(content) != record['blob_sha']:
-            raise RecoveryError(f'{slug}/{name}: archive digest mismatch')
+            raise PublicationError(f'{slug}/{name}: archive digest mismatch')
         return content
 
     def served(self):
@@ -229,15 +229,15 @@ def unpack_snapshot(archive, destination, expected_digest, *, git_directories=Fa
     archive, destination = Path(archive), Path(destination)
     if (not isinstance(expected_digest, str) or not DIGEST.fullmatch(expected_digest)
             or archive.is_symlink() or archive.stat().st_size > MAX_TRANSFER_BYTES):
-        raise RecoveryError('invalid archive transport')
+        raise PublicationError('invalid archive transport')
     digest = hashlib.sha256()
     with archive.open('rb') as stream:
         for chunk in iter(lambda: stream.read(65536), b''):
             digest.update(chunk)
     if digest.hexdigest() != expected_digest:
-        raise RecoveryError('archive transport digest mismatch')
+        raise PublicationError('archive transport digest mismatch')
     if destination.exists():
-        raise RecoveryError('snapshot destination must be new')
+        raise PublicationError('snapshot destination must be new')
     with tarfile.open(archive, 'r:*', tarinfo=BoundedTarInfo) as stream:
         members, names, directories, total = [], set(), set(), 0
         for member in stream:
@@ -245,38 +245,38 @@ def unpack_snapshot(archive, destination, expected_digest, *, git_directories=Fa
                 name = member.name.rstrip('/')
                 if (not name or name.startswith('/') or '\\' in name or len(name) > 576
                         or any(part in {'', '.', '..'} for part in name.split('/')) or name in directories):
-                    raise RecoveryError('unsafe/duplicate archive directory')
+                    raise PublicationError('unsafe/duplicate archive directory')
                 directories.add(name)
                 if len(directories) > 20000:
-                    raise RecoveryError('archive directory limit exceeded')
+                    raise PublicationError('archive directory limit exceeded')
                 continue
             path = PurePosixPath(member.name)
             if (not member.isfile() or member.name != path.as_posix() or path.is_absolute()
                     or any(part in {'', '.', '..'} for part in member.name.split('/'))
                     or '\\' in member.name or len(member.name) > 576 or member.name in names):
-                raise RecoveryError('unsafe/duplicate archive member')
+                raise PublicationError('unsafe/duplicate archive member')
             if member.name != MANIFEST and (len(path.parts) < 2 or not SLUG.fullmatch(path.parts[0])
                                             or path.parts[0] in RESERVED_SLUGS):
-                raise RecoveryError('unexpected archive member')
+                raise PublicationError('unexpected archive member')
             names.add(member.name)
             total += member.size
             if total > MAX_SITE_BYTES + MAX_MANIFEST_BYTES or len(names) > 10000:
-                raise RecoveryError('archive expanded size/member limit exceeded')
+                raise PublicationError('archive expanded size/member limit exceeded')
             members.append(member)
         if MANIFEST not in names:
-            raise RecoveryError('archive has no manifest')
+            raise PublicationError('archive has no manifest')
         manifest_member = next(member for member in members if member.name == MANIFEST)
         if manifest_member.size > MAX_MANIFEST_BYTES:
-            raise RecoveryError('archive manifest exceeds byte limit')
+            raise PublicationError('archive manifest exceeds byte limit')
         groups = decode_archive(stream.extractfile(manifest_member).read())
         expected = {MANIFEST} | {f'{slug}/{name}' for slug, entry in groups.items()
                                 if entry['snapshot'] for name in entry['snapshot']['files']}
         if names != expected:
-            raise RecoveryError('artifact inventory differs from manifest')
+            raise PublicationError('artifact inventory differs from manifest')
         parents = {'/'.join(name.split('/')[:index]) for name in expected
                    for index in range(1, len(name.split('/')))}
         if not directories <= parents:
-            raise RecoveryError('unlisted archive directory')
+            raise PublicationError('unlisted archive directory')
         with tempfile.TemporaryDirectory(prefix='.archive-validate-', dir=destination.parent) as temporary:
             staged = Path(temporary) / 'snapshot'
             staged.mkdir()
@@ -288,7 +288,7 @@ def unpack_snapshot(archive, destination, expected_digest, *, git_directories=Fa
                     while remaining:
                         chunk = source.read(min(65536, remaining))
                         if not chunk:
-                            raise RecoveryError('truncated archive member')
+                            raise PublicationError('truncated archive member')
                         target.write(chunk)
                         remaining -= len(chunk)
             # The transport digest alone cannot authorise bytes or active SVG.

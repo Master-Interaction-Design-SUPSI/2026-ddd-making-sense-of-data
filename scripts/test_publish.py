@@ -9,8 +9,8 @@ from unittest.mock import Mock, patch
 
 import archive_git
 import archive_transaction
-import publish_archive as controller
-from publication_state import RecoveryError
+import publish as controller
+from release import PublicationError
 from test_fixtures import SVG, TEXT, URL, Course
 from test_publication_requests import API, issue
 
@@ -41,16 +41,16 @@ class SplitPublisherTests(unittest.TestCase):
         self.api = API([issue()])
         self.api.client = SimpleNamespace(metrics={'rest_requests': 0, 'rest_bytes': 0})
         self.url = URL
-        self.patch('publish_archive.ROOT', self.fixture.root)
-        self.patch('publish_archive.STATE', self.fixture.root / '.scratch/v2-build-state.json')
-        self.patch('publish_archive.revision', side_effect=lambda ref: self.main if ref == 'HEAD' else self.tree)
-        self.patch('publish_archive.utc_now', return_value='2026-10-14T12:00:00Z')
-        self.patch('publish_site.worktree_clean', return_value=True)
-        self.patch('publish_site.time.sleep')
+        self.patch('publish.ROOT', self.fixture.root)
+        self.patch('publish.STATE', self.fixture.root / '.scratch/build-state.json')
+        self.patch('publish.revision', side_effect=lambda ref: self.main if ref == 'HEAD' else self.tree)
+        self.patch('publish.utc_now', return_value='2026-10-14T12:00:00Z')
+        self.patch('release.worktree_clean', return_value=True)
+        self.patch('release.time.sleep')
         self.patch('archive_git.init_remote', side_effect=self.init_remote)
         self.patch('archive_git.read_remote_snapshot', side_effect=lambda repository, commit, destination:
                    (archive_git.snapshot_from_git(self.remote, commit, destination), {'archive_transfer_bytes': 1}))
-        self.patch('publish_archive.prepare_archive', side_effect=lambda groups, previous, destination, **kwargs:
+        self.patch('publish.prepare_archive', side_effect=lambda groups, previous, destination, **kwargs:
             archive_transaction.prepare_archive(groups, previous, destination, client_factory=self.fixture.api.client, **kwargs))
         patcher = patch.dict(os.environ, MAIN_COMMIT=self.main, GITHUB_RUN_ID='60', GITHUB_RUN_ATTEMPT='1',
                              GITHUB_REPOSITORY='course/site', GITHUB_TOKEN='fixture-token', PAGES_URL=self.url)
@@ -74,7 +74,7 @@ class SplitPublisherTests(unittest.TestCase):
     def archive_head(self):
         try:
             return archive_git.git(self.remote, 'rev-parse', '--verify', archive_git.ARCHIVE_REF).decode().strip()
-        except RecoveryError:
+        except PublicationError:
             return None
 
     def archive_parents(self):
@@ -175,7 +175,7 @@ class SplitPublisherTests(unittest.TestCase):
             'site_sha256': 'f' * 64, 'probes': []}}
         self.verified = copy.deepcopy(self.latest)
         with patch.object(controller, 'prepare_archive', side_effect=AssertionError('must stop before import')), \
-                self.assertRaisesRegex(RecoveryError, 'student-work.*course-publication|course-publication.*student-work'):
+                self.assertRaisesRegex(PublicationError, 'student-work.*course-publication|course-publication.*student-work'):
             self.preparation()
         self.assertIsNone(self.archive_head())
 
@@ -198,16 +198,16 @@ class SplitPublisherTests(unittest.TestCase):
         self.accepted(other, other_digest)
         head = self.archive_head()
         self.next_run(60)
-        with self.assertRaisesRegex(RecoveryError, 'archive head changed'):
+        with self.assertRaisesRegex(PublicationError, 'archive head changed'):
             self.accepted(prepared, digest)
         self.assertEqual(self.archive_head(), head)
 
     def test_pause_blocks_archive_entry_and_issue_answer_before_remote_calls(self):
         self.records.reset_mock()
         with patch.dict(os.environ, DDD_PUBLICATION_PAUSED='true'):
-            with self.assertRaisesRegex(RecoveryError, 'paused'):
+            with self.assertRaisesRegex(PublicationError, 'paused'):
                 controller.require_main(self.records)
-            with self.assertRaisesRegex(RecoveryError, 'paused'):
+            with self.assertRaisesRegex(PublicationError, 'paused'):
                 controller.answer(self.api, self.folder('unused'), 'f' * 64, self.records)
         self.records.main_commit.assert_not_called()
         self.assertFalse(self.api.comments)
@@ -248,7 +248,7 @@ class SplitPublisherTests(unittest.TestCase):
         self.next_run(61)
         prepared, digest = self.preparation()
         head = self.archive_head()
-        with self.assertRaisesRegex(RecoveryError, 'unarchived'):
+        with self.assertRaisesRegex(PublicationError, 'unarchived'):
             controller.build(self.records, self.url, prepared, digest)
         self.assertEqual(self.archive_head(), head)
 
@@ -306,13 +306,13 @@ class SplitPublisherTests(unittest.TestCase):
     def test_changed_artifact_run_identity_and_code_are_rejected(self):
         admitted, checksum = self.admission(event='workflow_dispatch')
         (admitted / 'batch.json').write_text('{}')
-        with self.assertRaises(RecoveryError): controller.load(admitted, checksum, {'admission'})
+        with self.assertRaises(PublicationError): controller.load(admitted, checksum, {'admission'})
         fresh, checksum = self.admission(event='workflow_dispatch')
         os.environ['GITHUB_RUN_ATTEMPT'] = '2'
-        with self.assertRaises(RecoveryError): controller.load(fresh, checksum, {'admission'})
+        with self.assertRaises(PublicationError): controller.load(fresh, checksum, {'admission'})
         os.environ['GITHUB_RUN_ATTEMPT'] = '1'
         self.records.main_commit.return_value = 'f' * 40
-        with self.assertRaisesRegex(RecoveryError, 'superseded'):
+        with self.assertRaisesRegex(PublicationError, 'superseded'):
             controller.prepare(self.records, self.url, fresh, checksum, self.folder('superseded'))
 
     def test_second_run_after_the_first_is_unchanged_and_answers_without_new_deployment(self):
@@ -373,13 +373,13 @@ class SplitPublisherTests(unittest.TestCase):
         controller.build(self.records, self.url, accepted, checksum)
         self.assertEqual(controller.state()['release'], release)
         self.latest['payload']['archive_commit'] = 'f' * 40
-        with self.assertRaisesRegex(RecoveryError, 'superseded'):
+        with self.assertRaisesRegex(PublicationError, 'superseded'):
             controller.build(self.records, self.url, accepted, checksum)
 
     def test_main_change_before_deploy_or_answer_leaves_requests_open(self):
         result, checksum = self.publish()
         self.records.main_commit.return_value = 'f' * 40
-        with self.assertRaisesRegex(RecoveryError, 'superseded'): controller.authorize(self.records)
+        with self.assertRaisesRegex(PublicationError, 'superseded'): controller.authorize(self.records)
         controller.answer(self.api, result, checksum, self.records)
         self.assertEqual(self.api.issues[1]['state'], 'open')
         self.assertFalse(self.api.comments)
