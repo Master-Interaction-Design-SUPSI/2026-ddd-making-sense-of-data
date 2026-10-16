@@ -9,7 +9,7 @@ Use this manual for current operating instructions. [Acceptance checks](docs/202
 
 ## 1. Operating baseline
 
-The archive publication path (V2) is the only one. On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
+Publication goes through the archive (§9.4). On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
 
 The working registry (`groups.json`) has live remote groups `materialities-of-ai` and `ddd-abstract`, and hidden pilots `dust` and `pilot-beta`; `example` is local. Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
 
@@ -210,7 +210,7 @@ Meaning of each group status, for answering students. The student guide sends th
 
 Requirements: Python 3.9+, Node. No packages. Optional `GITHUB_TOKEN` raises API quota; never sent to raw or Pages hosts.
 
-## 9. Publication: V2 production
+## 9. Publication
 
 Workflow **Publish course website** (`.github/workflows/pages.yml`). Pushes to `main`, the schedule `7,17,27,37,47,57 * * * *`, and **Run workflow → main** refresh the site. Issue-opened events are admitted only when requests are enabled and eligible. Publication uses concurrency group `pages`, with `cancel-in-progress: false`.
 
@@ -346,7 +346,7 @@ Complete the [ordinary student-account acceptance checks](docs/2026-10-15_ddd_ac
 
 ### 10.4 Course repository
 
-Review every PR to `main`, including the full **Files changed** list. The required V2 protection baseline is a PR and the GitHub Actions `validate` check, with an up-to-date branch and resolved review threads. The recorded configuration has zero required approvals and no bypass actors; recheck effective settings before relying on it. `main` and `student-work` reject deletion and non-fast-forward updates. The `github-pages` environment is restricted to `main`. PR validation is offline, read-only, fixture-based.
+Review every PR to `main`, including the full **Files changed** list. The required protection baseline is a PR and the GitHub Actions `validate` check, with an up-to-date branch and resolved review threads. The recorded configuration has zero required approvals and no bypass actors; recheck effective settings before relying on it. `main` and `student-work` reject deletion and non-fast-forward updates. The `github-pages` environment is restricted to `main`. PR validation is offline, read-only, fixture-based.
 
 ## 11. Recovery
 
