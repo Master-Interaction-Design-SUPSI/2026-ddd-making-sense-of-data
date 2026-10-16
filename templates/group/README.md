@@ -120,8 +120,8 @@ Notes, citations and quotes take optional modifiers after a second `|`, separate
 | Media | Behavior |
 | --- | --- |
 | Image | Inline thumbnail; aspect ratio kept. Hover or keyboard focus: enlarged preview. Click or tap: opens the original source in a new tab. |
-| Audio | Static player with a play symbol and label. Click or tap: opens the original source in a new tab. |
-| Video | Inline, muted and looping; starts when half visible. Hover: enlarged preview with sound, when the browser permits playback. Keyboard focus: muted preview. Click or tap: opens the original source in a new tab. |
+| Audio | Player with a play symbol and label. Hover or keyboard focus: plays with sound; leaving stops playback. Click or tap: opens the original source in a new tab. |
+| Video | Inline, muted and looping; starts when half visible. Hover: enlarged preview with sound, when the browser permits playback. Keyboard focus: preview with sound. Click or tap: opens the original source in a new tab. |
 | External embed | Opens from its annotation. An **Open media on provider** link is always shown; playback inside the page may vary. |
 
 A click opens the source in the file's `media.csv` row. With an empty source, it opens the published file itself.
@@ -130,7 +130,7 @@ The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/
 
 - Playback stops off screen, on entry switch, while the main image is enlarged, and when the page is hidden.
 - With reduced motion turned on, videos stay still and previews do not animate.
-- Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. The source link always works. Check your entry on the site.
+- Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. If sound is blocked, choose **Enable sound**, then hover again. The source link always works. Check your entry on the site.
 
 ## 9. Editor (preview)
 
