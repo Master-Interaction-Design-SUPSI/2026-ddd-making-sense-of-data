@@ -62,11 +62,16 @@ test('partial inventories cannot infer deletions', () => {
 
 test('shared references cover frontmatter, annotations, Markdown and encoded paths', () => {
   const text = '---\ntitle: [ignored](missing.png)\n---\n[[detail|media/detail.svg]] [photo](media/ph%6fto.png?x=1#part)';
-  assert.deepEqual(references.validate(text, ['media/detail.svg', 'media/photo.png']), ['media/photo.png', 'media/detail.svg']);
+  assert.deepEqual(references.validate(text, ['media/detail.svg', 'media/photo.png']), { used: ['media/photo.png', 'media/detail.svg'], warnings: [] });
   for (const target of ['%2e%2e/secret.svg', 'media/%2fsecret.png', 'media/%00secret.png', '//host/path.png', 'blob:arbitrary', 'data:image/png,xx', 'javascript:alert(1)', '%zz']) {
     assert.throws(() => references.localPath(target));
   }
-  assert.throws(() => references.validate('![missing](media/missing.png)', []), /imported file/);
+  // A missing file is a warning; only unsafe targets reject the text.
+  assert.deepEqual(references.validate('![missing](media/missing.png)', []),
+    { used: [], warnings: ['text.md: media/missing.png is not in this group yet'] });
+  for (const target of ['../beta/visual.svg', '%zz', 'javascript:alert(1)']) {
+    assert.throws(() => references.validate(`![x](${target})`, []));
+  }
 });
 
 test('preview schema rejects unsafe paths, payloads, duplicate assets and byte excess', () => {
@@ -85,29 +90,6 @@ test('renderer import has no automatic fetching or start', () => {
   vm.runInContext(fs.readFileSync(require.resolve('../static/main.js'), 'utf8'), context);
   assert.equal(calls, 0);
   assert.equal(typeof context.CourseSite.start, 'function');
-});
-
-test('upload sequence counts replacements and obsolete files before deletion', () => {
-  const { validateUploads } = require('../editor/model.js');
-  const base = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/replacement.mp4', { size: 2 * 1048576 }], ['media/obsolete.mp4', { size: 20 * 1048576 }], ['media/kept.mp4', { size: 20 * 1048576 }]]);
-  const final = new Map(base);
-  final.set('media/replacement.mp4', { size: 20 * 1048576 });
-  final.delete('media/obsolete.mp4');
-  assert.doesNotThrow(() => select(final, contract));
-  assert.throws(() => validateUploads(base, [{ operation: 'replace', path: 'media/replacement.mp4' }, { operation: 'delete', path: 'media/obsolete.mp4' }], final, contract), /temporarily/);
-  const countBase = new Map([['text.md', { size: 0 }], ['visual.svg', { size: 1 }], ...Array.from({ length: 98 }, (_, i) => [`media/${i}.png`, { size: 1 }])]);
-  const countFinal = new Map(countBase);
-  countFinal.delete('media/0.png'); countFinal.set('media/new.png', { size: 1 });
-  assert.throws(() => validateUploads(countBase, [{ operation: 'add', path: 'media/new.png' }], countFinal, contract), /100 files/);
-});
-
-test('text commit is checked before obsolete-file deletion', () => {
-  const { validateUploads } = require('../editor/model.js');
-  const base = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/first.mp4', { size: 20 * 1048576 }], ['media/second.mp4', { size: 20 * 1048576 }], ['media/obsolete.mp4', { size: 10 * 1048576 - 2 }]]);
-  const final = new Map(base);
-  final.set('text.md', { size: 101 }); final.delete('media/obsolete.mp4');
-  assert.doesNotThrow(() => select(final, contract));
-  assert.throws(() => validateUploads(base, [{ operation: 'replace', path: 'text.md' }, { operation: 'delete', path: 'media/obsolete.mp4' }], final, contract), /Committing text/);
 });
 
 test('browser selection matches the authoritative importer on the shared parity corpus', () => {
@@ -177,23 +159,25 @@ test('media.csv reads comma or semicolon spreadsheets, quotes, BOM and CRLF', ()
   ]) assert.throws(() => media.read(text), message, JSON.stringify(text));
 });
 
-test('with media.csv, names resolve and every media file the text uses needs a row', () => {
+test('with media.csv, names resolve; unknown names, absent files and missing rows are warnings', () => {
   const media = require('../static/media-table.js');
   const table = media.read('name,source,file\nmine,https://example.org/mine,media/mine.jpg\nplanned,,media/later.mp4\n');
   const files = ['text.md', 'visual.svg', 'media.csv', 'media/mine.jpg', 'media/other.png'];
-  assert.deepEqual(references.validate('---\ntitle: x\n---\nThe [[MINE]].', files, undefined, table), ['media/mine.jpg']);
+  const warnings = (text, ...rest) => references.validate(text, ...rest).warnings;
+  assert.deepEqual(references.validate('---\ntitle: x\n---\nThe [[MINE]].', files, undefined, table), { used: ['media/mine.jpg'], warnings: [] });
   assert.deepEqual(references.collect('[[mine]]', table), ['media/mine.jpg', 'https://example.org/mine']);
-  assert.throws(() => references.validate('[[missing]]', files, undefined, table), /\[\[missing\]\] is not a name in media.csv/);
-  assert.throws(() => references.validate('[[x|media/other.png]]', files, undefined, table), /media\/other.png is used in the text but has no row/);
-  assert.throws(() => references.validate('![x](media/other.png)', files, undefined, table), /no row in media.csv/);
-  assert.throws(() => references.validate('[[planned]]', files, undefined, table), /must reference an imported file/);
-  assert.deepEqual(references.validate('![x](visual.svg)', files, undefined, table), ['visual.svg']);
-  assert.deepEqual(references.validate('[[literal]] [[x|media/other.png]]', files), ['media/other.png']);
+  assert.deepEqual(warnings('[[missing]] and [[missing]]', files, undefined, table), ['text.md: [[missing]] is not a name in media.csv']);
+  assert.deepEqual(warnings('[[x|media/other.png]]', files, undefined, table), ['text.md: media/other.png is used in the text but has no row in media.csv']);
+  assert.deepEqual(warnings('![x](media/other.png)', files, undefined, table), ['text.md: media/other.png is used in the text but has no row in media.csv']);
+  assert.deepEqual(warnings('[[planned]]', files, undefined, table), ['text.md: media/later.mp4 is not in this group yet']);
+  assert.deepEqual(references.validate('![x](visual.svg)', files, undefined, table), { used: ['visual.svg'], warnings: [] });
+  assert.deepEqual(references.validate('[[literal]] [[x|media/other.png]]', files),
+    { used: ['media/other.png'], warnings: ['text.md: [[literal]] is not a name in media.csv'] });
   assert.deepEqual(media.warnings(table, files), ['Rows without a source link: planned', 'Rows whose file is not in this group yet: media/later.mp4']);
 });
 
-test('drafts carry media.csv, start one from existing media and commit it before the text', async () => {
-  const { startingTable, validateUploads } = require('../editor/model.js');
+test('drafts carry media.csv, start one from existing media and note what does not resolve yet', async () => {
+  const { startingTable } = require('../editor/model.js');
   const base = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/field-photo.jpg', { size: 3 }], ['media/field_photo.png', { size: 3 }]]);
   assert.equal(startingTable(base, contract), 'name,source,file\nfield photo,,media/field-photo.jpg\nfield_photo.png,,media/field_photo.png\n');
   const draft = new Draft(base, config, contract);
@@ -205,7 +189,6 @@ test('drafts carry media.csv, start one from existing media and commit it before
   assert.deepEqual(result.notes, ['Rows without a source link: field photo, field_photo.png']);
   assert.deepEqual((await draft.changes()).map(change => change.path), ['media.csv', 'text.md']);
   assert.throws(() => draft.attach('media.csv', new Blob(['x']), 'a'.repeat(64)), /media table/);
-  const tight = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/a.mp4', { size: 20 * 1048576 }], ['media/b.mp4', { size: 20 * 1048576 }], ['media/c.mp4', { size: 10 * 1048576 - 100 }]]);
-  const final = new Map(tight); final.set('media.csv', { size: 200 });
-  assert.throws(() => validateUploads(tight, [{ operation: 'add', path: 'media.csv' }], final, contract), /Committing text/);
+  draft.text = 'A [[field photo]] and a [[later sketch]].';
+  assert.deepEqual(draft.validate().notes[0], 'text.md: [[later sketch]] is not a name in media.csv');
 });

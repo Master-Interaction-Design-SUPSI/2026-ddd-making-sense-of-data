@@ -88,9 +88,11 @@ def find_entries():
                  for path in folder.rglob("*") if path.is_file()}
         try:
             # Every group needs the main visual; a course-team folder may leave it out.
-            validate_content(folder, select_content_files(sizes, required=("text.md",)))
+            notes = validate_content(folder, select_content_files(sizes, required=("text.md",)))
         except (ValueError, ET.ParseError) as error:
             raise ValueError(f"{folder.name}: {error}") from error
+        for note in notes:
+            warnings.warn(f"{folder.name}: {note}")
         entries.append(folder.name)
     return sorted(entries, key=lambda name: (name != "example", name.casefold()))
 

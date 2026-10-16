@@ -54,21 +54,6 @@
     return { files: selected, total };
   }
 
-  function validateUploads(base, changes, final, contract) {
-    const intermediate = new Map(base);
-    // Commit order: media uploads, then media.csv, then text.md, then deletions.
-    const table = contract.media_table;
-    for (const change of changes.filter(change => change.path !== 'text.md' && change.path !== table && change.operation !== 'delete')) {
-      intermediate.set(change.path, final.get(change.path));
-      try { select(intermediate, contract); }
-      catch (error) { throw new Error(`Uploading ${change.path} would temporarily break the content limits or paths: ${error.message}. Reconcile the commit sequence before uploading.`); }
-    }
-    if (final.has(table)) intermediate.set(table, final.get(table));
-    intermediate.set('text.md', final.get('text.md'));
-    try { select(intermediate, contract); }
-    catch (error) { throw new Error(`Committing text before deleting obsolete files would temporarily break the content limits: ${error.message}. Reconcile the commit sequence before uploading.`); }
-  }
-
   class Draft {
     constructor(base, config, contract) {
       this.base = new Map(base);
@@ -107,10 +92,12 @@
       if (this.table === null) throw new Error('media.csv: add the media table');
       const table = media.read(this.table);
       const result = select(this.files(), this.contract);
-      const used = new Set(references.validate(this.text, result.files.keys(), this.contract.reference_schemes, table));
+      // Names and files that do not resolve yet are notes: the page shows them as missing.
+      const checked = references.validate(this.text, result.files.keys(), this.contract.reference_schemes, table);
+      const used = new Set(checked.used);
       const fixed = ['text.md', 'visual.svg', this.contract.media_table];
       return { ...result, orphans: [...result.files.keys()].filter(name => !fixed.includes(name) && !used.has(name)),
-               notes: media.warnings(table, result.files.keys()) };
+               notes: [...checked.warnings, ...media.warnings(table, result.files.keys())] };
     }
     async changes() {
       const changes = [];
@@ -138,7 +125,7 @@
     return media.serialize(rows);
   }
 
-  const api = { bytes, digest, select, validateUploads, publicationRequest, startingTable, Draft };
+  const api = { bytes, digest, select, publicationRequest, startingTable, Draft };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CourseDraft = api;
 })(globalThis);

@@ -87,11 +87,12 @@ def validate_svg_style(value, name):
 
 
 def validate_references(text, files, table=None):
+    """Reject unsafe targets; return warnings for names and files that do not resolve."""
     payload = json.dumps({"text": text, "files": list(files), "schemes": CONTRACT["reference_schemes"],
                           "table": table})
     try:
-        subprocess.run(["node", str(LINK_CHECKER), "--validate"], input=payload, text=True,
-                       capture_output=True, timeout=10, check=True)
+        checked = subprocess.run(["node", str(LINK_CHECKER), "--validate"], input=payload, text=True,
+                                 capture_output=True, timeout=10, check=True)
     except subprocess.TimeoutExpired as error:
         raise ValueError("text.md: link validation exceeded 10 seconds; simplify the text") from error
     except subprocess.CalledProcessError as error:
@@ -101,9 +102,11 @@ def validate_references(text, files, table=None):
             named = message.startswith(("text.md:", MEDIA_TABLE))
             raise ValueError(message if named else "text.md: " + message) from error
         raise RuntimeError("Text validator failed; check the local Node/Markdown setup") from error
+    return json.loads(checked.stdout)["warnings"]
 
 
 def validate_content(folder, files, *, require_table=False):
+    """Reject unsafe or malformed content; return warnings about references that do not resolve."""
     # Only import admission requires media.csv; archive checks validate it when present.
     for name in files:
         if name.endswith(".svg"):
@@ -120,7 +123,7 @@ def validate_content(folder, files, *, require_table=False):
     elif require_table:
         raise ValueError(f"{MEDIA_TABLE}: required; list each media file as name,source,file "
                          "(keep only that first line if the text uses no media)")
-    validate_references(text, files, table)
+    return validate_references(text, files, table)
 
 
 def import_group(group, destination, client, result, *, previous=None, allow_unchanged=False):
@@ -171,7 +174,7 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
             path = candidate / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        validate_content(candidate, files, require_table=True)
+        result["warnings"] = validate_content(candidate, files, require_table=True)
         client.remaining()
         candidate.rename(destination / group.slug)
     result.update(status="imported", files=list(files))

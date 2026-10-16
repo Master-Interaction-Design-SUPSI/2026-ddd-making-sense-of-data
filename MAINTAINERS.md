@@ -75,7 +75,7 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | `repository` | `owner/name`; no URL, no `.git`; unique, case-insensitive; public. Redirects rejected. |
 | `branch` | Default `main`. Valid Git ref name. |
 | `state` | Required: `live`, `frozen` or `hidden`. |
-| `exclude` | Exact optional media paths, dropped before download and size accounting. Cannot drop `text.md` or `visual.svg`. A referenced excluded file fails validation. Reported as `excluded_files`. |
+| `exclude` | Exact optional media paths, dropped before download and size accounting. Cannot drop `text.md` or `visual.svg`. A reference to an excluded file is a warning and shows as missing. Reported as `excluded_files`. |
 
 Maximum 15 groups. Unknown fields rejected. Validation is offline; the importer checks visibility.
 
@@ -111,9 +111,9 @@ Paths:
 
 SVG: static UTF-8. Rejected: scripts, event handlers, foreign markup, links, animation, entities, processing instructions, external resources. Permitted: local paint references; embedded PNG/JPEG/WebP data images.
 
-References: Markdown links and images, including reference syntax, and annotation targets must resolve to selected files. `./media/x.svg` and local fragments pass. Missing, ignored, excluded or cross-group targets reject the update. `http`, `https`, `mailto` pass unfetched; other schemes reject.
+References: Markdown links and images, including reference syntax, and annotation targets resolve to selected files. `./media/x.svg` and local fragments pass. A target that is missing, ignored or excluded, an unknown `[[name]]`, or a used file without a `media.csv` row is a warning: the update is accepted, the report lists it under `warnings`, and the page shows one mark, *missing: name or path*, in annotation styling. Targets that leave the group, bad encodings and schemes other than `http`, `https`, `mailto` reject the update. Files and text can therefore be committed in any order.
 
-Media table (`static/media-table.js`, shared by renderer, editor and importer): `[[name]]` expands to `[[name|file|source=url]]` before any other parsing. Names are unique case-insensitively. Every media file `text.md` uses, by name or path, needs a row; rows for files not yet uploaded pass, so media → `media.csv` → `text.md` commits stay valid one by one. Empty source passes; the editor warns. A row's source also links path references and Markdown images.
+Media table (`static/media-table.js`, shared by renderer, editor and importer): `[[name]]` expands to `[[name|file|source=url]]` before any other parsing. Names are unique case-insensitively. Every media file `text.md` uses, by name or path, should have a row; a missing row is a warning. Rows for files not yet uploaded pass. Empty source passes; the editor warns. A row's source also links path references and Markdown images.
 
 `media.csv` is required only by `import_group` (`validate_content(require_table=True)`); archive verification and course-team folders check it when present.
 
@@ -163,7 +163,7 @@ Drafts:
 - Storage denied: localStorage text-only fallback; missing media listed. Old backups kept until explicit migration.
 - Label: "Saved in this browser only."
 
-Hand-off, generated per draft, not atomic:
+Hand-off, generated per draft, in any order (until every commit is in, the page shows what is not there yet as missing):
 
 1. Review current `text.md` on GitHub. Stale-text comparison warns; equality is not proof of freshness.
 2. Upload new media; commit. Replace referenced media under a new name.
@@ -171,7 +171,7 @@ Hand-off, generated per draft, not atomic:
 4. Delete removed files.
 5. Submit request (if enabled) or read the run summary.
 
-Intermediate totals are checked. A valid intermediate commit can publish.
+The final file set is checked against the limits. Names and files that do not resolve are notes, not errors.
 
 Preview: same-origin iframe; layout isolation, not a sandbox. Protocol v1, types `hello ready render ack error`; window, origin, schema, slug, path, size and revision checked. Only editor-owned object URLs bypass scheme checks; `blob:` and `data:` in text are rejected.
 
@@ -197,6 +197,7 @@ Report: `report.json` in each run's job artifacts (§9.2).
 | `status` | `imported`, `unchanged`, `failed`, `disabled` (not `live`) |
 | `publication_status` | `updated`, `unchanged`, `retained`, `skipped`, `hidden`, `frozen` |
 | `selected_source` | Repository, branch, commit actually published; may differ from attempt. |
+| `warnings` | References that do not resolve; the page shows each as missing. |
 
 Meaning of each group status, for answering students. The student guide sends them to the site itself and to the course team.
 

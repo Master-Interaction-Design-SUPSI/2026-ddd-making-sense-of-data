@@ -190,9 +190,13 @@ function expandColours(src) {
   return out;
 }
 
-function renderMarkdown(body, table = null) {
+/* missing collects each [[name]] the media table cannot resolve; the page
+   shows it as one mark, filled in with textContent by renderEntry. */
+function renderMarkdown(body, table = null, missing = []) {
+  const named = CourseMediaTable.replaceUnresolved(CourseMediaTable.expand(body, table),
+    name => `\uE000${missing.push(name) - 1}\uE001`);
   // Keep Markdown blockquotes (>) while preventing contributor HTML (<...>).
-  const plain = CourseMediaTable.expand(body, table).replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const plain = named.replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const expanded = expandColours(expandAnnotations(plain));
   const tokens = marked.lexer(expanded);
   marked.walkTokens(tokens, (token) => {
@@ -214,7 +218,44 @@ function renderMarkdown(body, table = null) {
       flow.push(token);
     }
   }
-  return marked.parser(flow);
+  return marked.parser(flow).replace(/\uE000(\d+)\uE001/g,
+    (_, index) => `<span class="annotation annotation-missing" data-missing="${index}"></span>`);
+}
+
+/* One visible mark for a name or file that is not in the group (yet). */
+function missingMark(name) {
+  const mark = document.createElement("span");
+  mark.className = "annotation annotation-missing";
+  const text = document.createElement("span");
+  text.className = "annotation-content annotation-text";
+  text.textContent = `missing: ${name}`;
+  mark.append(text);
+  return mark;
+}
+
+const isLocal = url => !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url);
+
+/* On the site, a media file is known to be missing only once loading it
+   fails: an image errors, a video errors and the file answers 404, an
+   audio link's file answers 404. */
+function watchMissingMedia(textEl, folder) {
+  const pathOf = url => url && url.startsWith(`${folder}/`) ? url.slice(folder.length + 1) : null;
+  const replace = (target, path) => { if (target.isConnected) target.replaceWith(missingMark(path)); };
+  const absent = url => fetch(url, { method: "HEAD" }).then(response => response.status === 404, () => false);
+  for (const image of textEl.querySelectorAll("img[src]")) {
+    const path = pathOf(image.getAttribute("src"));
+    if (path) image.addEventListener("error", () => replace(image.closest(".inline-image") || image, path), { once: true });
+  }
+  for (const video of textEl.querySelectorAll("video[src]")) {
+    const path = pathOf(video.getAttribute("src"));
+    if (path) video.addEventListener("error", async () => {
+      if (await absent(video.getAttribute("src"))) replace(video.closest(".inline-playback") || video, path);
+    }, { once: true });
+  }
+  for (const link of textEl.querySelectorAll("a.inline-audio[data-file]")) {
+    const path = pathOf(link.dataset.file);
+    if (path) absent(link.dataset.file).then(gone => { if (gone) replace(link, path); });
+  }
 }
 
 /* ---------- loading ---------- */
@@ -258,8 +299,9 @@ function renderEntry(entry) {
   let table = null;
   try { table = entry.table ? CourseMediaTable.read(entry.table) : null; }
   catch { /* Import admission rejects invalid tables; names then stay literal. */ }
+  const missing = [];
   html += `<div class="entry-text">`;
-  if (entry.text !== null) html += renderMarkdown(body, table);
+  if (entry.text !== null) html += renderMarkdown(body, table, missing);
   html += `</div>`;
   const visual = entry.visual && safeUrl(entry.visual === `${entry.folder}/visual.svg` ? "visual.svg" : entry.visual, entry.folder, "media");
   if (visual) {
@@ -277,9 +319,17 @@ function renderEntry(entry) {
      resolves against the Entry's folder. The hero visual above is already
      a full path and sits outside this scope. */
   const textEl = template.content.querySelector(".entry-text");
+  for (const mark of textEl.querySelectorAll(".annotation-missing[data-missing]")) {
+    mark.replaceWith(missingMark(missing[Number(mark.dataset.missing)]));
+  }
   const sources = CourseMediaTable.sources(table);
   for (const el of textEl.querySelectorAll("[src]")) {
     const src = el.getAttribute("src");
+    // In the editor preview, a draft file that is not attached yet is missing.
+    if (src && resourceResolver && isLocal(src) && !safeUrl(src, entry.folder, "media")) {
+      (el.closest(".annotation") || el).replaceWith(missingMark(src.replace(/^\.\//, "").split(/[?#]/)[0]));
+      continue;
+    }
     // A Markdown image links to its media.csv source, like [[name]] media.
     const source = src && sources.get(src.replace(/^\.\//, ""));
     if (source && el.tagName === "IMG" && !el.closest("a[href]")) {
@@ -304,6 +354,7 @@ function renderEntry(entry) {
   }
   prepareInlineImages(textEl);
   CoursePlayback.prepare(textEl);
+  if (!resourceResolver) watchMissingMedia(textEl, entry.folder);
   section.append(template.content);
 
   return section;

@@ -39,24 +39,24 @@
     return path;
   }
 
-  /* With a media table, [[name]] must be one of its rows and every media
-     file the text uses needs a row. Without one, older snapshots keep
-     their previous rules. */
+  /* Only unsafe targets throw: other schemes, bad encoding, paths that leave
+     the group. Anything else that does not resolve is a warning, and the page
+     shows it as missing, so files and text can be committed in any order. */
   function validate(text, files, schemes, table = null) {
     const paths = new Set(files);
     const used = new Set();
-    if (table) {
-      const [name] = media.unresolved(media.expand(bodyOf(text), table));
-      if (name !== undefined) throw new Error(`text.md: [[${name}]] is not a name in media.csv`);
+    const warnings = new Set();
+    for (const name of media.unresolved(media.expand(bodyOf(text), table))) {
+      warnings.add(`text.md: [[${name}]] is not a name in media.csv`);
     }
     for (const target of collect(text, table)) {
       const path = localPath(target, schemes);
       if (path === null) continue;
-      if (!paths.has(path)) throw new Error(`text.md: ${target} must reference an imported file inside this group`);
-      if (table && path !== 'visual.svg' && !table.byFile.has(path)) throw new Error(`text.md: ${path} is used in the text but has no row in media.csv`);
+      if (!paths.has(path)) { warnings.add(`text.md: ${path} is not in this group yet`); continue; }
+      if (table && path !== 'visual.svg' && !table.byFile.has(path)) warnings.add(`text.md: ${path} is used in the text but has no row in media.csv`);
       used.add(path);
     }
-    return [...used];
+    return { used: [...used], warnings: [...warnings] };
   }
 
   const api = { collect, localPath, validate };

@@ -15,6 +15,17 @@ const context = vm.createContext({
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/main.js'), 'utf8'), context);
 
+test('an unknown [[name]] renders one missing mark whose text is filled in later', () => {
+  const missing = [];
+  const table = mediaTable.read('name,source,file\nknown,,media/known.png\n');
+  const html = context.renderMarkdown('A [[ghost <b>]], a [[known]] and a [[note|A detail]].', table, missing);
+  assert.deepEqual(missing, ['ghost <b>']);
+  assert.match(html, /<span class="annotation annotation-missing" data-missing="0"><\/span>/);
+  assert.doesNotMatch(html, /ghost|<b>/);
+  assert.match(html, /media\/known\.png/);
+  assert.match(html, /annotation-note/);
+});
+
 test('semantic type, style and color are independent and order does not matter', () => {
   for (const modifiers of ['type=quote;style=italic;color=crimson', 'color=crimson;type=quote;style=italic']) {
     const [annotation] = annotations.parseAll(`[[the quote|Quoted words|${modifiers}]]`);
@@ -176,7 +187,7 @@ test('data source underlines preserve text and Markdown emphasis', () => {
   assert.match(context.renderMarkdown('{underline|Dataset **XX**}'), /<u>Dataset <strong>XX<\/strong><\/u>/);
 });
 
-test('media.csv names render their file with the source link; unknown names stay literal', () => {
+test('media.csv names render their file with the source link; unknown names render as missing', () => {
   const table = mediaTable.read('name,source,file\nlithium mine,https://example.org/mine?a=1&b=2,media/mine.jpg\ninterview,,media/interview.mp3\nclip,https://example.org/clip;v=2,media/clip.mp4\n');
   const image = context.renderMarkdown('The [[Lithium Mine]] near the river.', table);
   assert.match(image, /<a href="https:\/\/example.org\/mine\?a=1&amp;b=2" target="_blank" rel="noopener noreferrer"><img src="media\/mine.jpg"/);
@@ -185,6 +196,9 @@ test('media.csv names render their file with the source link; unknown names stay
   assert.doesNotMatch(context.renderMarkdown('[[interview]]', table), /<a href/);
   assert.match(context.renderMarkdown('[[clip]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
   assert.match(context.renderMarkdown('[[a recording|media/clip.mp4]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
-  assert.match(context.renderMarkdown('[[unknown name]]', table), /\[\[unknown name\]\]/);
-  assert.match(context.renderMarkdown('[[lithium mine]]'), /\[\[lithium mine\]\]/);
+  for (const [text, rows] of [['[[unknown name]]', table], ['[[lithium mine]]', null]]) {
+    const missing = [];
+    assert.match(context.renderMarkdown(text, rows, missing), /annotation-missing/);
+    assert.deepEqual(missing, [text.slice(2, -2)]);
+  }
 });

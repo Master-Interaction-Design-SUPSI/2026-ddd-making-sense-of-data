@@ -10,7 +10,7 @@ Your group's public repository. You write your text and add your media here. The
 - One repository per group. One member opens the [group template](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta) → **Use this template → Create a new repository**. Owner: your account. Visibility: **Public**. Then **Settings → Collaborators → Add people** for each teammate. Send the repository link to the course team.
 - The course team sends you your group identifier (slug) and the website link, and tells you when publication starts.
 - Edit only your group repository, never the course repository.
-- The text, visual, `media.csv` and `media/example-*` files you start with are demonstrations with invented numbers. Replace them. Before deleting a file, remove its name from `text.md`.
+- The text, visual, `media.csv` and `media/example-*` files you start with are demonstrations with invented numbers. Replace them.
 
 ## 2. Files
 
@@ -65,9 +65,9 @@ If GitHub offers only a fork or a proposed change, you are in the wrong reposito
    ```
 
 3. Write the name in double brackets in `text.md`: `[[interview]]`, `[[lithium mine]]`. Commit. The file appears there; a click opens its source.
-4. To remove a file: delete its name from `text.md` and commit; then delete the file and its row.
+4. To remove a file: delete its name from `text.md`, the file and its row.
 
-One rule sets the order: everything `text.md` names must already exist. Each commit can publish on its own, so commit `text.md` last when you add media, and first when you remove it.
+Commit in any order. Until a file is there, your page shows *missing: its name* in its place.
 
 `media.csv` is required, even without media: then it holds only its first line. Names: unique, ignoring case; no `[`, `]` or `|`. Source: a full `https://` link, or empty for your own material. A spreadsheet can save it as **CSV UTF-8**; commas or semicolons both work. Typing in GitHub: put a value containing a comma in double quotes.
 
@@ -95,16 +95,14 @@ Open the website and look at your entry.
 | Your latest version | Published. | Nothing. |
 | Your previous version | Not collected yet, or the update was not accepted. The previous version stays online meanwhile. | Wait a few hours. Still old: check the list below, correct, commit to **main**. |
 | No entry | Nothing published yet. | Check the list below. Still missing: ask the course team. |
+| *missing: …* in your text | That name has no row in `media.csv`, or its file is not uploaded yet. | Upload the file, or correct the name or path. Match case exactly. |
 
 Common reasons an update is not accepted:
 
 | Problem | Fix |
 | --- | --- |
 | Wrong SVG size | Re-export the whole 1920 × 1080 frame. |
-| Missing media | Upload the file, or correct its path in `media.csv` or `text.md`. Match case exactly. |
 | No `media.csv` | Create `media.csv` at the root; first line `name,source,file`. |
-| A `[[name]]` without a row | Add the row to `media.csv`, or correct the name in `text.md`. |
-| A media file without a row | Every media file used in `text.md` needs a row in `media.csv`. |
 
 The course team can see the exact reason for every group. Ask when the list does not help.
 
@@ -159,7 +157,7 @@ Use only after the course team announces it. URL: website link + `editor/`.
 1. **Group** → **Open last published version**. New group: **Start from template**.
 2. Edit the Markdown. Attach files with their exact destination, e.g. `media/new-photo.png`, a name and a source link; the row goes into `media.csv`. **Insert in text** writes `[[name]]`.
 3. **Check and prepare GitHub steps**. Resolve every error.
-4. Follow the generated steps in order on GitHub: compare current GitHub text, upload media, commit `media.csv`, commit `text.md`, delete removed files.
+4. Follow the generated steps on GitHub, in any order: compare current GitHub text, upload media, commit `media.csv`, commit `text.md`, delete removed files.
 5. To replace media the text already uses, upload it under a new filename.
 6. If shown, **Request publication** after all commits. Read the answer on the issue.
 

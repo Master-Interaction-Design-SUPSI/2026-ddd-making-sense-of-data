@@ -81,7 +81,7 @@ class EntryValidationTests(unittest.TestCase):
     def test_course_team_folders_get_the_same_content_checks_as_an_import(self):
         folder = self.entry("brief")
         for name, content, message in (
-                ("text.md", "See ![x](media/missing.png)", "brief: text.md: media/missing.png"),
+                ("text.md", "See ![x](../other/photo.png)", "brief: text.md: Reference must stay inside this group"),
                 ("media/detail.svg", '<svg xmlns="http://www.w3.org/2000/svg"><script/></svg>', "brief: detail.svg"),
                 ("media/Photo.png", "x", "brief: media/Photo.png")):
             with self.subTest(name=name):
@@ -93,6 +93,16 @@ class EntryValidationTests(unittest.TestCase):
                     build_site.find_entries()
                 if name != "text.md":
                     target.unlink()
+
+    def test_course_team_folder_reference_that_does_not_resolve_is_a_warning(self):
+        folder = self.entry("brief")
+        (folder / "text.md").write_text("See [[ghost]] and ![x](media/later.png).")
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            self.assertEqual(build_site.find_entries(), ["brief"])
+        self.assertEqual([str(warning.message) for warning in caught], [
+            "brief: text.md: [[ghost]] is not a name in media.csv",
+            "brief: text.md: media/later.png is not in this group yet"])
 
     def test_validation_failure_preserves_previous_build(self):
         self.entry(visual="invalid")

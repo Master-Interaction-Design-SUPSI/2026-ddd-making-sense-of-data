@@ -76,13 +76,29 @@ class ImportTests(unittest.TestCase):
         self.assertNotIn("media/12.mov", result["files"])
         self.assertFalse(any(call.endswith("a" * 40) for call in self.api.calls))
 
-    def test_reference_to_excluded_media_still_fails(self):
+    def test_reference_to_excluded_media_is_accepted_with_a_warning(self):
         self.api.add("course/alpha", {"text.md": TEXT + b' [[Watch|media/12.mov]]',
                                      "visual.svg": SVG, "media/detail.svg": SVG,
                                      "media/12.mov": b'video'})
         result = self.run_import([Group("alpha", "course/alpha", "main", "live", ("media/12.mov",))])[0]
-        self.assertEqual(result["status"], "failed")
-        self.assertIn("must reference an imported file", result["error"])
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["warnings"], ["text.md: media/12.mov is not in this group yet"])
+
+    def test_text_committed_before_its_media_is_accepted_and_the_next_commit_completes_it(self):
+        files = {"text.md": b"A [[photo]] and ![x](media/later.png).", "visual.svg": SVG,
+                 "media.csv": b"name,source,file\nphoto,,media/photo.png\n"}
+        self.api.add("course/alpha", files, table=False)
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["warnings"], ["text.md: media/later.png is not in this group yet",
+                                              "text.md: media/photo.png is not in this group yet"])
+        self.api.add("course/alpha", {**files, "media/photo.png": b"png", "media/later.png": b"png",
+                                      "media.csv": b"name,source,file\nphoto,,media/photo.png\nlater,,media/later.png\n"},
+                     table=False, commit="b" * 40)
+        self.root = self.root / "next"
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported")
+        self.assertEqual(result["warnings"], [])
 
     def test_inline_playback_template_imports_and_builds_real_media(self):
         template = Path(__file__).resolve().parent.parent / "templates/group"
@@ -109,7 +125,7 @@ class ImportTests(unittest.TestCase):
             self.assertEqual((output / "alpha" / name).read_bytes(), original)
 
     def test_one_failure_does_not_stop_other_groups_or_leave_partial_files(self):
-        commit, _ = self.api.add("course/alpha", {"text.md": b'[[missing|media/absent.svg]]', "visual.svg": SVG})
+        commit, _ = self.api.add("course/alpha", {"text.md": b'[[outside|../beta/visual.svg]]', "visual.svg": SVG})
         self.api.add("course/beta")
         results = self.run_import([self.group(), self.group("beta")])
         self.assertEqual(results[0]["error_code"], "invalid_content")
@@ -117,17 +133,13 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(results[1]["status"], "imported")
         self.assertEqual([p.name for p in (self.root / "imports").iterdir()], ["beta"])
 
-    def test_media_table_is_required_on_import_and_resolves_names(self):
+    def test_media_table_is_required_on_import_and_resolves_names_with_warnings(self):
         table = b'name,source,file\nthe detail,https://example.org/detail,media/detail.svg\n'
         cases = {
             "missing": ({"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}, "media.csv: required"),
             "header": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"file,name\n"}, "media.csv: the first line"),
             "encoding": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n\xe9t\xe9,,media/x.svg\n"},
                          "media.csv: save the table as a UTF-8"),
-            "unknown name": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG, "media.csv": table, "media/detail.svg": SVG},
-                             "text.md: [[elsewhere]] is not a name in media.csv"),
-            "unlisted media": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n", "media/detail.svg": SVG},
-                               "text.md: media/detail.svg is used in the text but has no row in media.csv"),
         }
         for case, (files, message) in cases.items():
             with self.subTest(case=case):
@@ -136,11 +148,27 @@ class ImportTests(unittest.TestCase):
                 result = self.run_import()[0]
                 self.assertEqual(result["error_code"], "invalid_content")
                 self.assertTrue(result["error"].startswith(message), result["error"])
+        warnings = {
+            "unknown name": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG, "media.csv": table, "media/detail.svg": SVG},
+                             "text.md: [[elsewhere]] is not a name in media.csv"),
+            "unlisted media": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n", "media/detail.svg": SVG},
+                               "text.md: media/detail.svg is used in the text but has no row in media.csv"),
+        }
+        for case, (files, message) in warnings.items():
+            with self.subTest(case=case):
+                self.api = FixtureAPI()
+                self.api.add("course/alpha", files, table=False)
+                shutil.rmtree(self.root / "imports", ignore_errors=True)
+                result = self.run_import()[0]
+                self.assertEqual(result["status"], "imported", result.get("error"))
+                self.assertEqual(result["warnings"], [message])
         self.api = FixtureAPI()
         self.api.add("course/alpha", {"text.md": b"See [[The Detail]].", "visual.svg": SVG, "media.csv": table,
                                       "media/detail.svg": SVG}, table=False)
+        shutil.rmtree(self.root / "imports", ignore_errors=True)
         result = self.run_import()[0]
         self.assertEqual(result["status"], "imported", result.get("error"))
+        self.assertEqual(result["warnings"], [])
         self.assertEqual((self.root / "imports/alpha/media.csv").read_bytes(), table)
 
     def test_archive_checks_accept_snapshots_without_a_media_table(self):
@@ -240,8 +268,10 @@ class ImportTests(unittest.TestCase):
 
     def test_reference_markdown_links_and_annotations_use_group_local_files(self):
         valid = "![chart][img]\n\n[img]: media/detail.svg\n\n[[detail|./media/detail.svg]] [source](https://example.org) [jump](#note)"
-        validate_references(valid, {"media/detail.svg"})
-        for target in ("../other/visual.svg", "%2e%2e/other/visual.svg", "/static/main.js", "//other.test/photo.jpg", "media/missing.svg", "javascript:alert"):
+        self.assertEqual(validate_references(valid, {"media/detail.svg"}), [])
+        self.assertEqual(validate_references("[link](media/missing.svg)", {"media/detail.svg"}),
+                         ["text.md: media/missing.svg is not in this group yet"])
+        for target in ("../other/visual.svg", "%2e%2e/other/visual.svg", "/static/main.js", "//other.test/photo.jpg", "javascript:alert"):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_references(f"[link]({target})", {"media/detail.svg"})
 
@@ -250,7 +280,7 @@ class ImportTests(unittest.TestCase):
                             "[[source|https://example.org|type=bibliography]] "
                             "[[quote|Quoted words|type=quote;style=italic;color=crimson]]",
                             {"media/detail.svg"})
-        for target in ("media/missing.svg", "../beta/visual.svg", "/static/main.js"):
+        for target in ("../beta/visual.svg", "/static/main.js"):
             with self.subTest(target=target), self.assertRaises(ValueError):
                 validate_references(f"[[detail|{target}|type=bibliography;style=italic]]",
                                     {"media/detail.svg"})

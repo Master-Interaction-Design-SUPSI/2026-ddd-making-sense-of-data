@@ -95,6 +95,11 @@
     return Array.from(body.matchAll(NAMED), match => match[1].trim());
   }
 
+  // Replace each [[name]] that expand() left unresolved.
+  function replaceUnresolved(body, replacer) {
+    return body.replace(NAMED, (match, name) => replacer(name.trim()));
+  }
+
   function sources(table) {
     return new Map(table ? [...table.byFile].filter(([, row]) => row.source).map(([file, row]) => [file, row.source]) : []);
   }
@@ -116,7 +121,7 @@
       .map(fields => fields.map(quote).join(",")).join("\n") + "\n";
   }
 
-  const api = { read, expand, unresolved, sources, warnings, serialize };
+  const api = { read, expand, unresolved, replaceUnresolved, sources, warnings, serialize };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CourseMediaTable = api;
 })(globalThis);

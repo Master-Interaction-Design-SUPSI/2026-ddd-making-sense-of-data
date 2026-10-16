@@ -367,13 +367,13 @@
       }
     }
     if (active !== draft || revision !== mutationRevision) return;
-    CourseDraft.validateUploads(active.base, changes, result.files, contract);
     $('validation').textContent = `Known local checks passed: ${result.files.size} files, ${result.total.toLocaleString()} bytes. Importer still validates repository and SVG security. ${result.orphans.length ? 'Unreferenced media still counts: ' + result.orphans.join(', ') + '. ' : ''}${result.notes.join('. ')}`;
     $('steps').replaceChildren();
+    // Any order works: until every commit is in, the page shows what is not there yet as missing.
     step('Review current repository text and changed-media paths before overwriting.', github('blob', 'text.md'));
     for (const change of changes.filter(change => change.path !== 'text.md' && change.path !== tableName && change.operation !== 'delete')) {
       const parent = change.path.includes('/') ? change.path.slice(0, change.path.lastIndexOf('/')) : '';
-      step(`${change.operation === 'add' ? 'Upload' : 'Replace'} ${change.path} and commit. Upload into ${parent || 'repository root'}; preserve this exact path.`, github('upload', parent));
+      step(`${change.operation === 'add' ? 'Upload' : 'Replace'} ${change.path} and commit. Upload into ${parent || 'repository root'}; keep this exact path.`, github('upload', parent));
     }
     const tableChange = changes.find(change => change.path === tableName);
     if (tableChange?.operation === 'add') {
@@ -383,9 +383,9 @@
       step('Create media.csv in the repository root. If the page is empty, paste the copied table, then commit.', create.href, 'Create media.csv ↗');
     } else if (tableChange) step('Replace the whole content of media.csv with the copied table and commit.', github('edit', tableName));
     if (changes.some(change => change.path === 'text.md')) step('Paste the reviewed text.md and commit it on the configured branch. For a new group, create the template files first.', github('edit', 'text.md'));
-    for (const change of changes.filter(change => change.operation === 'delete')) step(`After committing text that no longer uses it, delete ${change.path} through the file menu.`, github('blob', change.path));
+    for (const change of changes.filter(change => change.operation === 'delete')) step(`Delete ${change.path} through the file menu.`, github('blob', change.path));
     if (groups.publication_requests?.enabled) {
-      step('After completing the applicable GitHub commits, submit this request. Read its result on GitHub; submission does not prove publication.',
+      step('After the commits above, submit this request. Read its result on GitHub; submission does not prove publication.',
         CourseDraft.publicationRequest(groups.publication_requests.repository, config.slug), 'Request publication ↗');
     }
     step('Check the course site after publication. A checked box records your action; it does not verify a commit.', new URL(`#${config.slug}`, siteRoot).href, 'Open published entry ↗');
