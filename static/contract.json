@@ -1,0 +1,21 @@
+{
+  "version": 2,
+  "limits": {
+    "text_bytes": 262144,
+    "table_bytes": 65536,
+    "svg_bytes": 5242880,
+    "media_bytes": 20971520,
+    "group_bytes": 52428800,
+    "files": 100,
+    "groups": 15,
+    "site_bytes": 943718400,
+    "path_length": 512,
+    "path_depth": 16
+  },
+  "media_extensions": [".svg", ".png", ".jpg", ".jpeg", ".webp", ".gif", ".avif", ".mp3", ".m4a", ".wav", ".ogg", ".aac", ".flac", ".mp4", ".webm", ".mov"],
+  "path_component": "[a-z0-9][a-z0-9._-]*",
+  "required_files": ["text.md", "visual.svg"],
+  "media_table": "media.csv",
+  "visual_viewbox": [0, 0, 1920, 1080],
+  "reference_schemes": ["https", "http", "mailto"]
+}

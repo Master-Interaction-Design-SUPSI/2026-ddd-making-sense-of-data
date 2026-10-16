@@ -1,0 +1,723 @@
+/* Data Driven Design — MAInD SUPSI
+   Broad Arial prose and inline media, with a separate left navigation rail.
+   Prose uses fixed 52px leading. Inline media stays at or
+   below 30px so it cannot expand the reading lines. Press g for guides. */
+
+:root {
+  --paper: #ffffff;
+  --ink: #101010;
+  --mid: #6b6b6b;
+  --signal: #8800ff; /* readable on white, including small navigation labels */
+  --accent-magenta: #ff09d6;
+  --accent-cyan: #0eb5be;
+  --accent-purple: #8800ff;
+  --accent-green: #00e279;
+  --accent-yellow: #e5b800;
+  --rule: #dedede;
+  --space: clamp(20px, 3.2vw, 58px);
+  --side-width: 180px;
+  --header-height: 40px;
+  --prose-size: clamp(24px, 2.2vw, 32px);
+  --prose-leading: 52px;
+  --reading-row: var(--prose-leading);
+  --inline-media-height: 30px;
+  --annotation-default: var(--signal);
+  --u: 20px; /* compact interface spacing */
+  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  position: relative; /* anchors the .show-grid overlay */
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/20px Arial, Helvetica, sans-serif;
+}
+
+body.lightbox-open {
+  overflow: hidden;
+}
+
+:focus-visible {
+  outline: 1px solid var(--signal);
+  outline-offset: 2px;
+}
+
+/* ---------- the bar ---------- */
+
+/* Keep the current-entry readout and markers in the existing fixed bar.
+   The name sits over the rail; title, authors and markers share the
+   reading column evenly, and the editor link closes the row. */
+.site-bar {
+  position: fixed;
+  inset-inline: 0;
+  top: 0;
+  z-index: 10;
+  height: var(--header-height);
+  display: grid;
+  grid-template-columns: var(--side-width) repeat(3, minmax(0, 1fr)) auto;
+  gap: var(--space);
+  padding-inline: var(--space);
+  align-items: center;
+  background: var(--paper);
+  border-bottom: 1px solid var(--rule);
+}
+
+.site-bar h1 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.bar-current {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bar-authors {
+  margin: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--mid);
+}
+
+/* One marker per Entry, still; the current one is lit in the signal
+   colour. */
+.bar-markers {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  overflow: hidden;
+  gap: 0 0.5ch;
+  font-family: var(--mono);
+  line-height: 18px;
+  color: var(--mid);
+}
+
+.bar-markers .current {
+  color: var(--signal);
+}
+
+.bar-link {
+  color: var(--signal);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.bar-link:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+/* ---------- navigation rail and reading area ---------- */
+
+.layout {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: var(--side-width) minmax(0, 1fr);
+  gap: var(--space);
+  padding-inline: var(--space);
+  margin-block-start: var(--header-height);
+}
+
+.site-side {
+  padding-block: var(--space);
+  position: sticky;
+  top: var(--header-height);
+  align-self: start;
+  max-height: calc(100dvh - var(--header-height));
+  overflow-y: auto;
+  overflow-wrap: anywhere;
+}
+
+#entries {
+  min-inline-size: 0;
+  inline-size: 100%;
+  max-inline-size: 1800px;
+  padding-block: var(--space);
+}
+
+/* ---------- header & nav (left column) ---------- */
+
+.site-nav {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5em;
+}
+
+.site-nav a {
+  color: var(--mid);
+  text-decoration: none;
+}
+
+.site-nav .nav-index {
+  font-family: var(--mono);
+}
+
+.site-nav a:hover {
+  color: var(--ink);
+}
+
+.site-nav a.active {
+  color: var(--signal);
+}
+
+/* ---------- entries ---------- */
+
+.entry {
+  margin-block-end: calc(var(--space) * 2);
+  /* anchor jumps land clear of the fixed bar */
+  scroll-margin-block-start: calc(var(--header-height) + var(--space));
+}
+
+/* Compact metadata above the large abstract; titles and authors may wrap. */
+.entry-caption {
+  display: grid;
+  grid-template-columns: minmax(0, calc(var(--entry-author-offset, 70%) - var(--space))) minmax(0, 1fr);
+  gap: 0.4em var(--space);
+  overflow-wrap: anywhere;
+  align-items: start;
+  margin-block-end: var(--u);
+}
+
+.entry-caption > div {
+  display: contents;
+}
+
+.entry-caption h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.entry-authors {
+  margin: 0;
+  color: var(--mid);
+}
+
+/* Which commit is online: the author line's style, on its own row below title and authors. */
+.entry-status {
+  grid-column: 1 / -1;
+}
+
+.entry-text {
+  font-size: var(--prose-size);
+  line-height: var(--prose-leading);
+  text-align: start;
+  hyphens: none;
+  overflow-wrap: anywhere;
+}
+
+.entry-visual {
+  margin: 1em 0 0;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+}
+
+.entry-visual img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  object-position: left top;
+  cursor: zoom-in;
+}
+
+/* ---------- markdown body ---------- */
+
+.entry-text p,
+.entry-text ul,
+.entry-text ol {
+  margin-block: 0 0.5em;
+}
+
+.entry-text p {
+  display: flow-root; /* contain annotation lines (floats) at paragraph end */
+}
+
+.entry-text h3,
+.entry-text h4 {
+  margin-block: 1em 0.5em;
+  font-size: 1em;
+  font-weight: 400;
+}
+
+.entry-text a {
+  color: var(--signal);
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
+}
+
+.entry-text u {
+  text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
+}
+
+.entry-text blockquote {
+  margin: 1lh 0;
+  padding-inline-start: var(--u);
+  border-inline-start: 1px solid var(--ink);
+}
+
+.entry-text code {
+  font-family: var(--mono);
+  font-size: 0.875em;
+}
+
+.entry-text pre {
+  overflow-x: auto;
+  margin-block: 0 0.5em;
+  padding: var(--u);
+  border: 1px solid var(--ink);
+}
+
+/* Static audio player: activation opens the original source. */
+.entry-text .inline-audio {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
+  max-inline-size: 100%;
+  block-size: var(--inline-media-height);
+  padding-inline: 0.3em;
+  border: 1px solid currentColor;
+  font-size: 0.6em;
+  font-style: normal;
+  vertical-align: middle;
+  margin-inline: 0.1em;
+}
+
+.inline-playback {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  max-inline-size: 100%;
+  gap: 0.25em;
+  margin-inline: 0.1em;
+  vertical-align: middle;
+  line-height: 1;
+  text-align: start;
+}
+
+.inline-playback video {
+  display: block;
+  inline-size: auto;
+  block-size: min(1.35em, var(--inline-media-height));
+  max-inline-size: 12em;
+  aspect-ratio: auto 16 / 9;
+  object-fit: contain;
+  background: var(--paper);
+}
+
+.playback-status {
+  font-size: 0.875em;
+}
+
+.playback-status:empty {
+  display: none;
+}
+
+/* Images and videos share the reference abstract's inline proportions. */
+.entry-text .inline-image {
+  display: inline-block;
+  vertical-align: middle;
+  margin-inline: 0.1em;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: 0;
+  max-inline-size: 100%;
+  cursor: pointer;
+}
+
+.entry-text .inline-image img {
+  display: block;
+  inline-size: auto;
+  block-size: min(1.35em, var(--inline-media-height));
+  max-inline-size: min(12em, 100%);
+  object-fit: contain;
+  margin: 0;
+}
+
+#image-preview {
+  position: fixed;
+  z-index: 20;
+  pointer-events: none;
+  background: var(--paper);
+  box-shadow: 0 8px 45px #0002;
+}
+
+#image-preview,
+#image-preview *,
+body:has(#image-preview:not([hidden]))::before {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+/* A backdrop follows the existing preview visibility and never intercepts input. */
+body:has(#image-preview:not([hidden]))::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 19;
+  pointer-events: none;
+  background: rgb(255 255 255 / 80%);
+}
+
+#image-preview img,
+#image-preview video {
+  display: block;
+  inline-size: 100%;
+  block-size: 100%;
+  object-fit: contain;
+  opacity: 1;
+}
+
+#image-preview [hidden] {
+  display: none;
+}
+
+#image-preview-close {
+  position: fixed;
+  z-index: 21;
+  inset-block-end: var(--u);
+  inset-inline-end: var(--space);
+  min-block-size: 44px;
+  padding: 0 1ch;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+#image-preview[hidden],
+#image-preview-close[hidden] {
+  display: none;
+}
+
+/* Embedded players remain full-width plates below their text. */
+.entry-text iframe {
+  display: block;
+  border: 0;
+  width: 100%;
+  height: auto;
+  aspect-ratio: 16 / 9;
+  margin-block: var(--u);
+}
+
+.entry-text hr {
+  border: 0;
+  height: 1px;
+  margin-block: 0.75em;
+  background: var(--rule);
+}
+
+/* ---------- annotations ---------- */
+
+.annotation-toggle {
+  all: unset;
+  cursor: pointer;
+  color: var(--annotation-color, var(--annotation-default));
+  text-decoration: underline dotted;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.12em;
+}
+
+.annotation-toggle:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
+.annotation-marker {
+  margin-inline-start: 0;
+  text-decoration: none;
+  display: inline-block;
+  font-style: normal;
+}
+
+.annotation-note {
+  --annotation-default: #000;
+  color: var(--annotation-color, var(--annotation-default));
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.annotation-style-italic {
+  font-style: italic;
+}
+
+.annotation-style-normal {
+  font-style: normal;
+}
+
+.annotation.open .annotation-toggle {
+  text-decoration-style: solid;
+}
+
+/* An open annotation is not appended into the sentence: it drops in as its
+   own full line between the current line and the next, old-editor style.
+   A 100%-wide float can't sit beside the line that anchors it, so the
+   browser places it just below that line box and the rest of the paragraph
+   flows on underneath — the anchoring line itself stays intact. */
+.annotation-content {
+  float: left;
+  width: 100%;
+  /* whatever an annotation reveals sits on the full colour of the span
+     that produced it; the content is black or white, whichever reads on
+     that band — native contrast-color() where it exists, elsewhere the
+     relative-colour lightness flip (l < 0.7 → white, else black) */
+  background: var(--annotation-color, var(--annotation-default));
+  color: oklch(
+    from var(--annotation-color, var(--annotation-default))
+    calc((0.7 - l) * infinity) 0 0
+  );
+}
+
+@supports (color: contrast-color(red)) {
+  .annotation-content {
+    color: contrast-color(var(--annotation-color, var(--annotation-default)));
+  }
+}
+
+.annotation-content a {
+  color: inherit;
+  text-decoration-color: currentColor;
+  overflow-wrap: anywhere;
+}
+
+.annotation-content a::before {
+  content: " → ";
+}
+
+.annotation-content.annotation-text {
+  float: none;
+  width: auto;
+  background: none;
+  color: var(--annotation-color, var(--annotation-default));
+}
+
+.annotation-bibliography {
+  font-family: Georgia, "Times New Roman", Times, serif;
+  font-size: 1em;
+  font-weight: 400;
+  font-style: normal;
+  --annotation-default: #000;
+  --annotation-color: #000;
+  color: #000;
+}
+
+.annotation-bibliography .annotation-content {
+  float: none;
+  width: auto;
+  background: none;
+  color: #000;
+}
+
+.annotation-bibliography .annotation-toggle,
+.annotation-bibliography a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.annotation-bibliography .annotation-toggle:hover,
+.annotation-bibliography a:hover,
+.annotation-bibliography a:focus-visible {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
+}
+
+.annotation-quote .annotation-text::before {
+  content: " ";
+}
+
+/* Preserve the existing annotation peek and its script-controlled offset. */
+.annotation .annotation-content iframe {
+  display: block;
+  width: auto;
+  height: calc(var(--u) * 5);
+  margin-block: var(--u);
+  max-width: 100%;
+}
+
+.annotation .annotation-content iframe {
+  aspect-ratio: 16 / 9;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .annotation-content:not([hidden]) {
+    transition: opacity 0.15s linear;
+    @starting-style {
+      opacity: 0;
+    }
+  }
+}
+
+/* ---------- lightbox ---------- */
+
+#lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
+  display: grid;
+  place-items: center;
+  background: rgb(255 255 255 / 80%);
+  cursor: zoom-out;
+}
+
+#lightbox[hidden] {
+  display: none;
+}
+
+#lightbox img {
+  max-width: 94vw;
+  max-height: 94dvh;
+  box-shadow: 0 8px 45px #0002;
+}
+
+.lightbox-close {
+  position: fixed;
+  top: var(--u);
+  right: var(--u);
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 400 14px/20px var(--mono);
+  color: var(--ink);
+}
+
+/* ---------- footer & notes ---------- */
+
+.site-note {
+  color: var(--mid);
+}
+
+.site-footer {
+  margin-block-start: 2em;
+  color: var(--mid);
+}
+
+.site-footer a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.site-footer a:hover {
+  color: var(--ink);
+}
+
+/* ---------- reading rhythm and column guides (press g) ---------- */
+
+body.show-grid::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 98; /* under the lightbox */
+  pointer-events: none;
+  --grid-line: color-mix(in srgb, var(--signal) 25%, transparent);
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(var(--reading-row) - 1px),
+      var(--grid-line) calc(var(--reading-row) - 1px) var(--reading-row)
+    ),
+    linear-gradient(to right,
+      transparent var(--space),
+      var(--grid-line) var(--space) calc(var(--space) + 1px),
+      transparent calc(var(--space) + 1px) calc(var(--space) + var(--side-width)),
+      var(--grid-line) calc(var(--space) + var(--side-width)) calc(var(--space) + var(--side-width) + 1px),
+      transparent calc(var(--space) + var(--side-width) + 1px) calc(2 * var(--space) + var(--side-width)),
+      var(--grid-line) calc(2 * var(--space) + var(--side-width)) calc(2 * var(--space) + var(--side-width) + 1px),
+      transparent calc(2 * var(--space) + var(--side-width) + 1px)
+    );
+}
+
+/* ---------- narrow screens: keep the existing navigation above the text ---------- */
+
+@media (width <= 700px) {
+  :root {
+    --space: 16px;
+    --prose-size: clamp(20px, 4.5vw, 26px);
+  }
+
+  .layout {
+    display: block;
+  }
+
+  .site-bar {
+    display: flex;
+    gap: 12px;
+  }
+
+  .site-bar h1,
+  .bar-link {
+    flex: none;
+  }
+
+  .bar-current,
+  .bar-authors {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .bar-markers {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    max-inline-size: 15%;
+    font-size: 10px;
+    line-height: 10px;
+  }
+
+  .site-side {
+    position: static;
+    max-height: none;
+    padding-block: 20px 0;
+  }
+
+  .site-nav {
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 0.5em var(--u);
+  }
+
+  .site-footer {
+    margin-block-start: 1em;
+  }
+
+  body.show-grid::after {
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0 calc(var(--reading-row) - 1px),
+      var(--grid-line) calc(var(--reading-row) - 1px) var(--reading-row)
+    );
+  }
+
+  #entries {
+    padding-block: 20px;
+  }
+
+  .entry-text .inline-image img,
+  .inline-playback video {
+    block-size: min(1.3em, var(--inline-media-height));
+  }
+}
+
+.inline-playback:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: 2px;
+}
+
+.annotation-bibliography .annotation-content a::before {
+  content: none;
+}

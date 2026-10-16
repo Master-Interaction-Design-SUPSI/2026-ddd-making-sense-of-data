@@ -1,0 +1,95 @@
+"""Read the maintainer-owned list of public GitHub content repositories."""
+
+import json
+import re
+from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+from content_contract import MEDIA_EXTENSIONS, PATH_PART, MAX_FILES, LIMITS
+
+
+SITE_DIRECTORIES = frozenset({"static", "scripts", "_site", "templates", "editor"})
+RESERVED_SLUGS = SITE_DIRECTORIES | {"example", "index", "entries", "groups"}
+SLUG = re.compile(r"[a-z0-9]+(?:-[a-z0-9]+)*")
+REPOSITORY = re.compile(r"[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?/[A-Za-z0-9_][A-Za-z0-9_.-]*")
+
+
+STATES = ('live', 'frozen', 'hidden')
+
+
+@dataclass(frozen=True)
+class Group:
+    slug: str
+    repository: str
+    branch: str
+    state: str
+    exclude: tuple[str, ...] = ()
+
+
+def validate_exclusions(exclude):
+    if not isinstance(exclude, list) or len(exclude) > MAX_FILES:
+        raise ValueError("exclude: expected a list of at most 100 optional media paths")
+    seen = set()
+    for name in exclude:
+        if not isinstance(name, str) or len(name) > 512:
+            raise ValueError("exclude: expected optional media paths")
+        parts = name.split("/")
+        path = PurePosixPath(name)
+        if (name in {"text.md", "visual.svg"} or len(parts) > 16
+                or not all(PATH_PART.fullmatch(part) for part in parts)
+                or not (len(parts) == 1 or parts[0] == "media")
+                or path.suffix not in MEDIA_EXTENSIONS or name in seen):
+            raise ValueError(f"exclude: invalid or duplicate optional media path {name!r}")
+        seen.add(name)
+    return tuple(exclude)
+
+
+def validate_branch(branch):
+    if not isinstance(branch, str) or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._/-]*", branch):
+        raise ValueError("branch: use a branch name such as main or draft/content")
+    if ".." in branch or any(
+        not part or part.startswith(".") or part.endswith((".", ".lock"))
+        for part in branch.split("/")
+    ):
+        raise ValueError(f"branch: invalid branch name {branch!r}")
+    return branch
+
+
+def load_registry(path):
+    registry = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(registry, dict) or set(registry) != {"groups"}:
+        raise ValueError("registry: expected an object containing only groups")
+    if not isinstance(registry["groups"], list):
+        raise ValueError("registry: groups must be a list")
+    if len(registry["groups"]) > LIMITS["groups"]:
+        raise ValueError(f"registry: at most {LIMITS['groups']} groups are supported")
+    groups = []
+    slugs = set()
+    repositories = set()
+    for index, entry in enumerate(registry["groups"], start=1):
+        label = f"registry group {index}"
+        if not isinstance(entry, dict):
+            raise ValueError(f"{label}: expected an object")
+        if not {"slug", "repository", "state"} <= entry.keys() or entry.keys() - {
+            "slug", "repository", "branch", "state", "exclude"
+        }:
+            raise ValueError(f"{label}: require slug, repository, state; branch and exclude are optional")
+        slug = entry["slug"]
+        if not isinstance(slug, str) or len(slug) > 63 or not SLUG.fullmatch(slug):
+            raise ValueError(f"{label}: slug must use lowercase letters, digits and single hyphens (max 63)")
+        if slug in RESERVED_SLUGS or slug in slugs:
+            raise ValueError(f"{label}: reserved or duplicate slug {slug!r}")
+        repository = entry["repository"]
+        if not isinstance(repository, str) or not REPOSITORY.fullmatch(repository) or repository.endswith(".git"):
+            raise ValueError(f"{label}: repository must be owner/name, without a URL or .git suffix")
+        if repository.casefold() in repositories:
+            raise ValueError(f"{label}: duplicate repository {repository!r}")
+        state = entry["state"]
+        if state not in STATES:
+            raise ValueError(f"{label}: state must be live, frozen or hidden")
+        branch = validate_branch(entry.get("branch", "main"))
+        exclude = validate_exclusions(entry.get("exclude", []))
+        groups.append(Group(slug, repository, branch, state, exclude))
+        slugs.add(slug)
+        repositories.add(repository.casefold())
+    return groups

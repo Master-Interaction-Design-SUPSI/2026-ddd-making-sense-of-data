@@ -1,0 +1,25 @@
+# Generated output and caches
+_site/
+__pycache__/
+*.py[cod]
+.cache/
+.pytest_cache/
+.coverage
+coverage/
+htmlcov/
+node_modules/
+playwright-report/
+test-results/
+
+# Local development files
+.scratch/
+.DS_Store
+.idea/
+.vscode/
+.env
+.env.*
+!.env.example
+*.log
+*.tmp
+*.swp
+*~

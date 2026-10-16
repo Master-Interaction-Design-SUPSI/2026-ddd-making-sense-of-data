@@ -1,0 +1,414 @@
+/* Entry editor — layered on the course site's main.css so the bar, type and
+   palette stay shared. Each workflow step is an ink-ruled box headed by a
+   full band of one site accent, the same way an open annotation sits on
+   the colour of its span. Band text is set per colour for contrast. */
+
+:root {
+  color-scheme: light;
+  accent-color: var(--signal);
+  --control-height: 36px;
+  --gap: 10px;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+:focus-visible {
+  outline-width: 2px;
+}
+
+/* ---------- bar ---------- */
+
+.site-bar {
+  grid-template-columns: var(--side-width) minmax(0, 1fr) auto;
+}
+
+.site-bar p {
+  margin: 0;
+}
+
+/* ---------- layout ---------- */
+
+.editor {
+  display: grid;
+  grid-template-columns: minmax(20rem, 1fr) minmax(0, 2fr);
+  gap: var(--space);
+  align-items: start;
+  margin-block-start: var(--header-height);
+  padding: var(--space);
+}
+
+.steps {
+  min-inline-size: 0;
+}
+
+/* ---------- steps ---------- */
+
+.step {
+  --accent: var(--accent-cyan);
+  --accent-ink: var(--ink);
+  min-inline-size: 0;
+  padding: 0 var(--u) var(--u);
+  border: 1px solid var(--ink);
+  overflow-wrap: anywhere;
+}
+
+.step + .step {
+  border-block-start: 0;
+}
+
+.step-group { --accent: var(--accent-cyan); }
+.step-text { --accent: var(--accent-magenta); }
+.step-media { --accent: var(--accent-green); }
+.step-github { --accent: var(--accent-yellow); }
+.step-preview { --accent: var(--accent-purple); --accent-ink: var(--paper); }
+
+.step h2 {
+  display: flex;
+  align-items: center;
+  gap: 1ch;
+  block-size: var(--header-height);
+  margin: 0 calc(-1 * var(--u)) var(--u);
+  padding-inline: var(--gap);
+  border-block-end: 1px solid var(--ink);
+  background: var(--accent);
+  color: var(--accent-ink);
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.step-index {
+  font-family: var(--mono);
+}
+
+.step > * {
+  margin-block: 0;
+}
+
+.step > * + * {
+  margin-block-start: var(--gap);
+}
+
+.step > h2 + * {
+  margin-block-start: 0;
+}
+
+.step p {
+  overflow-wrap: anywhere;
+}
+
+.step p:empty {
+  display: none;
+}
+
+.note {
+  color: var(--mid);
+}
+
+label {
+  display: block;
+}
+
+.step > label:not(:first-of-type) {
+  margin-block-start: var(--u);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.row:not(:has(> :not([hidden]))) {
+  display: none;
+}
+
+/* ---------- controls ---------- */
+
+button,
+select,
+input,
+textarea {
+  max-inline-size: 100%;
+  margin: 0;
+  border-radius: 0;
+  color: var(--ink);
+  font: inherit;
+}
+
+button,
+::file-selector-button {
+  min-block-size: var(--control-height);
+  padding: 0 1ch;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  color: var(--ink);
+  font: inherit;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled),
+::file-selector-button:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+button.primary {
+  background: var(--ink);
+  color: var(--paper);
+}
+
+button:disabled {
+  border-color: var(--rule);
+  background: var(--paper);
+  color: var(--mid);
+  cursor: default;
+}
+
+select,
+input:not([type]),
+input[type="text"],
+input[type="url"],
+input[type="file"] {
+  min-block-size: var(--control-height);
+}
+
+select {
+  appearance: none;
+  padding: 0 calc(2ch + var(--gap)) 0 1ch;
+  border: 1px solid var(--ink);
+  background: var(--paper) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 10 6'%3E%3Cpath d='M0 0h10L5 6z' fill='%23101010'/%3E%3C/svg%3E") no-repeat right 1ch center / 10px 6px;
+  cursor: pointer;
+}
+
+select:disabled {
+  border-color: var(--rule);
+  color: var(--mid);
+  cursor: default;
+}
+
+input:not([type]),
+input[type="text"],
+input[type="url"] {
+  inline-size: 100%;
+  padding: 0 1ch;
+  border: 1px solid var(--ink);
+  background: var(--paper);
+}
+
+input::placeholder {
+  color: var(--mid);
+}
+
+input[type="file"] {
+  display: block;
+  inline-size: 100%;
+}
+
+::file-selector-button {
+  margin-inline-end: 1ch;
+}
+
+textarea {
+  display: block;
+  inline-size: 100%;
+  min-block-size: 45dvh;
+  padding: var(--gap);
+  border: 1px solid var(--ink);
+  background: var(--paper);
+  font: 14px/20px var(--mono);
+  resize: vertical;
+}
+
+textarea:disabled {
+  border-color: var(--rule);
+  color: var(--mid);
+}
+
+/* Insert buttons hang off the textarea as one ruled strip. */
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+}
+
+.step > textarea + .toolbar {
+  margin-block-start: -1px;
+}
+
+.toolbar button {
+  flex: 1 1 auto;
+  margin-inline-end: -1px;
+}
+
+.toolbar button:last-child {
+  margin-inline-end: 0;
+}
+
+/* Sub-parts of a step, ruled off like the step boxes themselves. */
+.step h3 {
+  margin-block-start: var(--u);
+  padding-block-start: var(--gap);
+  border-block-start: 1px solid var(--ink);
+  font: 14px/20px var(--mono);
+}
+
+/* ---------- media.csv rows ---------- */
+
+.media-rows {
+  padding: 0;
+  list-style: none;
+}
+
+.media-rows:empty {
+  display: none;
+}
+
+.media-rows li {
+  display: grid;
+  gap: 6px;
+  padding-block: var(--gap);
+  border-block-start: 1px solid var(--rule);
+}
+
+.media-rows label {
+  display: grid;
+  gap: 2px;
+  color: var(--mid);
+}
+
+.media-rows input[data-field="file"] {
+  font-family: var(--mono);
+}
+
+/* ---------- lists ---------- */
+
+.files {
+  padding: 0;
+  list-style: none;
+}
+
+/* editor.js writes each row as a bare path text node plus buttons; a
+   full-width break keeps every row's buttons on their own line. */
+.files li {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: var(--gap);
+  padding-block: var(--gap);
+  border-block-start: 1px solid var(--rule);
+  font-family: var(--mono);
+}
+
+.files li::after {
+  content: "";
+  flex-basis: 100%;
+  order: 1;
+}
+
+.files li button {
+  order: 2;
+  margin-block-start: var(--gap);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+.files:empty {
+  display: none;
+}
+
+#steps {
+  padding-inline-start: 3ch;
+}
+
+#steps:empty {
+  display: none;
+}
+
+#steps li {
+  padding-block: 6px;
+  border-block-start: 1px solid var(--rule);
+}
+
+#steps li::marker {
+  font-family: var(--mono);
+  color: var(--mid);
+}
+
+#steps li:has(:checked) {
+  color: var(--mid);
+}
+
+#steps a,
+#base a {
+  color: var(--signal);
+}
+
+details summary {
+  cursor: pointer;
+}
+
+pre {
+  max-block-size: 40dvh;
+  overflow: auto;
+  margin: var(--gap) 0 0;
+  padding: var(--gap);
+  border: 1px solid var(--rule);
+  font: 14px/20px var(--mono);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+pre:empty {
+  display: none;
+}
+
+/* ---------- preview ---------- */
+
+/* The preview fills one screen beside the steps. */
+.step-preview {
+  display: flex;
+  flex-direction: column;
+  block-size: calc(100dvh - var(--header-height) - 2 * var(--space));
+}
+
+.preview-controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--gap) var(--u);
+}
+
+.preview-controls .note {
+  margin: 0;
+}
+
+/* The rendered page runs to the box edges, under one ink rule. */
+.preview-scroll {
+  flex: 1;
+  min-block-size: 0;
+  overflow: auto;
+  margin: var(--u) calc(-1 * var(--u)) calc(-1 * var(--u));
+  border-block-start: 1px solid var(--ink);
+}
+
+iframe {
+  display: block;
+  inline-size: 1280px;
+  block-size: 100%;
+  border: 0;
+}
+
+/* ---------- narrow screens: steps above the preview ---------- */
+
+@media (width < 800px) {
+  .editor {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .step-preview {
+    block-size: auto;
+  }
+
+  iframe {
+    block-size: 80dvh;
+  }
+}
