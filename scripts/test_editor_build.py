@@ -5,13 +5,17 @@ from pathlib import Path
 from unittest.mock import patch
 
 import build_site
+from group_registry import Group
 
 
 class EditorBuildTests(unittest.TestCase):
     def test_generated_preview_uses_production_shell_with_only_deliberate_substitutions(self):
         with tempfile.TemporaryDirectory() as temporary:
             destination = Path(temporary)
-            build_site.write_editor(destination)
+            registry = [Group('city-water', 'course/city-water', 'main', 'live', ('media/12.mov',)),
+                        Group('pilot', 'course/pilot', 'main', 'hidden')]
+            with patch.object(build_site, 'load_registry', return_value=registry):
+                build_site.write_editor(destination)
             production = (build_site.ROOT / 'index.html').read_text()
             preview = (destination / 'editor/preview.html').read_text()
             expected = production.replace('href="static/', 'href="../static/').replace('src="static/', 'src="../static/')
@@ -21,12 +25,11 @@ class EditorBuildTests(unittest.TestCase):
             expected = expected.replace('<a class="bar-link" href="editor/">', '<a class="bar-link">')
             self.assertEqual(preview, expected)
             groups = json.loads((destination / 'editor/groups.json').read_text())['groups']
-            abstract = next(group for group in groups if group['slug'] == 'ddd-abstract')
-            self.assertFalse(abstract['require_visual'])
-            self.assertTrue(abstract['editable'])
-            brief = next(group for group in groups if group['slug'] == 'materialities-of-ai')
-            self.assertFalse(brief['editable'])
-            self.assertEqual(abstract['exclude'], ['media/12.mov', 'media/4.mov'])
+            self.assertEqual(groups, [
+                {'slug': 'city-water', 'repository': 'course/city-water', 'branch': 'main', 'exclude': ['media/12.mov'],
+                 'state': 'live', 'editable': True, 'contract_version': 2},
+                {'slug': 'pilot', 'repository': 'course/pilot', 'branch': 'main', 'exclude': [],
+                 'state': 'hidden', 'editable': False, 'contract_version': 2}])
             template = json.loads((destination / 'editor/template.json').read_text())
             self.assertIn('media/example-tone.mp3', template['files'])
             for name, record in template['files'].items():

@@ -377,10 +377,11 @@ class TransportTests(unittest.TestCase):
 
     def test_full_cohort_metadata_budget_is_independent_of_file_count(self):
         api = FixtureAPI()
-        groups = [Group(f"group-{i}", f"course/group-{i}", "main", "live", require_visual=False) for i in range(15)]
+        groups = [Group(f"group-{i}", f"course/group-{i}", "main", "live") for i in range(15)]
         for group in groups:
-            # 98 media + text.md + media.csv fill the 100-file limit.
-            api.add(group.repository, {"text.md": b"Fixture", **{f"media/{i}.png": b"image" for i in range(98)}})
+            # 97 media + text.md + visual.svg + media.csv fill the 100-file limit.
+            api.add(group.repository, {"text.md": b"Fixture", "visual.svg": SVG,
+                                       **{f"media/{i}.png": b"image" for i in range(97)}})
         requests = 0
         with tempfile.TemporaryDirectory() as temporary:
             for cycle in range(6):

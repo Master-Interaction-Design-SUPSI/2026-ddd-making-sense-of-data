@@ -24,7 +24,6 @@ class Group:
     branch: str
     state: str
     exclude: tuple[str, ...] = ()
-    require_visual: bool = True
 
 
 def validate_exclusions(exclude):
@@ -72,9 +71,9 @@ def load_registry(path):
         if not isinstance(entry, dict):
             raise ValueError(f"{label}: expected an object")
         if not {"slug", "repository", "state"} <= entry.keys() or entry.keys() - {
-            "slug", "repository", "branch", "state", "exclude", "require_visual"
+            "slug", "repository", "branch", "state", "exclude"
         }:
-            raise ValueError(f"{label}: require slug, repository, state; branch, exclude and require_visual are optional")
+            raise ValueError(f"{label}: require slug, repository, state; branch and exclude are optional")
         slug = entry["slug"]
         if not isinstance(slug, str) or len(slug) > 63 or not SLUG.fullmatch(slug):
             raise ValueError(f"{label}: slug must use lowercase letters, digits and single hyphens (max 63)")
@@ -90,10 +89,7 @@ def load_registry(path):
             raise ValueError(f"{label}: state must be live, frozen or hidden")
         branch = validate_branch(entry.get("branch", "main"))
         exclude = validate_exclusions(entry.get("exclude", []))
-        require_visual = entry.get("require_visual", True)
-        if type(require_visual) is not bool:
-            raise ValueError(f"{label}: require_visual must be true or false")
-        groups.append(Group(slug, repository, branch, state, exclude, require_visual))
+        groups.append(Group(slug, repository, branch, state, exclude))
         slugs.add(slug)
         repositories.add(repository.casefold())
     return groups

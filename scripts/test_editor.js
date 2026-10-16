@@ -5,7 +5,7 @@ const { Draft, bytes, digest, select, publicationRequest } = require('../editor/
 const { validateRender } = require('../editor/protocol.js');
 const references = require('../static/references.js');
 const contract = require('../static/contract.json');
-const config = { exclude: ['media/excluded.mov'], require_visual: false };
+const config = { exclude: ['media/excluded.mov'] };
 
 test('publication requests prefill only the registered group on the fixed course form', () => {
   const url = new URL(publicationRequest('Course/site', 'city-water'));
@@ -31,11 +31,11 @@ test('UTF-8 and exact admission boundaries include unreferenced files', () => {
 test('unloaded base files survive text edits; deletion is explicit', async () => {
   const text = new Blob(['Original']);
   const table = new Blob(['name,source,file\n']);
-  const base = new Map([['text.md', { size: text.size, sha256: await digest(text) }], ['media.csv', { size: table.size, sha256: await digest(table) }], ['media/orphan.png', { size: 30, sha256: 'a'.repeat(64) }]]);
+  const base = new Map([['text.md', { size: text.size, sha256: await digest(text) }], ['visual.svg', { size: 10, sha256: 'b'.repeat(64) }], ['media.csv', { size: table.size, sha256: await digest(table) }], ['media/orphan.png', { size: 30, sha256: 'a'.repeat(64) }]]);
   const draft = new Draft(base, config, contract);
   draft.text = 'Revised';
   draft.table = 'name,source,file\n';
-  assert.equal(draft.validate().total, 54);
+  assert.equal(draft.validate().total, 64);
   assert.deepEqual(draft.validate().orphans, ['media/orphan.png']);
   assert.deepEqual(await draft.changes(), [{ operation: 'replace', path: 'text.md' }]);
   draft.remove('media/orphan.png');
@@ -89,49 +89,48 @@ test('renderer import has no automatic fetching or start', () => {
 
 test('upload sequence counts replacements and obsolete files before deletion', () => {
   const { validateUploads } = require('../editor/model.js');
-  const base = new Map([['text.md', { size: 1 }], ['media/replacement.mp4', { size: 2 * 1048576 }], ['media/obsolete.mp4', { size: 20 * 1048576 }], ['media/kept.mp4', { size: 20 * 1048576 }]]);
+  const base = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/replacement.mp4', { size: 2 * 1048576 }], ['media/obsolete.mp4', { size: 20 * 1048576 }], ['media/kept.mp4', { size: 20 * 1048576 }]]);
   const final = new Map(base);
   final.set('media/replacement.mp4', { size: 20 * 1048576 });
   final.delete('media/obsolete.mp4');
-  assert.doesNotThrow(() => select(final, contract, false));
-  assert.throws(() => validateUploads(base, [{ operation: 'replace', path: 'media/replacement.mp4' }, { operation: 'delete', path: 'media/obsolete.mp4' }], final, contract, false), /temporarily/);
-  const countBase = new Map([['text.md', { size: 0 }], ...Array.from({ length: 99 }, (_, i) => [`media/${i}.png`, { size: 1 }])]);
+  assert.doesNotThrow(() => select(final, contract));
+  assert.throws(() => validateUploads(base, [{ operation: 'replace', path: 'media/replacement.mp4' }, { operation: 'delete', path: 'media/obsolete.mp4' }], final, contract), /temporarily/);
+  const countBase = new Map([['text.md', { size: 0 }], ['visual.svg', { size: 1 }], ...Array.from({ length: 98 }, (_, i) => [`media/${i}.png`, { size: 1 }])]);
   const countFinal = new Map(countBase);
   countFinal.delete('media/0.png'); countFinal.set('media/new.png', { size: 1 });
-  assert.throws(() => validateUploads(countBase, [{ operation: 'add', path: 'media/new.png' }], countFinal, contract, false), /100 files/);
+  assert.throws(() => validateUploads(countBase, [{ operation: 'add', path: 'media/new.png' }], countFinal, contract), /100 files/);
 });
 
 test('text commit is checked before obsolete-file deletion', () => {
   const { validateUploads } = require('../editor/model.js');
-  const base = new Map([['text.md', { size: 1 }], ['media/first.mp4', { size: 20 * 1048576 }], ['media/second.mp4', { size: 20 * 1048576 }], ['media/obsolete.mp4', { size: 10 * 1048576 - 2 }]]);
+  const base = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/first.mp4', { size: 20 * 1048576 }], ['media/second.mp4', { size: 20 * 1048576 }], ['media/obsolete.mp4', { size: 10 * 1048576 - 2 }]]);
   const final = new Map(base);
   final.set('text.md', { size: 101 }); final.delete('media/obsolete.mp4');
-  assert.doesNotThrow(() => select(final, contract, false));
-  assert.throws(() => validateUploads(base, [{ operation: 'replace', path: 'text.md' }, { operation: 'delete', path: 'media/obsolete.mp4' }], final, contract, false), /Committing text/);
+  assert.doesNotThrow(() => select(final, contract));
+  assert.throws(() => validateUploads(base, [{ operation: 'replace', path: 'text.md' }, { operation: 'delete', path: 'media/obsolete.mp4' }], final, contract), /Committing text/);
 });
 
 test('browser selection matches the authoritative importer on the shared parity corpus', () => {
   const { spawnSync } = require('node:child_process');
   const path = require('node:path');
   const cases = [
-    { files: { 'text.md': 0 }, visual: false },
-    { files: { 'text.md': 0 }, visual: true },
+    { files: { 'text.md': 0 } },
     { files: { 'text.md': 5, 'visual.svg': 1, 'visual.detail.png': 2 } },
     { files: { 'text.md': 5, 'visual.svg': 1, 'media/unreferenced.png': 2 } },
     { files: { 'text.md': 262144, 'visual.svg': 5242880 } },
     { files: { 'text.md': 262145, 'visual.svg': 1 } },
     { files: { 'text.md': 1, 'visual.svg': 5242881 } },
     { files: { 'text.md': 1, 'visual.svg': 1, 'media/clip.mp4': 20971521 } },
-    { files: { 'text.md': 1, 'media/a.mp4': 20971520, 'media/b.mp4': 20971520, 'media/c.mp4': 10485759 }, visual: false },
-    { files: { 'text.md': 1, 'media/a.mp4': 20971520, 'media/b.mp4': 20971520, 'media/c.mp4': 10485760 }, visual: false },
+    { files: { 'text.md': 1, 'visual.svg': 1, 'media/a.mp4': 20971520, 'media/b.mp4': 20971520, 'media/c.mp4': 10485758 } },
+    { files: { 'text.md': 1, 'visual.svg': 1, 'media/a.mp4': 20971520, 'media/b.mp4': 20971520, 'media/c.mp4': 10485759 } },
     { files: { 'text.md': 1, 'visual.svg': 1, 'media/photo.png': true } },
     { files: { 'text.md': 1, 'visual.svg': 1, 'media/Photo.png': 1 } },
     { files: { 'text.md': 1, 'visual.svg': 1, 'media/../photo.png': 1 } },
     { files: { 'text.md': 1, 'visual.svg': 1, 'media/photo.png': 1, 'media/photo.png/child.png': 1 } },
-    { files: { 'text.md': 1, 'media/excluded.mov': 20971521 }, exclude: ['media/excluded.mov'], visual: false },
-    { files: { 'text.md': 1, 'media.csv': 65536 }, visual: false },
-    { files: { 'text.md': 1, 'media.csv': 65537 }, visual: false },
-    { files: { 'text.md': 1, 'media/media.csv': 10, 'media.CSV': 10 }, visual: false },
+    { files: { 'text.md': 1, 'visual.svg': 1, 'media/excluded.mov': 20971521 }, exclude: ['media/excluded.mov'] },
+    { files: { 'text.md': 1, 'visual.svg': 1, 'media.csv': 65536 } },
+    { files: { 'text.md': 1, 'visual.svg': 1, 'media.csv': 65537 } },
+    { files: { 'text.md': 1, 'visual.svg': 1, 'media/media.csv': 10, 'media.CSV': 10 } },
   ];
   const python = spawnSync('python3', ['-c', `
 import json, sys
@@ -142,7 +141,7 @@ results = []
 for case in json.load(sys.stdin):
     tree = {'truncated': False, 'tree': [{'path': name, 'size': size, 'type': 'blob', 'mode': '100644', 'sha': 'a' * 40} for name, size in case['files'].items()]}
     try:
-        results.append(sorted(validate_tree(tree, case.get('exclude', []), require_visual=case.get('visual', True))))
+        results.append(sorted(validate_tree(tree, case.get('exclude', []))))
     except (ValueError, ImportFailure):
         results.append(None)
 print(json.dumps(results))
@@ -153,7 +152,7 @@ print(json.dumps(results))
     const input = cases[i];
     const files = new Map(Object.entries(input.files).filter(([name]) => !(input.exclude || []).includes(name)).map(([name, size]) => [name, { size }]));
     let selected = null;
-    try { selected = [...select(files, contract, input.visual !== false).files.keys()].sort(); } catch {}
+    try { selected = [...select(files, contract).files.keys()].sort(); } catch {}
     assert.deepEqual(selected, expected[i], JSON.stringify(input));
   }
 });
@@ -206,7 +205,7 @@ test('drafts carry media.csv, start one from existing media and commit it before
   assert.deepEqual(result.notes, ['Rows without a source link: field photo, field_photo.png']);
   assert.deepEqual((await draft.changes()).map(change => change.path), ['media.csv', 'text.md']);
   assert.throws(() => draft.attach('media.csv', new Blob(['x']), 'a'.repeat(64)), /media table/);
-  const tight = new Map([['text.md', { size: 1 }], ['media/a.mp4', { size: 20 * 1048576 }], ['media/b.mp4', { size: 20 * 1048576 }], ['media/c.mp4', { size: 10 * 1048576 - 100 }]]);
+  const tight = new Map([['text.md', { size: 1 }], ['visual.svg', { size: 1 }], ['media/a.mp4', { size: 20 * 1048576 }], ['media/b.mp4', { size: 20 * 1048576 }], ['media/c.mp4', { size: 10 * 1048576 - 100 }]]);
   const final = new Map(tight); final.set('media.csv', { size: 200 });
-  assert.throws(() => validateUploads(tight, [{ operation: 'add', path: 'media.csv' }], final, contract, false), /Committing text/);
+  assert.throws(() => validateUploads(tight, [{ operation: 'add', path: 'media.csv' }], final, contract), /Committing text/);
 });

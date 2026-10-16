@@ -52,13 +52,8 @@ def decode_manifest(payload):
         for slug, entry in groups.items():
             if len(slug) > 63 or not SLUG.fullmatch(slug) or slug in RESERVED_SLUGS:
                 raise ValueError("invalid group slug")
-            required_keys = {"repository", "branch", "commit", "files"}
-            if (not isinstance(entry, dict) or not required_keys <= entry.keys()
-                    or entry.keys() - (required_keys | {"require_visual"})):
+            if not isinstance(entry, dict) or set(entry) != {"repository", "branch", "commit", "files"}:
                 raise ValueError(f"{slug}: invalid snapshot record")
-            require_visual = entry.get("require_visual", True)
-            if type(require_visual) is not bool:
-                raise ValueError(f"{slug}: invalid require_visual")
             repository = entry["repository"]
             if not isinstance(repository, str) or not REPOSITORY.fullmatch(repository) or repository.endswith(".git"):
                 raise ValueError(f"{slug}: invalid repository")
@@ -75,8 +70,7 @@ def decode_manifest(payload):
                     raise ValueError(f"{slug}: invalid file record")
                 if not isinstance(record["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", record["sha256"]):
                     raise ValueError(f"{slug}: invalid file digest")
-            selected = select_content_files({name: record["size"] for name, record in files.items()},
-                                            require_visual=require_visual)
+            selected = select_content_files({name: record["size"] for name, record in files.items()})
             if set(selected) != set(files):
                 raise ValueError(f"{slug}: unsupported files in served manifest")
             if any(parent in files for name in files for parent in (

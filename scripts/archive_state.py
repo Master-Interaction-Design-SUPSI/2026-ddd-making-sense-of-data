@@ -57,7 +57,6 @@ def served_entry(entry):
     if snapshot is None:
         return None
     return {'repository': entry['repository'], 'branch': entry['branch'], 'commit': snapshot['commit'],
-            'require_visual': snapshot['require_visual'],
             'files': {name: {key: record[key] for key in ('size', 'sha256')}
                       for name, record in snapshot['files'].items()}}
 
@@ -77,7 +76,7 @@ def decode_archive(payload):
             if not isinstance(slug, str) or len(slug) > 63 or not SLUG.fullmatch(slug) or slug in RESERVED_SLUGS:
                 raise ValueError('invalid archive slug')
             if not isinstance(entry, dict) or set(entry) != {
-                'repository', 'branch', 'state', 'require_visual', 'exclude', 'snapshot'
+                'repository', 'branch', 'state', 'exclude', 'snapshot'
             }:
                 raise ValueError(f'{slug}: invalid archive group record')
             if (not isinstance(entry['repository'], str) or not REPOSITORY.fullmatch(entry['repository'])
@@ -85,15 +84,15 @@ def decode_archive(payload):
                 raise ValueError(f'{slug}: invalid repository')
             validate_branch(entry['branch'])
             validate_exclusions(entry['exclude'])
-            if entry['state'] not in STATES or type(entry['require_visual']) is not bool:
-                raise ValueError(f'{slug}: invalid state/settings')
+            if entry['state'] not in STATES:
+                raise ValueError(f'{slug}: invalid state')
             snapshot = entry['snapshot']
             if snapshot is None:
                 if entry['state'] == 'frozen':
                     raise ValueError(f'{slug}: frozen group needs an accepted snapshot')
                 continue
             if not isinstance(snapshot, dict) or set(snapshot) != {
-                'commit', 'tree', 'contract_version', 'require_visual', 'exclude', 'files', 'excluded'
+                'commit', 'tree', 'contract_version', 'exclude', 'files', 'excluded'
             }:
                 raise ValueError(f'{slug}: invalid snapshot')
             if not isinstance(snapshot['commit'], str) or not SHA.fullmatch(snapshot['commit']):
@@ -102,8 +101,6 @@ def decode_archive(payload):
                 raise ValueError(f'{slug}: invalid source tree')
             if type(snapshot['contract_version']) is not int or snapshot['contract_version'] != CONTRACT_VERSION:
                 raise ValueError(f'{slug}: unsupported contract')
-            if type(snapshot['require_visual']) is not bool:
-                raise ValueError(f'{slug}: invalid snapshot visual setting')
             validate_exclusions(snapshot['exclude'])
             files = snapshot['files']
             if not isinstance(files, dict):
@@ -114,8 +111,7 @@ def decode_archive(payload):
                 if (not isinstance(record['sha256'], str) or not DIGEST.fullmatch(record['sha256'])
                         or not isinstance(record['blob_sha'], str) or not SHA.fullmatch(record['blob_sha'])):
                     raise ValueError(f'{slug}: invalid file digest')
-            selected = select_content_files({name: record['size'] for name, record in files.items()},
-                                            require_visual=snapshot['require_visual'])
+            selected = select_content_files({name: record['size'] for name, record in files.items()})
             if set(selected) != set(files) or set(files) & set(snapshot['exclude']):
                 raise ValueError(f'{slug}: unsupported/excluded archive content')
             if any('/'.join(name.split('/')[:i]) in files for name in files
@@ -144,7 +140,7 @@ def encode_archive(groups):
 
 def group_record(group):
     return {'repository': group.repository, 'branch': group.branch, 'state': group.state,
-            'require_visual': group.require_visual, 'exclude': list(group.exclude), 'snapshot': None}
+            'exclude': list(group.exclude), 'snapshot': None}
 
 
 def reconcile(groups, registry):
@@ -197,8 +193,7 @@ class ArchiveSnapshot:
             for name in entry['snapshot']['files']:
                 self.read_file(slug, name)
             try:
-                validate_content(self.folder / slug, entry['snapshot']['files'],
-                                 require_visual=entry['snapshot']['require_visual'])
+                validate_content(self.folder / slug, entry['snapshot']['files'])
             except ValueError as error:
                 raise PublicationError(f'{slug}: archive content is invalid: {error}') from error
 

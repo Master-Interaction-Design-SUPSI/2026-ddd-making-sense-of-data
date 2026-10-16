@@ -87,9 +87,9 @@ class FixtureAPI:
 
 def archived_group(files, repository='course/alpha', state='live'):
     """One archive row whose accepted snapshot holds these files."""
-    return {'repository': repository, 'branch': 'main', 'state': state, 'require_visual': True, 'exclude': [],
+    return {'repository': repository, 'branch': 'main', 'state': state, 'exclude': [],
             'snapshot': {'commit': 'a' * 40, 'tree': 'b' * 40, 'contract_version': CONTRACT_VERSION,
-                         'require_visual': True, 'exclude': [], 'excluded': {},
+                         'exclude': [], 'excluded': {},
                          'files': {name: file_record(data) for name, data in files.items()}}}
 
 

@@ -44,7 +44,6 @@ class ArchiveBase:
     def can_skip(self, group, files):
         snapshot = self.archive.groups[group.slug]['snapshot']
         return (snapshot['exclude'] == list(group.exclude)
-                and snapshot['require_visual'] == group.require_visual
                 and {name: {'size': node['size'], 'blob_sha': node['sha']} for name, node in files.items()}
                     == {name: {key: record[key] for key in ('size', 'blob_sha')}
                         for name, record in snapshot['files'].items()})
@@ -97,7 +96,7 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
             if result and state == 'live' and result['status'] == 'imported':
                 files = {name: file_record((imported / slug / name).read_bytes()) for name in result['files']}
                 entry['snapshot'] = {'commit': result['commit'], 'tree': result['tree'],
-                    'contract_version': CONTRACT_VERSION, 'require_visual': entry['require_visual'],
+                    'contract_version': CONTRACT_VERSION,
                     'exclude': entry['exclude'], 'excluded': result['excluded_blobs'], 'files': files}
                 shutil.copytree(imported / slug, staged / slug)
                 result['publication_status'] = ('unchanged' if entry['snapshot'] == previous.groups.get(slug, {}).get('snapshot')
@@ -145,7 +144,7 @@ def admit_candidate(candidate, registry, previous):
         if target['state'] != 'live' or entry['snapshot'] is None:
             raise PublicationError(f'{slug}: candidate altered retained/frozen/hidden bytes')
         snapshot = entry['snapshot']
-        if snapshot['exclude'] != target['exclude'] or snapshot['require_visual'] != target['require_visual']:
+        if snapshot['exclude'] != target['exclude']:
             raise PublicationError(f'{slug}: new acceptance does not meet current policy')
     # Independently validated content, registry and whole-site budget precede any Git write.
     candidate.verify()

@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import build_site
 from content_contract import (
-    MAX_MEDIA_BYTES, MAX_SVG_BYTES, MAX_TEXT_BYTES, select_content_files,
+    MAX_MEDIA_BYTES, MAX_SVG_BYTES, MAX_TEXT_BYTES, select_content_files, validate_visual,
 )
 from group_registry import load_registry
 from import_groups import validate_content
@@ -57,13 +57,14 @@ class GroupContractTests(unittest.TestCase):
             with self.subTest(exclude=exclude), self.assertRaises(ValueError):
                 self.load([self.group(exclude=exclude)])
 
-    def test_visual_can_be_optional_but_text_is_always_required(self):
-        self.assertFalse(self.load([self.group(require_visual=False)])[0].require_visual)
+    def test_every_group_needs_the_main_visual_and_only_course_team_folders_may_omit_it(self):
         with self.assertRaises(ValueError):
-            self.load([self.group(require_visual="false")])
-        self.assertEqual(select_content_files({"text.md": 1}, require_visual=False), ["text.md"])
+            self.load([self.group(require_visual=False)])
+        with self.assertRaisesRegex(ValueError, "visual.svg"):
+            select_content_files({"text.md": 1})
+        self.assertEqual(select_content_files({"text.md": 1}, required=("text.md",)), ["text.md"])
         with self.assertRaises(ValueError):
-            select_content_files({}, require_visual=False)
+            select_content_files({}, required=("text.md",))
 
     def test_repository_change_preserves_slug(self):
         before = self.load([self.group()])[0]
@@ -159,7 +160,7 @@ class GroupContractTests(unittest.TestCase):
         template = ROOT / "templates" / "group"
         files = {path.relative_to(template).as_posix(): path.stat().st_size for path in template.rglob("*") if path.is_file()}
         self.assertEqual(select_content_files(files), ["media.csv", "media/example-detail.svg", "media/example-motion.mp4", "media/example-tall.svg", "media/example-tone.mp3", "text.md", "visual.svg"])
-        build_site.validate_visual(template / "visual.svg")
+        validate_visual(template / "visual.svg")
         text = (template / "text.md").read_text(encoding="utf-8")
         self.assertIn("invented", text)
         self.assertIn("[[wide detail]]", text)

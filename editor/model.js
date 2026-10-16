@@ -17,7 +17,8 @@
     return url.href;
   }
 
-  function select(files, contract, requireVisual = true) {
+  // complete: the file set is a whole group, so every required file must be present.
+  function select(files, contract, complete = true) {
     const selected = new Map();
     const part = new RegExp(`^${contract.path_component}$`);
     const limits = contract.limits;
@@ -41,7 +42,7 @@
       selected.set(name, record);
     }
     if (selected.size > limits.files || total > limits.group_bytes) throw new Error(`Group content exceeds ${limits.files} files or ${limits.group_bytes / 1048576} MiB`);
-    for (const name of requireVisual ? [...contract.required_files, contract.conditional_visual] : contract.required_files) {
+    for (const name of complete ? contract.required_files : []) {
       if (!selected.has(name)) throw new Error(`Group content requires ${name}`);
     }
     for (const name of selected.keys()) {
@@ -53,18 +54,18 @@
     return { files: selected, total };
   }
 
-  function validateUploads(base, changes, final, contract, requireVisual) {
+  function validateUploads(base, changes, final, contract) {
     const intermediate = new Map(base);
     // Commit order: media uploads, then media.csv, then text.md, then deletions.
     const table = contract.media_table;
     for (const change of changes.filter(change => change.path !== 'text.md' && change.path !== table && change.operation !== 'delete')) {
       intermediate.set(change.path, final.get(change.path));
-      try { select(intermediate, contract, requireVisual); }
+      try { select(intermediate, contract); }
       catch (error) { throw new Error(`Uploading ${change.path} would temporarily break the content limits or paths: ${error.message}. Reconcile the commit sequence before uploading.`); }
     }
     if (final.has(table)) intermediate.set(table, final.get(table));
     intermediate.set('text.md', final.get('text.md'));
-    try { select(intermediate, contract, requireVisual); }
+    try { select(intermediate, contract); }
     catch (error) { throw new Error(`Committing text before deleting obsolete files would temporarily break the content limits: ${error.message}. Reconcile the commit sequence before uploading.`); }
   }
 
@@ -105,7 +106,7 @@
     validate() {
       if (this.table === null) throw new Error('media.csv: add the media table');
       const table = media.read(this.table);
-      const result = select(this.files(), this.contract, this.config.require_visual);
+      const result = select(this.files(), this.contract);
       const used = new Set(references.validate(this.text, result.files.keys(), this.contract.reference_schemes, table));
       const fixed = ['text.md', 'visual.svg', this.contract.media_table];
       return { ...result, orphans: [...result.files.keys()].filter(name => !fixed.includes(name) && !used.has(name)),

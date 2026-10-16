@@ -56,7 +56,7 @@ class ArchiveTests(unittest.TestCase):
         archive = ArchiveSnapshot(folder, 'b' * 40)
         self.assertEqual(archive.read_file('alpha', 'text.md'), b'Accepted text')
         self.assertEqual(archive.served(), {'alpha': {
-            'repository': 'course/alpha', 'branch': 'main', 'commit': 'a' * 40, 'require_visual': True,
+            'repository': 'course/alpha', 'branch': 'main', 'commit': 'a' * 40,
             'files': {name: {'size': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
                       for name, data in self.bytes.items()}}})
         hidden = reconcile(archive.groups, [Group('alpha', 'course/alpha', 'main', 'hidden')])
@@ -107,13 +107,13 @@ class ArchiveTests(unittest.TestCase):
         for number in range(15):
             slug = f'group-{number:02d}'
             entry = copy.deepcopy(self.groups['alpha'])
-            entry.update(repository='course/' + slug, require_visual=False)
+            entry.update(repository='course/' + slug)
             excluded = [prefix + f'o{i:03d}.png' for i in range(100)]
             entry['exclude'] = excluded
             snapshot = entry['snapshot']
-            snapshot.update(require_visual=False, exclude=excluded, excluded={path: None for path in excluded})
+            snapshot.update(exclude=excluded, excluded={path: None for path in excluded})
             record = snapshot['files']['text.md']
-            snapshot['files'] = {'text.md': record} | {prefix + f'f{i:03d}.png': record for i in range(99)}
+            snapshot['files'] = {'text.md': record, 'visual.svg': record} | {prefix + f'f{i:03d}.png': record for i in range(98)}
             groups[slug] = entry
         payload = encode_archive(groups)
         self.assertGreater(len(payload), 2 * 1024 * 1024)

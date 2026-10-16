@@ -38,15 +38,14 @@ class ImportCapacityTests(unittest.TestCase):
 class CohortWorkloadTests(unittest.TestCase):
     def test_full_cohort_idle_text_and_replacement_workloads_reuse_archived_bytes(self):
         fixture = Course(self)
-        groups = [Group(f'group-{i}', f'course/group-{i}', 'main', 'live', require_visual=False) for i in range(15)]
+        groups = [Group(f'group-{i}', f'course/group-{i}', 'main', 'live') for i in range(15)]
         (fixture.root / 'groups.json').write_text(json.dumps({'groups': [
-            {'slug': group.slug, 'repository': group.repository, 'state': 'live', 'require_visual': False}
-            for group in groups]}))
+            {'slug': group.slug, 'repository': group.repository, 'state': 'live'} for group in groups]}))
 
         def revision(text_cycle, media_cycle):
             for group in groups:
-                files = {'text.md': f'{group.slug} edit {text_cycle}'.encode(), **{
-                    f'media/{i}.png': f'{group.slug} media {i} version {media_cycle}'.encode() for i in range(98)}}
+                files = {'text.md': f'{group.slug} edit {text_cycle}'.encode(), 'visual.svg': SVG, **{
+                    f'media/{i}.png': f'{group.slug} media {i} version {media_cycle}'.encode() for i in range(97)}}
                 commit = hashlib.sha1(json.dumps([(name, data.hex()) for name, data in files.items()]).encode()).hexdigest()
                 fixture.api.add(group.repository, files, commit=commit)
 
@@ -54,7 +53,7 @@ class CohortWorkloadTests(unittest.TestCase):
         previous = fixture.first_archive(groups)
         # One run per workload: idle, a text edit per group, every file replaced.
         for workload, (text_cycle, media_cycle), raw_requests in (
-                ('unchanged', (0, 0), 0), ('text-only', (1, 0), 15), ('replacement', (2, 2), 1485)):
+                ('unchanged', (0, 0), 0), ('text-only', (1, 0), 15), ('replacement', (2, 2), 1470)):
             with self.subTest(workload=workload):
                 revision(text_cycle, media_cycle)
                 results = import_groups(groups, fixture.workspace / workload, fixture.api.client,
@@ -62,7 +61,7 @@ class CohortWorkloadTests(unittest.TestCase):
                 expected = 'unchanged' if workload == 'unchanged' else 'imported'
                 self.assertTrue(all(result['status'] == expected for result in results))
                 self.assertEqual(sum(result['transport']['rest_requests'] for result in results), 60)
-                # media.csv is unchanged and reused even when every media file is replaced.
+                # visual.svg and media.csv are unchanged and reused even when every media file is replaced.
                 self.assertEqual(sum(result['transport']['raw_requests'] for result in results), raw_requests)
                 if workload == 'text-only':
                     self.assertGreater(sum(result['reused_bytes'] for result in results), 0)

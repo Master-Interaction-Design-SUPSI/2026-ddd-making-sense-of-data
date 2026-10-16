@@ -1,31 +1,3 @@
 {
-  "groups": [
-    {
-      "slug": "materialities-of-ai",
-      "repository": "ginevraterenghi/multimodal-abstract-ddd",
-      "branch": "main",
-      "state": "live",
-      "require_visual": false
-    },
-    {
-      "slug": "dust",
-      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-alpha",
-      "branch": "main",
-      "state": "hidden"
-    },
-    {
-      "slug": "pilot-beta",
-      "repository": "Master-Interaction-Design-SUPSI/2026-ddd-pilot-beta",
-      "branch": "main",
-      "state": "hidden"
-    },
-    {
-      "slug": "ddd-abstract",
-      "repository": "ginevraterenghi/ddd-abstract",
-      "branch": "main",
-      "state": "live",
-      "exclude": ["media/12.mov", "media/4.mov"],
-      "require_visual": false
-    }
-  ]
+  "groups": []
 }

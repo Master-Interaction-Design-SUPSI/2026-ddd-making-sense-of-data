@@ -9,9 +9,9 @@ Use this manual for current operating instructions. [Acceptance checks](docs/202
 
 ## 1. Operating baseline
 
-Publication goes through the archive (§9.4). On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
+Publication goes through the archive. On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
 
-The working registry (`groups.json`) has live remote groups `materialities-of-ai` and `ddd-abstract`, and hidden pilots `dust` and `pilot-beta`; `example` is local. Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
+The registry (`groups.json`) starts empty. The course-team pages `materialities-of-ai`, `example` and `ddd-abstract` are local folders (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
 
 Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule remains in `pages.yml` until request-pilot acceptance. Hosted recovery, ordinary student-account and device checks remain on the [acceptance checklist](docs/2026-10-15_ddd_acceptance-checks.md).
 
@@ -62,7 +62,6 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | `scripts/publication_requests.py` | Request capture and answers. |
 | `.github/workflows/pages.yml` | Publication jobs. |
 | `.github/workflows/validate.yml` | PR gate. Offline. |
-| `scripts/multimodal_source.py` | Source adapter for the opening brief. |
 | `.github/ISSUE_TEMPLATE/` | Request form; blank issues off. |
 | `.github/publishing.json` | Editor request policy. |
 | `templates/group/` | Canonical student guide and demonstration files. |
@@ -77,13 +76,14 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | `branch` | Default `main`. Valid Git ref name. |
 | `state` | Required: `live`, `frozen` or `hidden`. |
 | `exclude` | Exact optional media paths, dropped before download and size accounting. Cannot drop `text.md` or `visual.svg`. A referenced excluded file fails validation. Reported as `excluded_files`. |
-| `require_visual` | Default `true`. `false` permits absent `visual.svg`; a present one is still validated. |
 
 Maximum 15 groups. Unknown fields rejected. Validation is offline; the importer checks visibility.
 
-Current exclusions: `ddd-abstract` drops `media/12.mov` and `media/4.mov` (each > 20 MiB). Remove when replacements exist. Exclusion never alters the source repository.
+Exclusion never alters the source repository.
 
-Adapted source: the opening brief, **Materialities of AI**, imports from `ginevraterenghi/multimodal-abstract-ddd` under slug `materialities-of-ai`. `scripts/multimodal_source.py` adapts that repository's `article#abstract` in `index.html` and original media links in `sources.json` into `text.md`; media bytes remain unchanged. The exception is allowlisted only in `scripts/multimodal_source.py`; that module owns repository selection, source-file bounds, pinned downloads, blob verification and conversion. The importer calls its `prepare` boundary and then applies normal content validation; the editor uses its repository predicate. Other HTML repositories still require `text.md`. Source files are verified against one exact Git commit; remote scripts and styles are omitted. Future imports refresh the brief automatically. Edit the brief in its source repository; the Markdown editor is disabled for this adapted entry. A future source `text.md` takes precedence over adaptation. Keep `require_visual: false` because this brief has inline media and no main SVG.
+### 4.1 Course-team pages
+
+Course-team pages are folders at the repository root, published with every build: `materialities-of-ai` (the opening brief, generated once from `ginevraterenghi/multimodal-abstract-ddd` at `1c07295`), `example` (generated from `templates/group/`, §10.2) and `ddd-abstract` (copied from `ginevraterenghi/ddd-abstract` at `d5b5fd7`, without its two `.mov` files over 20 MiB). Edit them by reviewed PR. `build_site.py` gives each folder the content checks of an import; only the main visual is optional. Order on the site: `materialities-of-ai`, `example`, then alphabetical.
 
 ## 5. Content contract
 
@@ -93,7 +93,7 @@ Source: `static/contract.json` (v2). Python constants are adapters.
 | --- | --- | --- |
 | Text | Root `text.md`, UTF-8, title/authors front matter. Required. | 256 KiB |
 | Media table | Root `media.csv`, UTF-8 CSV, first line `name,source,file`; comma or semicolon. Required at import admission. | 64 KiB |
-| Main visual | Root `visual.svg`; `viewBox="0 0 1920 1080"`; optional width/height = 1920/1080 px. Other root `visual.*` rejects the entry. | 5 MiB |
+| Main visual | Root `visual.svg`. Required for every group; a course-team folder may omit it. `viewBox="0 0 1920 1080"`; optional width/height = 1920/1080 px. Other root `visual.*` rejects the entry. | 5 MiB |
 | Image | `.svg .png .jpg .jpeg .webp .gif .avif` | SVG 5 MiB; others 20 MiB |
 | Audio | `.mp3 .m4a .wav .ogg .aac .flac` | 20 MiB |
 | Video | `.mp4 .webm .mov` | 20 MiB |
@@ -115,7 +115,7 @@ References: Markdown links and images, including reference syntax, and annotatio
 
 Media table (`static/media-table.js`, shared by renderer, editor and importer): `[[name]]` expands to `[[name|file|source=url]]` before any other parsing. Names are unique case-insensitively. Every media file `text.md` uses, by name or path, needs a row; rows for files not yet uploaded pass, so media → `media.csv` → `text.md` commits stay valid one by one. Empty source passes; the editor warns. A row's source also links path references and Markdown images.
 
-`media.csv` is required only by `import_group` (`validate_content(require_table=True)`); archive verification checks it when present. The adapted brief (`multimodal_source`) is exempt.
+`media.csv` is required only by `import_group` (`validate_content(require_table=True)`); archive verification and course-team folders check it when present.
 
 Rejected update: previous snapshot retained. No previous snapshot: group skipped. Audio/video codecs are not validated; browser check required.
 
@@ -333,7 +333,7 @@ python3 scripts/sync_course_materials.py
 
 The script generates the marked student-guide section of the root README and all files in `example/`. Only the example title/authors differ; prose, visual, media table and media come from the template. The root introduction and repository layout remain separately maintained. The editor template is already generated directly from `templates/group/` at build time. CI rejects stale checked-in copies. Unexpected example files require explicit review/removal; synchronization does not delete them.
 
-The remote template repository is a distribution copy of `templates/group/`, never an upstream editing source. After an authorized template update, compare its full file inventory and bytes with the canonical folder; do not copy remote edits back automatically. It stays registered as the `hidden` pilot `pilot-beta`, which is never imported. Local generation and CI do not synchronize or verify that remote repository.
+The remote template repository is a distribution copy of `templates/group/`, never an upstream editing source. After an authorized template update, compare its full file inventory and bytes with the canonical folder; do not copy remote edits back automatically. Local generation and CI do not synchronize or verify that remote repository.
 
 Complete the [ordinary student-account acceptance checks](docs/2026-10-15_ddd_acceptance-checks.md#ordinary-student-accounts-and-request-rollout) before access cutover.
 

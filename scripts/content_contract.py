@@ -22,6 +22,7 @@ MAX_MEDIA_BYTES = LIMITS["media_bytes"]
 MAX_TOTAL_BYTES = LIMITS["group_bytes"]
 MAX_SITE_BYTES = LIMITS["site_bytes"]
 MAX_FILES = LIMITS["files"]
+REQUIRED_FILES = tuple(CONTRACT["required_files"])
 PATH_PART = re.compile(CONTRACT["path_component"])
 
 
@@ -50,7 +51,7 @@ def validate_visual(path):
             raise ValueError(f"{path}: {attribute} must be {expected} pixels or omitted")
 
 
-def select_content_files(file_sizes, *, require_visual=True):
+def select_content_files(file_sizes, *, required=REQUIRED_FILES):
     """Return sorted allowed paths; ignore non-content files, reject bad content."""
     selected = []
     total = 0
@@ -63,11 +64,11 @@ def select_content_files(file_sizes, *, require_visual=True):
         path = PurePosixPath(name)
         if len(parts) == 1 and path.stem.lower() == "visual" and name != "visual.svg":
             raise ValueError(f"{name}: use exactly visual.svg for the main visual")
-        required = name in {"text.md", "visual.svg"}
+        root_file = name in {"text.md", "visual.svg"}
         media = path.suffix.lower() in MEDIA_EXTENSIONS and (len(parts) == 1 or parts[0] == "media")
         # Selected whenever present; import admission is where media.csv becomes mandatory.
         table = name == MEDIA_TABLE
-        if not required and not media and not table:
+        if not root_file and not media and not table:
             continue
         if len(name) > LIMITS["path_length"] or len(parts) > LIMITS["path_depth"]:
             raise ValueError(f"{name}: content path too long")
@@ -83,7 +84,6 @@ def select_content_files(file_sizes, *, require_visual=True):
         total += size
         if len(selected) > MAX_FILES or total > MAX_TOTAL_BYTES:
             raise ValueError(f"group content exceeds {MAX_FILES} files or {MAX_TOTAL_BYTES // (1024 * 1024)} MiB")
-    required_files = {"text.md", "visual.svg"} if require_visual else {"text.md"}
-    if not required_files <= set(selected):
-        raise ValueError("group content requires " + " and ".join(sorted(required_files)))
+    if not set(required) <= set(selected):
+        raise ValueError("group content requires " + " and ".join(sorted(required)))
     return sorted(selected)

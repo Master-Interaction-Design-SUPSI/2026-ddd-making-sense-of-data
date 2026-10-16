@@ -110,9 +110,9 @@
       identity = entry.commit; prefix = new URL(`${selected.slug}/`, siteRoot);
     }
     const records = new Map(Object.entries(entry.files));
-    const checked = CourseDraft.select(records, contract, selected.require_visual);
+    const checked = CourseDraft.select(records, contract);
     if (checked.files.size !== records.size) throw new Error('Inventory includes unsupported files');
-    identity += ':' + await CourseDraft.digest(new Blob([JSON.stringify({ files: entry.files, exclude: selected.exclude, require_visual: selected.require_visual, contract: contract.version })]));
+    identity += ':' + await CourseDraft.digest(new Blob([JSON.stringify({ files: entry.files, exclude: selected.exclude, contract: contract.version })]));
     for (const [path, file] of records) {
       if (!/^[0-9a-f]{64}$/.test(file.sha256)) throw new Error('Invalid inventory digest');
       file.url = new URL(path, prefix);
@@ -367,7 +367,7 @@
       }
     }
     if (active !== draft || revision !== mutationRevision) return;
-    CourseDraft.validateUploads(active.base, changes, result.files, contract, config.require_visual);
+    CourseDraft.validateUploads(active.base, changes, result.files, contract);
     $('validation').textContent = `Known local checks passed: ${result.files.size} files, ${result.total.toLocaleString()} bytes. Importer still validates repository and SVG security. ${result.orphans.length ? 'Unreferenced media still counts: ' + result.orphans.join(', ') + '. ' : ''}${result.notes.join('. ')}`;
     $('steps').replaceChildren();
     step('Review current repository text and changed-media paths before overwriting.', github('blob', 'text.md'));

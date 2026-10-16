@@ -6,18 +6,18 @@ import json
 import shutil
 import tempfile
 import warnings
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
-from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files, validate_visual
+from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files
 from group_registry import REPOSITORY, SITE_DIRECTORIES, load_registry
+from import_groups import validate_content
 from release import MANIFEST, encode_manifest
 from archive_state import ArchiveSnapshot
-import multimodal_source
 
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "_site"
-VISUAL_NAME = "visual.svg"
 
 
 def write_editor(candidate):
@@ -30,9 +30,7 @@ def write_editor(candidate):
     shell = shell.replace('<a class="bar-link" href="editor/">', '<a class="bar-link">')
     (candidate / "editor" / "preview.html").write_text(shell, encoding="utf-8")
     groups = [{"slug": group.slug, "repository": group.repository, "branch": group.branch,
-               "exclude": list(group.exclude), "require_visual": group.require_visual,
-               "state": group.state, "editable": group.state == 'live'
-               and not multimodal_source.handles_repository(group.repository),
+               "exclude": list(group.exclude), "state": group.state, "editable": group.state == 'live',
                "contract_version": CONTRACT_VERSION} for group in load_registry(ROOT / "groups.json")]
     requests = {'enabled': False, 'repository': None}
     policy = ROOT / '.github/publishing.json'
@@ -77,21 +75,22 @@ def enforce_site_budget(candidate):
 
 
 def find_entries():
+    """Course-team folders at the root: the checks of an import, but the main visual is optional."""
     entries = []
     for folder in ROOT.iterdir():
         if not folder.is_dir() or folder.name.startswith(".") or folder.name in SITE_DIRECTORIES:
             continue
-        has_text = (folder / "text.md").is_file()
-        visuals = [path.name for path in folder.iterdir() if path.is_file() and path.stem.lower() == "visual"]
-        if not has_text and not visuals:
+        if not (folder / "text.md").is_file():
+            if any(path.is_file() and path.stem.lower() == "visual" for path in folder.iterdir()):
+                warnings.warn(f"{folder.name}: waiting for text.md")
             continue
-        if visuals and visuals != [VISUAL_NAME]:
-            raise ValueError(f"{folder.name}: use exactly one {VISUAL_NAME}; remove other visual.* files")
-        if visuals:
-            validate_visual(folder / VISUAL_NAME)
-        if not has_text or not visuals:
-            warnings.warn(f"{folder.name}: waiting for text.md and {VISUAL_NAME}")
-            continue
+        sizes = {path.relative_to(folder).as_posix(): path.stat().st_size
+                 for path in folder.rglob("*") if path.is_file()}
+        try:
+            # Every group needs the main visual; a course-team folder may leave it out.
+            validate_content(folder, select_content_files(sizes, required=("text.md",)))
+        except (ValueError, ET.ParseError) as error:
+            raise ValueError(f"{folder.name}: {error}") from error
         entries.append(folder.name)
     return sorted(entries, key=lambda name: (name != "example", name.casefold()))
 

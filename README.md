@@ -27,7 +27,7 @@ Each group edits its own public repository. This repository imports the register
 | --- | --- | --- |
 | `text.md` | Text | Required. Front matter: title, authors. |
 | `media.csv` | Media table | Required. First line `name,source,file`; one row per media file used in `text.md`. |
-| `visual.svg` | Main visual | Required unless the course team exempts your group. 1920 × 1080 SVG. |
+| `visual.svg` | Main visual | Required. 1920 × 1080 SVG. |
 | `media/…` | Extra images, audio, video | Optional. Listed in `media.csv`, named in `text.md`. |
 
 Everything else (this README, design sources, HTML, scripts) is ignored and never published.
@@ -183,6 +183,7 @@ Nothing is published until the commits are on GitHub. After the last one, look a
 | Path | Content |
 | --- | --- |
 | `groups.json` | Registry of group repositories. |
+| `materialities-of-ai/`, `ddd-abstract/` | Course-team pages, published as they are. |
 | `example/` | Demonstration generated from `templates/group/`. |
 | `templates/group/` | Canonical student guide and demonstration. Copy its contents, not the folder. |
 | `editor/` | Entry editor. |

@@ -18,7 +18,7 @@ Your group's public repository. You write your text and add your media here. The
 | --- | --- | --- |
 | `text.md` | Text | Required. Front matter: title, authors. |
 | `media.csv` | Media table | Required. First line `name,source,file`; one row per media file used in `text.md`. |
-| `visual.svg` | Main visual | Required unless the course team exempts your group. 1920 × 1080 SVG. |
+| `visual.svg` | Main visual | Required. 1920 × 1080 SVG. |
 | `media/…` | Extra images, audio, video | Optional. Listed in `media.csv`, named in `text.md`. |
 
 Everything else (this README, design sources, HTML, scripts) is ignored and never published.
