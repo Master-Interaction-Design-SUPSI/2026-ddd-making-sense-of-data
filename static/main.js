@@ -81,13 +81,19 @@ function parseFrontmatter(raw) {
 
 function expandAnnotations(src) {
   return CourseAnnotations.replace(src, (annotation) => {
-    const { label, target, resource, type, style, color, marker } = annotation;
+    const { label, target, resource, type, style, color, marker, sourceUrl } = annotation;
     if (!annotation.valid || (color && !CSS.supports("color", color))) return annotation.source;
     const bibliography = type === "bibliography";
+    if (bibliography && resource) {
+      return `<span class="annotation annotation-bibliography"><a href="${esc(target)}" target="_blank" rel="noopener noreferrer">(■ ${label})</a></span>`;
+    }
     const open = bibliography || type === "note";
     let content = target;
     if (resource) content = bibliography ? linkHtml(target) : resourceHtml(target);
     else if (type === "quote") content = `<q>${target}</q>`;
+    if (sourceUrl && resource && [...IMAGE_EXTS, ...AUDIO_EXTS, ...VIDEO_EXTS].includes(extensionOf(target))) {
+      content = `<a href="${esc(sourceUrl.replace(/&amp;/g, "&"))}" target="_blank" rel="noopener noreferrer">${content}</a>`;
+    }
     const mark = marker || ({ note: DEFAULT_MARKER, bibliography: "■" }[type] || DEFAULT_MARKER);
     const glyph = `<span class="annotation-marker" aria-hidden="true">${esc(mark)}</span>`;
     const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
@@ -151,7 +157,7 @@ function resourceHtml(url) {
   if (AUDIO_EXTS.includes(ext))
     return `<audio controls preload="none" src="${resolved}"></audio>`;
   if (VIDEO_EXTS.includes(ext))
-    return `<video controls preload="metadata" src="${resolved}"></video>`;
+    return `<video controls muted loop playsinline preload="metadata" src="${resolved}"></video>`;
   return linkHtml(url);
 }
 
@@ -173,6 +179,7 @@ function expandColours(src) {
   for (let guard = 0; guard < 500; guard++) {
     const next = out.replace(COLOUR_RE, (_, colour, text) => {
       const value = colour.trim();
+      if (value === "underline") return `<u>${text}</u>`;
       if (!CSS.supports("color", value)) return text;
       const content = /^\*?✶\s/.test(text.trim()) ? `&#123;${text}&#125;` : text;
       return `<span class="tinted" style="color:${value};--annotation-color:${value}">${content}</span>`;
@@ -183,9 +190,9 @@ function expandColours(src) {
   return out;
 }
 
-function renderMarkdown(body) {
+function renderMarkdown(body, table = null) {
   // Keep Markdown blockquotes (>) while preventing contributor HTML (<...>).
-  const plain = body.replace(/&/g, "&amp;").replace(/</g, "&lt;");
+  const plain = CourseMediaTable.expand(body, table).replace(/&/g, "&amp;").replace(/</g, "&lt;");
   const expanded = expandColours(expandAnnotations(plain));
   const tokens = marked.lexer(expanded);
   marked.walkTokens(tokens, (token) => {
@@ -223,11 +230,13 @@ async function findVisual(folder) {
 }
 
 async function loadEntry(folder) {
-  const [text, visual] = await Promise.all([
+  const [text, visual, table] = await Promise.all([
     fetch(`${folder}/text.md`).then((r) => (r.ok ? r.text() : null)).catch(() => null),
     findVisual(folder),
+    // Snapshots published before media.csv existed have none.
+    fetch(`${folder}/media.csv`).then((r) => (r.ok ? r.text() : null)).catch(() => null),
   ]);
-  return { folder, text, visual };
+  return { folder, text, visual, table };
 }
 
 /* ---------- rendering ---------- */
@@ -246,8 +255,11 @@ function renderEntry(entry) {
   if (entry.authors) html += `<p class="entry-authors">${esc(entry.authors)}</p>`;
   html += `</div>`;
   html += `</header>`;
+  let table = null;
+  try { table = entry.table ? CourseMediaTable.read(entry.table) : null; }
+  catch { /* Import admission rejects invalid tables; names then stay literal. */ }
   html += `<div class="entry-text">`;
-  if (entry.text !== null) html += renderMarkdown(body);
+  if (entry.text !== null) html += renderMarkdown(body, table);
   html += `</div>`;
   const visual = entry.visual && safeUrl(entry.visual === `${entry.folder}/visual.svg` ? "visual.svg" : entry.visual, entry.folder, "media");
   if (visual) {
@@ -265,8 +277,17 @@ function renderEntry(entry) {
      resolves against the Entry's folder. The hero visual above is already
      a full path and sits outside this scope. */
   const textEl = template.content.querySelector(".entry-text");
+  const sources = CourseMediaTable.sources(table);
   for (const el of textEl.querySelectorAll("[src]")) {
     const src = el.getAttribute("src");
+    // A Markdown image links to its media.csv source, like [[name]] media.
+    const source = src && sources.get(src.replace(/^\.\//, ""));
+    if (source && el.tagName === "IMG" && !el.closest("a[href]")) {
+      const link = document.createElement("a");
+      link.href = source;
+      el.replaceWith(link);
+      link.append(el);
+    }
     const safe = src && safeUrl(src, entry.folder, "media");
     if (safe) el.setAttribute("src", safe);
     else el.removeAttribute("src");
@@ -276,6 +297,10 @@ function renderEntry(entry) {
     const safe = href && safeUrl(href, entry.folder, "link");
     if (safe) a.setAttribute("href", safe);
     else a.removeAttribute("href");
+    if (safe) {
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+    }
   }
   prepareInlineImages(textEl);
   CoursePlayback.prepare(textEl);
@@ -286,22 +311,29 @@ function renderEntry(entry) {
 
 function prepareInlineImages(textEl) {
   for (const image of textEl.querySelectorAll("img[src]")) {
-    const content = image.parentElement.matches(".annotation-content") &&
-      image.parentElement.childNodes.length === 1 ? image.parentElement : null;
+    const content = image.closest(".annotation-content");
     let target;
     if (content) {
-      target = content.parentElement.querySelector(".annotation-toggle");
-      target.querySelector(".annotation-marker")?.remove();
-      image.alt = target.textContent.trim();
-      target.classList.remove("annotation-toggle");
+      const label = content.parentElement.querySelector(".annotation-toggle");
+      label.querySelector(".annotation-marker")?.remove();
+      image.alt = label.textContent.trim();
+      target = image.closest("a[href]") || document.createElement("a");
+      if (!target.hasAttribute("href")) target.href = image.src;
+      target.target = "_blank";
+      target.rel = "noopener noreferrer";
+      target.setAttribute("aria-label", `Open image source: ${image.alt}`);
       target.replaceChildren(image);
+      label.replaceWith(target);
       content.remove();
     } else {
       // Linked Markdown images keep their link and native activation.
       target = image.closest("a[href]");
       if (!target) {
-        target = document.createElement("button");
-        target.type = "button";
+        target = document.createElement("a");
+        target.href = image.src;
+        target.target = "_blank";
+        target.rel = "noopener noreferrer";
+        target.setAttribute("aria-label", `Open image source: ${image.alt || "supporting image"}`);
         image.replaceWith(target);
         target.append(image);
       }
@@ -460,7 +492,6 @@ function setupImagePreviews() {
   const preview = document.getElementById("image-preview");
   const image = preview.querySelector("img");
   const video = preview.querySelector("video");
-  let animation;
   const dismiss = document.getElementById("image-preview-close");
   let active = null;
   let mode = null;
@@ -473,7 +504,6 @@ function setupImagePreviews() {
     mode = null;
     preview.hidden = true;
     dismiss.hidden = true;
-    animation?.cancel();
     image.removeAttribute("src");
     video.pause();
     video.removeAttribute("src");
@@ -496,16 +526,8 @@ function setupImagePreviews() {
     const top = Math.max(48, Math.min(y - h / 2, innerHeight - h - 16));
     Object.assign(preview.style, {
       width: `${w}px`, height: `${h}px`, left: `${left}px`, top: `${top}px`,
-      transformOrigin: `${x - left}px ${y - top}px`,
     });
     preview.hidden = false;
-    if (!matchMedia("(prefers-reduced-motion: reduce)").matches) {
-      animation?.cancel();
-      animation = preview.animate([
-        { transform: `scale(${anchor.width / w}, ${anchor.height / h})` },
-        { transform: "scale(1)" },
-      ], { duration: 180, easing: "ease-out" });
-    }
   }
 
   async function playPreview() {
@@ -514,8 +536,7 @@ function setupImagePreviews() {
       await video.play();
       if (!active || video.hidden) video.pause();
     } catch {
-      // A hover cannot override a browser's audio activation policy.
-      if (active === target) target.querySelector(".playback-status").textContent = "Click the video to enable sound.";
+      if (active === target) target.querySelector(".playback-status").textContent = "Could not preview this video.";
     }
   }
 
@@ -532,8 +553,10 @@ function setupImagePreviews() {
       } else {
         video.src = source.src;
         video.currentTime = source.currentTime;
-        video.muted = false;
-        playPreview();
+        video.muted = reason !== "pointer";
+        video.defaultMuted = true;
+        video.loop = true;
+        if (!matchMedia("(prefers-reduced-motion: reduce)").matches) playPreview();
       }
     }
     if (reason === "pinned" && !video.hidden && video.paused) playPreview();
@@ -570,6 +593,8 @@ function setupImagePreviews() {
         !(mode === "pinned" && event.relatedTarget === dismiss)) clear();
   });
   document.addEventListener("click", event => {
+    const sourceLink = event.target.closest("a.inline-image, a.inline-playback");
+    if (sourceLink) { clear(); return; }
     const target = event.target.closest("button.inline-image, .inline-playback");
     if (target) {
       if (active === target && mode === "pinned") clear();
@@ -591,7 +616,7 @@ function setupImagePreviews() {
   window.addEventListener("resize", clear);
   document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
   document.addEventListener("keydown", event => {
-    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".inline-playback")) {
+    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".inline-playback:not(a)")) {
       event.preventDefault();
       event.target.click();
     }
@@ -612,8 +637,19 @@ function disposeRender() {
   playback?.dispose();
 }
 
+function alignEntryCaptionAuthors() {
+  const barAuthors = document.getElementById("current-authors");
+  const caption = document.querySelector(".entry-caption");
+  if (!barAuthors || !caption) return;
+  const offset = barAuthors.getBoundingClientRect().left - caption.getBoundingClientRect().left;
+  document.documentElement.style.setProperty("--entry-author-offset", `${offset}px`);
+}
+
 function render(entries) {
-  if (!clearInteractions) clearInteractions = setupInteractions();
+  if (!clearInteractions) {
+    clearInteractions = setupInteractions();
+    window.addEventListener("resize", alignEntryCaptionAuthors);
+  }
   if (!playback) playback = CoursePlayback.setup();
   const position = { x: window.scrollX, y: window.scrollY };
   disposeRender();
@@ -626,6 +662,7 @@ function render(entries) {
     document.getElementById("current").textContent = "";
     document.getElementById("current-authors").textContent = "";
   }
+  alignEntryCaptionAuthors();
   disposeSections = watchSections(shown);
   playback.mount();
   window.scrollTo(position.x, position.y);

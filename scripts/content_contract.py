@@ -15,6 +15,8 @@ CONTRACT_VERSION = CONTRACT["version"]
 LIMITS = CONTRACT["limits"]
 MEDIA_EXTENSIONS = frozenset(CONTRACT["media_extensions"])
 MAX_TEXT_BYTES = LIMITS["text_bytes"]
+MEDIA_TABLE = CONTRACT["media_table"]
+MAX_TABLE_BYTES = LIMITS["table_bytes"]
 MAX_SVG_BYTES = LIMITS["svg_bytes"]
 MAX_MEDIA_BYTES = LIMITS["media_bytes"]
 MAX_TOTAL_BYTES = LIMITS["group_bytes"]
@@ -65,7 +67,10 @@ def select_content_files(file_sizes, *, require_visual=True, recovery=False):
             raise ValueError(f"{name}: use exactly visual.svg for the main visual")
         required = name in {"text.md", "visual.svg"}
         media = path.suffix.lower() in MEDIA_EXTENSIONS and (len(parts) == 1 or parts[0] == "media")
-        if not required and not media:
+        # Selected whenever present; import admission, not recovery of older
+        # snapshots, is where media.csv becomes mandatory.
+        table = name == MEDIA_TABLE
+        if not required and not media and not table:
             continue
         if len(name) > LIMITS["path_length"] or len(parts) > LIMITS["path_depth"]:
             raise ValueError(f"{name}: content path too long")
@@ -73,7 +78,8 @@ def select_content_files(file_sizes, *, require_visual=True, recovery=False):
             raise ValueError(f"{name}: content filenames must use lowercase letters, digits, dots, hyphens or underscores")
         if type(size) is not int or size < 0:
             raise ValueError(f"{name}: invalid file size")
-        limit = MAX_TEXT_BYTES if name == "text.md" else MAX_SVG_BYTES if path.suffix == ".svg" else MAX_MEDIA_BYTES
+        limit = (MAX_TEXT_BYTES if name == "text.md" else MAX_TABLE_BYTES if name == MEDIA_TABLE
+                 else MAX_SVG_BYTES if path.suffix == ".svg" else MAX_MEDIA_BYTES)
         if size > limit:
             raise ValueError(f"{name}: exceeds the {limit}-byte file limit")
         selected.append(name)

@@ -3,7 +3,8 @@
 import hashlib
 
 import build_site
-from archive_state import ArchiveSnapshot
+from content_contract import MEDIA_TABLE
+from archive_state import ArchiveSnapshot, MAX_MANIFEST_BYTES, decode_archive
 from publication_state import MANIFEST, RecoveryError
 from publish_site import RELEASE, encode, site_digest, validate_release
 
@@ -20,6 +21,8 @@ def probes_for(groups, previous=None):
             (text if name == 'text.md' else media).append(f'{slug}/{name}')
     if len(text) > 15:
         raise RecoveryError('verification probe group limit exceeded')
+    # media.csv is probed only when no real media file changed.
+    media.sort(key=lambda path: path.endswith('/' + MEDIA_TABLE))
     return text + media[:1]
 
 
@@ -35,6 +38,30 @@ def make_release(main_commit, main_tree, archive, run_id, run_attempt, previous_
     (build_site.OUTPUT / RELEASE).write_bytes(encode(release))
     build_site.enforce_site_budget(build_site.OUTPUT)
     return release
+
+
+def verified_previous_groups(records, repository, verified_record):
+    """Read a served inventory from the independently verified immutable archive pin."""
+    if not verified_record:
+        return None
+    release = validate_release(verified_record['payload'])
+    if release['version'] != 2 or not records.is_verified(verified_record['id']):
+        return None
+    if records.archive_authority(release['archive_commit']) != 'v2':
+        raise RecoveryError('previous verified release lacks V2 archive authority')
+    payload = records.client.raw_file(repository, release['archive_commit'], 'publication.json',
+                                      MAX_MANIFEST_BYTES)
+    if hashlib.sha256(payload).hexdigest() != release['archive_manifest_sha256']:
+        raise RecoveryError('previous archive manifest differs from verified release pin')
+    groups = decode_archive(payload)
+    served = {}
+    for slug, entry in groups.items():
+        snapshot = entry['snapshot']
+        if entry['state'] == 'hidden' or snapshot is None:
+            continue
+        served[slug] = {'files': {name: {key: record[key] for key in ('size', 'sha256')}
+                                  for name, record in snapshot['files'].items()}}
+    return served
 
 
 def reconstruct(release, archive, main_commit, main_tree):

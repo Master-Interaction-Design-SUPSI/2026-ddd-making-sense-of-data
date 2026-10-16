@@ -33,13 +33,16 @@ on:
 permissions:
   contents: read
 
+env:
+  DDD_PUBLICATION_PAUSED: ${{ vars.DDD_PUBLICATION_PAUSED }}
+
 concurrency:
-  group: ${{ github.event_name != 'issues' && 'pages' || (vars.DDD_ARCHIVE_ENABLED == 'true' && vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request') && 'pages') || format('ignored-issue-{0}', github.event.issue.number) }}
+  group: ${{ vars.DDD_PUBLICATION_PAUSED == 'true' && format('publication-paused-{0}', github.run_id) || (github.event_name != 'issues' && 'pages') || (vars.DDD_ARCHIVE_ENABLED == 'true' && vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request') && 'pages') || format('ignored-issue-{0}', github.event.issue.number) }}
   cancel-in-progress: false
 
 jobs:
   publish:
-    if: github.ref == 'refs/heads/main' && vars.DDD_ARCHIVE_ENABLED != 'true' && github.event_name != 'issues' && !(github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))
+    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main' && vars.DDD_ARCHIVE_ENABLED != 'true' && github.event_name != 'issues' && !(github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:
@@ -118,7 +121,7 @@ jobs:
         run: python3 scripts/publish_site.py summary
 
   pin:
-    if: github.ref == 'refs/heads/main' && (vars.DDD_ARCHIVE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))) && (github.event_name != 'issues' || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request')))
+    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main' && (vars.DDD_ARCHIVE_ENABLED == 'true' || (github.event_name == 'workflow_dispatch' && (inputs.seed_archive || inputs.reconcile_seed || inputs.rebind_archive))) && (github.event_name != 'issues' || (vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request')))
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:

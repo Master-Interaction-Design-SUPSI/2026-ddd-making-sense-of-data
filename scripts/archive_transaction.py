@@ -11,7 +11,7 @@ from pathlib import Path
 import build_site
 from archive_state import ArchiveSnapshot, blob_sha, encode_archive, reconcile, reconcile_v1_seed, seed_v1
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES
-from github_content import GitHubClient
+from github_content import GitHubClient, ImportFailure
 from import_groups import import_groups
 from publication_state import MANIFEST, RecoveryError, decode_manifest
 
@@ -39,7 +39,7 @@ class ArchiveBase:
 
     def read_file(self, slug, name):
         if time.monotonic() > self.deadline:
-            raise RecoveryError('archive reuse deadline exceeded')
+            raise ImportFailure('timeout', 'Archive reuse exceeded the group time budget; retry later')
         content = self.archive.read_file(slug, name)
         self.metrics['archive_read_bytes'] += len(content)
         return content

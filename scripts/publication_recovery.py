@@ -13,9 +13,11 @@ import os
 import re
 import shutil
 import sys
+import tarfile
 import tempfile
 from pathlib import Path, PurePosixPath
 
+from archive_state import BoundedTarInfo
 from content_contract import MAX_SITE_BYTES
 from publication_state import (MANIFEST, MAX_MANIFEST_BYTES, RecoveryError,
                                decode_manifest, unique_keys)
@@ -29,6 +31,9 @@ SHA256 = re.compile(r'[0-9a-f]{64}')
 MAX_INVENTORY_ENTRIES = 10000
 MAX_RELEASE_BYTES = 4096
 MAX_CAPTURE_METADATA_BYTES = 8 * 1024 * 1024
+MAX_ARTIFACT_TAR_BYTES = MAX_SITE_BYTES + 16 * 1024 * 1024
+MAX_ARTIFACT_PATH_BYTES = 576
+MAX_ARTIFACT_PATH_DEPTH = 32
 
 
 def _sha256(payload):
@@ -241,6 +246,142 @@ def capture_v1(site_folder, release, destination):
     return verify_capture(destination)
 
 
+def _artifact_path(member):
+    """Normalize a Pages tar member without using its mode or path for extraction."""
+    name = member.name
+    if (not isinstance(name, str) or not name or len(name.encode('utf-8')) > MAX_ARTIFACT_PATH_BYTES
+            or '\\' in name or any(ord(char) < 32 or ord(char) == 127 for char in name)):
+        raise RecoveryError('Pages artifact contains an unsafe path')
+    if name in {'.', './'} and member.type == tarfile.DIRTYPE:
+        return '.'
+    if name.startswith('./'):
+        name = name[2:]
+    if name.startswith('/'):
+        raise RecoveryError('Pages artifact contains an unsafe path')
+    if member.type == tarfile.DIRTYPE and name.endswith('/'):
+        name = name[:-1]
+    parts = name.split('/')
+    if (not name or len(parts) > MAX_ARTIFACT_PATH_DEPTH
+            or any(part in {'', '.', '..'} for part in parts)):
+        raise RecoveryError('Pages artifact contains an unsafe path')
+    return '/'.join(parts)
+
+
+def _copy_artifact_member(source, member, destination):
+    stream = source.extractfile(member)
+    if stream is None:
+        raise RecoveryError('Pages artifact file has no readable payload')
+    remaining = member.size
+    with stream, destination.open('xb') as output:
+        while remaining:
+            chunk = stream.read(min(65536, remaining))
+            if not chunk:
+                raise RecoveryError('Pages artifact payload is shorter than its advertised size')
+            output.write(chunk)
+            remaining -= len(chunk)
+        if stream.read(1):
+            raise RecoveryError('Pages artifact payload exceeds its advertised size')
+
+
+def capture_v1_artifact(artifact_tar, expected_v1_release, destination):
+    """Safely capture a verified V1 Pages site from a plain tar artifact.
+
+    Tar-provided paths, modes, owners and timestamps are never used to extract
+    files.  The original V1 validator remains the authority for release, file,
+    manifest and complete-site digests after bounded extraction.
+    """
+    artifact_tar = Path(artifact_tar)
+    destination = Path(destination)
+    release = validate_release(expected_v1_release)
+    if release['version'] != 1:
+        raise RecoveryError('V1 artifact capture requires an expected V1 release')
+    if destination.exists() or destination.is_symlink():
+        raise RecoveryError('capture destination must not already exist')
+    if (artifact_tar.is_symlink() or not artifact_tar.is_file()
+            or artifact_tar.stat().st_size > MAX_ARTIFACT_TAR_BYTES):
+        raise RecoveryError('Pages artifact tar is missing, unsafe or oversized')
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    temporary = Path(tempfile.mkdtemp(prefix='.v1-artifact-', dir=destination.parent))
+    site = temporary / 'site'
+    site.mkdir()
+    try:
+        files, directories, names = {}, set(), set()
+        advertised_total = 0
+        try:
+            with artifact_tar.open('rb') as raw, tarfile.open(
+                    fileobj=raw, mode='r:', tarinfo=BoundedTarInfo) as archive:
+                members = []
+                for member in archive:
+                    if getattr(archive, '_archive_headers', 0) > MAX_INVENTORY_ENTRIES:
+                        raise RecoveryError('Pages artifact exceeds the inventory header limit')
+                    if member.type not in {tarfile.REGTYPE, tarfile.AREGTYPE, tarfile.DIRTYPE}:
+                        raise RecoveryError('Pages artifact contains a link or special file')
+                    name = _artifact_path(member)
+                    if name in names:
+                        raise RecoveryError('Pages artifact contains duplicate paths')
+                    names.add(name)
+                    if name == '.':
+                        if member.type != tarfile.DIRTYPE:
+                            raise RecoveryError('Pages artifact root entry must be a directory')
+                        members.append((member, name))
+                        continue
+                    if member.type == tarfile.DIRTYPE:
+                        directories.add(name)
+                    else:
+                        if type(member.size) is not int or member.size < 0:
+                            raise RecoveryError('Pages artifact has an invalid advertised file size')
+                        advertised_total += member.size
+                        if advertised_total > MAX_SITE_BYTES:
+                            raise RecoveryError('Pages artifact exceeds the expanded site byte limit')
+                        if name == RELEASE and member.size > MAX_RELEASE_BYTES:
+                            raise RecoveryError('V1 release metadata exceeds its byte limit')
+                        if name == MANIFEST and member.size > MAX_MANIFEST_BYTES:
+                            raise RecoveryError('V1 manifest exceeds its byte limit')
+                        files[name] = member.size
+                    members.append((member, name))
+                raw_headers = getattr(archive, '_archive_headers', 0)
+                if raw_headers > MAX_INVENTORY_ENTRIES:
+                    raise RecoveryError('Pages artifact exceeds the inventory header limit')
+                if RELEASE not in files or MANIFEST not in files:
+                    raise RecoveryError('V1 artifact is missing release or publication manifest')
+                declared_paths = set(files) | directories
+                materialized_paths = set(declared_paths)
+                for name in declared_paths:
+                    if any('/'.join(name.split('/')[:index]) in files
+                           for index in range(1, len(name.split('/')))):
+                        raise RecoveryError('Pages artifact contains a file/parent collision')
+                    parts = name.split('/')
+                    materialized_paths.update('/'.join(parts[:index]) for index in range(1, len(parts)))
+                if raw_headers + len(materialized_paths - declared_paths) > MAX_INVENTORY_ENTRIES:
+                    raise RecoveryError('Pages artifact exceeds the inventory entry limit')
+
+                # Only after the full archive inventory and metadata caps are
+                # known do we read any member payload.
+                for directory in sorted(directories, key=lambda value: (value.count('/'), value)):
+                    (site / directory).mkdir(parents=True, exist_ok=True)
+                copied_total = 0
+                for member, name in members:
+                    if name == '.' or member.type == tarfile.DIRTYPE:
+                        continue
+                    path = site / name
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    _copy_artifact_member(archive, member, path)
+                    copied_total += path.stat().st_size
+                    if path.stat().st_size != files[name] or copied_total > MAX_SITE_BYTES:
+                        raise RecoveryError('Pages artifact payload differs from its advertised size')
+                if copied_total != advertised_total:
+                    raise RecoveryError('Pages artifact expanded size differs from its advertised inventory')
+        except RecoveryError:
+            raise
+        except (tarfile.TarError, EOFError, OSError, ValueError, OverflowError) as error:
+            raise RecoveryError('Pages artifact tar is invalid or truncated') from error
+        result = capture_v1(site, release, destination)
+        return result
+    finally:
+        shutil.rmtree(temporary, ignore_errors=True)
+
+
 def _capture_fingerprint(metadata):
     return _sha256(encode(metadata))
 
@@ -366,6 +507,11 @@ def main(argv=None):
     capture.add_argument('--release', required=True, help='V1 release.json file')
     capture.add_argument('--out', required=True, help='new capture directory')
 
+    artifact = commands.add_parser('capture-v1-artifact', help='capture a V1 Pages site from its original tar artifact')
+    artifact.add_argument('--artifact', required=True, help='original complete Pages tar artifact')
+    artifact.add_argument('--release', required=True, help='expected verified V1 release.json file')
+    artifact.add_argument('--out', required=True, help='new capture directory')
+
     verify = commands.add_parser('verify-capture', help='verify all capture metadata and site bytes')
     verify.add_argument('--capture', required=True)
     verify.add_argument('--expected-release', help='optional expected V1 release.json file')
@@ -386,6 +532,9 @@ def main(argv=None):
         if args.command == 'capture-v1':
             release = _read_json(args.release, MAX_RELEASE_BYTES)
             result = capture_v1(args.site, release, args.out)
+        elif args.command == 'capture-v1-artifact':
+            release = _read_json(args.release, MAX_RELEASE_BYTES)
+            result = capture_v1_artifact(args.artifact, release, args.out)
         elif args.command == 'verify-capture':
             expected = _read_json(args.expected_release, MAX_RELEASE_BYTES) if args.expected_release else None
             result = verify_capture(args.capture, expected_release=expected)

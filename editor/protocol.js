@@ -7,6 +7,7 @@
     if (!envelope(message) || message.type !== 'render' || !Number.isSafeInteger(message.revision) || message.revision < 1 ||
         typeof message.slug !== 'string' || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(message.slug) || message.slug.length > 63 ||
         typeof message.text !== 'string' || new TextEncoder().encode(message.text).byteLength > contract.limits.text_bytes ||
+        (message.table !== null && (typeof message.table !== 'string' || new TextEncoder().encode(message.table).byteLength > contract.limits.table_bytes)) ||
         !Array.isArray(message.assets) || message.assets.length > contract.limits.files || !Array.isArray(message.paths) || message.paths.length > contract.limits.files) {
       throw new Error('Invalid preview message');
     }

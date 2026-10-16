@@ -12,7 +12,7 @@ from urllib.parse import urlsplit
 
 import build_site
 from publication_state import MANIFEST, PublishedSite, RecoveryError, decode_manifest
-from test_import_groups import FixtureAPI, Response, SVG, TEXT
+from test_import_groups import FixtureAPI, Response, SVG, TABLE, TEXT
 
 
 class PublishedHTTP:
@@ -81,7 +81,8 @@ class PublicationTests(unittest.TestCase):
         return json.loads((self.root / ".scratch/group-import-report.json").read_text())["groups"]
 
     def update(self, name, text=b"new content", visual=SVG):
-        commit, _ = self.api.add("course/" + name, {"text.md": text, "visual.svg": visual})
+        # A text or visual edit keeps the media.csv from the first revision.
+        commit, _ = self.api.add("course/" + name, {"text.md": text, "visual.svg": visual, "media.csv": TABLE})
         # Give each fixture revision a distinct source commit, as Git does.
         base = "/repos/course/" + name
         revision = hashlib.sha1(text + visual).hexdigest()
@@ -146,7 +147,7 @@ class PublicationTests(unittest.TestCase):
         self.bootstrap()
         entry = decode_manifest((self.live / MANIFEST).read_bytes())["beta"]
         self.assertFalse(entry["require_visual"])
-        self.assertEqual(set(entry["files"]), {"text.md"})
+        self.assertEqual(set(entry["files"]), {"text.md", "media.csv"})
         self.assertFalse((self.live / "beta/visual.svg").exists())
         self.api.routes["/repos/course/beta"] = URLError("temporary outage")
         with patch("github_content.time.sleep"):

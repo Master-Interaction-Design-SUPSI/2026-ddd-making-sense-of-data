@@ -9,6 +9,7 @@ from content_contract import (
     MAX_MEDIA_BYTES, MAX_SVG_BYTES, MAX_TEXT_BYTES, select_content_files,
 )
 from group_registry import load_registry
+from import_groups import validate_content
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -156,11 +157,13 @@ class GroupContractTests(unittest.TestCase):
     def test_template_matches_contract_and_is_not_discovered_as_an_entry(self):
         template = ROOT / "templates" / "group"
         files = {path.relative_to(template).as_posix(): path.stat().st_size for path in template.rglob("*") if path.is_file()}
-        self.assertEqual(select_content_files(files), ["media/example-detail.svg", "media/example-motion.mp4", "media/example-tall.svg", "media/example-tone.mp3", "text.md", "visual.svg"])
+        self.assertEqual(select_content_files(files), ["media.csv", "media/example-detail.svg", "media/example-motion.mp4", "media/example-tall.svg", "media/example-tone.mp3", "text.md", "visual.svg"])
         build_site.validate_visual(template / "visual.svg")
         text = (template / "text.md").read_text(encoding="utf-8")
         self.assertIn("invented", text)
-        self.assertIn("media/example-detail.svg", text)
+        self.assertIn("[[wide detail]]", text)
+        # The template passes the same admission check as a student repository.
+        validate_content(template, select_content_files(files), require_table=True)
         self.assertNotIn("templates", build_site.find_entries())
         load_registry(ROOT / "groups.json")
 

@@ -39,7 +39,7 @@
         assets.set(asset.path, { size: asset.bytes.byteLength, url: URL.createObjectURL(new Blob([asset.bytes], { type: mime(asset.path) })) });
       }
       await CourseSite.start({
-        loadEntries: async () => [{ folder: slug, text: message.text, visual: message.paths.includes('visual.svg') ? 'visual.svg' : null }],
+        loadEntries: async () => [{ folder: slug, text: message.text, table: message.table, visual: message.paths.includes('visual.svg') ? 'visual.svg' : null }],
         resolveResource: (path, kind) => kind === 'link' && path.endsWith('.svg') ? false : assets.get(path)?.url || false,
       });
       if (message.revision === revision) send({ type: 'ack', revision });

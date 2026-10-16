@@ -153,6 +153,79 @@ class TransactionTests(unittest.TestCase):
         for name in self.previous.groups['alpha']['snapshot']['files']:
             self.assertEqual(candidate.read_file('alpha', name), self.previous.read_file('alpha', name))
 
+    def test_archive_reuse_timeout_retains_that_group_while_another_update_succeeds(self):
+        self.prepare()
+        self.previous = ArchiveSnapshot(self.candidate, 'b' * 40)
+        self.fixture.update('alpha', b'New alpha text')
+        self.fixture.update('beta', b'New beta text')
+        original = archive_transaction.ArchiveBase.reuse
+
+        def expired_alpha(base, slug, name, node):
+            if slug == 'alpha':
+                base.deadline = 0
+            return original(base, slug, name, node)
+
+        destination = self.fixture.workspace / 'reuse-timeout'
+        with patch.object(archive_transaction.ArchiveBase, 'reuse', expired_alpha):
+            report = self.prepare(unchanged=True, idle=True, destination=destination)
+        candidate = ArchiveSnapshot(destination, self.previous.commit)
+        alpha, beta = report['groups']
+        self.assertEqual(alpha['error_code'], 'timeout')
+        self.assertEqual(alpha['publication_status'], 'retained')
+        self.assertEqual(beta['publication_status'], 'updated')
+        self.assertEqual(candidate.groups['alpha']['snapshot'], self.previous.groups['alpha']['snapshot'])
+        self.assertEqual(candidate.read_file('beta', 'text.md'), b'New beta text')
+
+    def test_low_api_headroom_retains_all_groups_without_spending_remaining_quota(self):
+        self.fixture.update('alpha', b'New alpha text')
+        self.fixture.update('beta', b'New beta text')
+        self.fixture.api.calls.clear()
+        original = self.fixture.api.open
+
+        def limited(request, timeout):
+            response = original(request, timeout)
+            response.headers = {'X-RateLimit-Remaining': '200'}
+            return response
+
+        with patch.object(self.fixture.api, 'open', limited):
+            report = self.prepare()
+        candidate = ArchiveSnapshot(self.candidate, self.previous.commit)
+        self.assertEqual(len(self.fixture.api.calls), 1)
+        self.assertEqual(report['transport']['raw_requests'], 0)
+        self.assertEqual([row['error_code'] for row in report['groups']], ['rate_limited'] * 2)
+        self.assertEqual([row['publication_status'] for row in report['groups']], ['retained'] * 2)
+        for slug, entry in self.previous.groups.items():
+            self.assertEqual(candidate.groups[slug]['snapshot'], entry['snapshot'])
+            for name in entry['snapshot']['files']:
+                self.assertEqual(candidate.read_file(slug, name), self.previous.read_file(slug, name))
+
+    def test_expired_run_deadline_retains_later_group_without_another_source_request(self):
+        self.fixture.update('alpha', b'New alpha text')
+        self.fixture.update('beta', b'New beta text')
+        self.fixture.api.calls.clear()
+        clock = [0.0]
+        clients = []
+
+        def factory():
+            if clients:
+                clock[0] = 901.0
+            client = self.fixture.api.client()
+            clients.append(client)
+            return client
+
+        with patch('import_groups.time.monotonic', side_effect=lambda: clock[0]):
+            report = archive_transaction.prepare_archive(self.registry, self.previous, self.candidate,
+                                                         client_factory=factory)
+        candidate = ArchiveSnapshot(self.candidate, self.previous.commit)
+        alpha, beta = report['groups']
+        self.assertEqual(alpha['publication_status'], 'updated')
+        self.assertEqual(beta['error_code'], 'timeout')
+        self.assertEqual(beta['publication_status'], 'retained')
+        self.assertEqual(clients[1].metrics['rest_requests'], 0)
+        self.assertEqual(clients[1].metrics['raw_requests'], 0)
+        self.assertEqual(candidate.read_file('alpha', 'text.md'), b'New alpha text')
+        self.assertEqual(candidate.groups['beta']['snapshot'], self.previous.groups['beta']['snapshot'])
+
     def test_writer_checks_identity_and_hidden_snapshots_beyond_transfer_integrity(self):
         registry = [replace(self.registry[0], enabled=False, state='hidden'), self.registry[1]]
         self.prepare(registry)

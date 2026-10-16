@@ -1,9 +1,13 @@
 ((root) => {
   const marked = typeof module !== 'undefined' && module.exports ? require('./vendor/marked.min.js') : root.marked;
   const annotations = typeof module !== 'undefined' && module.exports ? require('./annotations.js') : root.CourseAnnotations;
+  const media = typeof module !== 'undefined' && module.exports ? require('./media-table.js') : root.CourseMediaTable;
 
-  function collect(text) {
-    const body = text.replace(/^\uFEFF/, '').replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '');
+  const bodyOf = text => text.replace(/^\uFEFF/, '').replace(/^---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$)/, '');
+
+  // table: a parsed media.csv (CourseMediaTable.read) or null.
+  function collect(text, table = null) {
+    const body = media.expand(bodyOf(text), table);
     const references = [];
     const prose = annotations.replace(body, annotation =>
       annotation.label + ' ' + (annotation.resource ? '' : annotation.target));
@@ -12,6 +16,7 @@
     });
     for (const annotation of annotations.parseAll(body)) {
       if (annotation.resource) references.push(annotation.target);
+      if (annotation.sourceUrl) references.push(annotation.sourceUrl);
     }
     return references;
   }
@@ -34,13 +39,21 @@
     return path;
   }
 
-  function validate(text, files, schemes) {
+  /* With a media table, [[name]] must be one of its rows and every media
+     file the text uses needs a row. Without one, older snapshots keep
+     their previous rules. */
+  function validate(text, files, schemes, table = null) {
     const paths = new Set(files);
     const used = new Set();
-    for (const target of collect(text)) {
+    if (table) {
+      const [name] = media.unresolved(media.expand(bodyOf(text), table));
+      if (name !== undefined) throw new Error(`text.md: [[${name}]] is not a name in media.csv`);
+    }
+    for (const target of collect(text, table)) {
       const path = localPath(target, schemes);
       if (path === null) continue;
       if (!paths.has(path)) throw new Error(`text.md: ${target} must reference an imported file inside this group`);
+      if (table && path !== 'visual.svg' && !table.byFile.has(path)) throw new Error(`text.md: ${path} is used in the text but has no row in media.csv`);
       used.add(path);
     }
     return [...used];

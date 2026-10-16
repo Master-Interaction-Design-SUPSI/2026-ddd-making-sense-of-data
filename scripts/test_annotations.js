@@ -4,10 +4,11 @@ const path = require('node:path');
 const { test } = require('node:test');
 const vm = require('node:vm');
 const annotations = require('../static/annotations.js');
+const mediaTable = require('../static/media-table.js');
 const marked = require('../static/vendor/marked.min.js');
 
 const context = vm.createContext({
-  CourseAnnotations: annotations, marked, URL,
+  CourseAnnotations: annotations, CourseMediaTable: mediaTable, marked, URL,
   CSS: { supports: (_, value) => /^(crimson|green|red|#116964|rgb\(10, 20, 30\))$/.test(value) },
   document: { baseURI: 'https://site.test/course/', getElementById: () => null },
   fetch: () => new Promise(() => {}),
@@ -31,14 +32,14 @@ test('semantic type, style and color are independent and order does not matter',
 test('defaults distinguish notes, bibliography and unchanged media annotations', () => {
   const [note, bibliography, media] = annotations.parseAll('[[note|A detail]] [[source|https://example.org|type=bibliography]] [[sketch|media/sketch.svg]]');
   assert.equal(note.type, 'note');
-  assert.equal(note.style, 'italic');
+  assert.equal(note.style, 'normal');
   assert.equal(note.color, null);
   assert.equal(bibliography.type, 'bibliography');
   assert.equal(bibliography.resource, true);
   assert.equal(media.type, 'resource');
   assert.equal(media.style, 'inherit');
   assert.match(context.renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
-  assert.match(context.renderMarkdown(bibliography.source), /\(<span class="annotation-marker" aria-hidden="true">■<\/span> source/);
+  assert.match(context.renderMarkdown(bibliography.source), /\(■ source\)/);
   assert.match(context.renderMarkdown(media.source), /src="media\/sketch.svg"/);
 });
 
@@ -46,13 +47,19 @@ test('bibliography starts open and resource references stay links rather than pl
   for (const target of ['A written reference', 'https://example.org/data', 'media/sketch.svg',
     'media/example-tone.mp3', 'https://youtu.be/abcdefghijk']) {
     const html = context.renderMarkdown(`[[source|${target}|type=bibliography;color=crimson]]`);
-    assert.match(html, /annotation-bibliography annotation-style-inherit open/);
-    assert.match(html, /aria-expanded="true"/);
+    if (target === 'A written reference') {
+      assert.match(html, /annotation-bibliography annotation-style-inherit open/);
+      assert.match(html, /aria-expanded="true"/);
+    } else {
+      assert.match(html, /target="_blank" rel="noopener noreferrer"/);
+      assert.match(html, /\(■ source\)<\/a>/);
+      assert.doesNotMatch(html, /<button/);
+    }
     assert.doesNotMatch(html, / hidden|color:crimson|<iframe|<img|<audio|<video/);
     if (target !== 'A written reference') assert.match(html, /<a href=/);
   }
   const note = context.renderMarkdown('[[note|A detail]]');
-  assert.match(note, /annotation-note annotation-style-italic open/);
+  assert.match(note, /annotation-note annotation-style-normal open/);
   assert.match(note, /aria-expanded="true"/);
   assert.doesNotMatch(note, / hidden>/);
 });
@@ -151,4 +158,33 @@ test('reference punctuation surrounds marker, author and title together', () => 
 test('colored starred questions are enclosed in braces', () => {
   const html = context.renderMarkdown('{crimson|*✶ Where and how is AI computation performed?*}');
   assert.match(html, /&#123;<em>✶ Where and how is AI computation performed\?<\/em>&#125;/);
+});
+
+
+test('original media sources are collected and unsafe source modifiers stay literal', () => {
+  const references = require('../static/references.js');
+  const source = '[[video|media/clip.mp4|source=https://example.org/original]]';
+  assert.match(context.renderMarkdown('[[video|media/clip.mp4|source=https://example.org/original?a=1&b=2]]'), /href="https:\/\/example.org\/original\?a=1&amp;b=2"/);
+  assert.deepEqual(references.collect(source), ['media/clip.mp4', 'https://example.org/original']);
+  assert.match(context.renderMarkdown(source), /<a href="https:\/\/example.org\/original" target="_blank" rel="noopener noreferrer"><video/);
+  for (const url of ['javascript:alert(1)', 'data:text/html,bad', 'https://bad.test/"onclick="bad']) {
+    assert.equal(annotations.parseAll(`[[video|media/clip.mp4|source=${url}]]`)[0].valid, false);
+  }
+});
+
+test('data source underlines preserve text and Markdown emphasis', () => {
+  assert.match(context.renderMarkdown('{underline|Dataset **XX**}'), /<u>Dataset <strong>XX<\/strong><\/u>/);
+});
+
+test('media.csv names render their file with the source link; unknown names stay literal', () => {
+  const table = mediaTable.read('name,source,file\nlithium mine,https://example.org/mine?a=1&b=2,media/mine.jpg\ninterview,,media/interview.mp3\nclip,https://example.org/clip;v=2,media/clip.mp4\n');
+  const image = context.renderMarkdown('The [[Lithium Mine]] near the river.', table);
+  assert.match(image, /<a href="https:\/\/example.org\/mine\?a=1&amp;b=2" target="_blank" rel="noopener noreferrer"><img src="media\/mine.jpg"/);
+  assert.match(image, /aria-expanded="false">Lithium Mine/);
+  assert.match(context.renderMarkdown('[[interview]]', table), /<audio controls preload="none" src="media\/interview.mp3">/);
+  assert.doesNotMatch(context.renderMarkdown('[[interview]]', table), /<a href/);
+  assert.match(context.renderMarkdown('[[clip]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
+  assert.match(context.renderMarkdown('[[a recording|media/clip.mp4]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
+  assert.match(context.renderMarkdown('[[unknown name]]', table), /\[\[unknown name\]\]/);
+  assert.match(context.renderMarkdown('[[lithium mine]]'), /\[\[lithium mine\]\]/);
 });

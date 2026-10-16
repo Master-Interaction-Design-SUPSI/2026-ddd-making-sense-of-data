@@ -10,8 +10,9 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import quote
 
-from content_contract import CONTRACT, select_content_files, validate_visual
+from content_contract import CONTRACT, MEDIA_TABLE, select_content_files, validate_visual
 from github_content import GitHubClient, ImportFailure
+import multimodal_source
 
 
 LINK_CHECKER = Path(__file__).with_name("check_content_links.js")
@@ -87,8 +88,9 @@ def validate_svg_style(value, name):
         raise ValueError(f"{name}: SVG styles may reference only local # identifiers")
 
 
-def validate_references(text, files):
-    payload = json.dumps({"text": text, "files": list(files), "schemes": CONTRACT["reference_schemes"]})
+def validate_references(text, files, table=None):
+    payload = json.dumps({"text": text, "files": list(files), "schemes": CONTRACT["reference_schemes"],
+                          "table": table})
     try:
         subprocess.run(["node", str(LINK_CHECKER), "--validate"], input=payload, text=True,
                        capture_output=True, timeout=10, check=True)
@@ -96,18 +98,32 @@ def validate_references(text, files):
         raise ValueError("text.md: link validation exceeded 10 seconds; simplify the text") from error
     except subprocess.CalledProcessError as error:
         if error.returncode == 2 and error.stderr:
-            raise ValueError("text.md: " + error.stderr.strip()) from error
+            # Messages naming their file keep it; others concern text.md.
+            message = error.stderr.strip()
+            named = message.startswith(("text.md:", MEDIA_TABLE))
+            raise ValueError(message if named else "text.md: " + message) from error
         raise RuntimeError("Text validator failed; check the local Node/Markdown setup") from error
 
 
-def validate_content(folder, files, *, require_visual=True):
+def validate_content(folder, files, *, require_visual=True, require_table=False):
+    # Only import admission requires media.csv; archive and recovery checks
+    # revalidate snapshots published before it existed.
     for name in files:
         if name.endswith(".svg"):
             validate_svg_content(folder / name)
     text = (folder / "text.md").read_text(encoding="utf-8")
     if require_visual or "visual.svg" in files:
         validate_visual(folder / "visual.svg")
-    validate_references(text, files)
+    table = None
+    if MEDIA_TABLE in files:
+        try:
+            table = (folder / MEDIA_TABLE).read_bytes().decode("utf-8")
+        except UnicodeDecodeError as error:
+            raise ValueError(f"{MEDIA_TABLE}: save the table as a UTF-8 CSV file") from error
+    elif require_table:
+        raise ValueError(f"{MEDIA_TABLE}: required; list each media file as name,source,file "
+                         "(keep only that first line if the text uses no media)")
+    validate_references(text, files, table)
 
 
 def import_group(group, destination, client, result, *, previous=None, allow_unchanged=False):
@@ -130,6 +146,8 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
     tree = client.json(repository + "/git/trees/" + tree_sha + "?recursive=1")
     if tree["sha"] != tree_sha:
         raise ImportFailure("invalid_response", "GitHub returned a different tree")
+    tree, generated = multimodal_source.prepare(
+        group, tree, client, commit, validate_tree=validate_tree)
     files = validate_tree(tree, group.exclude, require_visual=group.require_visual)
     result["excluded_files"] = sorted(node["path"] for node in tree["tree"]
                                       if node["path"] in group.exclude)
@@ -141,6 +159,8 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
     same_identity = (base and base["repository"] == group.repository and base["branch"] == group.branch)
     if (allow_unchanged and same_identity and base["commit"] == commit
             and base.get("require_visual", True) == group.require_visual
+            and all(base['files'].get(name, {}).get('sha256') == hashlib.sha256(data).hexdigest()
+                    for name, data in generated.items())
             and (not hasattr(previous, 'can_skip') or previous.can_skip(group, files))
             and {name: node["size"] for name, node in files.items()}
             == {name: record["size"] for name, record in base["files"].items()}):
@@ -149,11 +169,13 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
     with tempfile.TemporaryDirectory(prefix=".candidate-", dir=destination) as temporary:
         candidate = Path(temporary)
         for name, node in files.items():
-            data = previous.reuse(group.slug, name, node) if same_identity else None
+            data = generated.get(name)
+            if data is None and same_identity:
+                data = previous.reuse(group.slug, name, node)
+                if data is not None:
+                    result["reused_bytes"] = result.get("reused_bytes", 0) + len(data)
             if data is None:
                 data = client.raw_file(group.repository, commit, name, node["size"])
-            else:
-                result["reused_bytes"] = result.get("reused_bytes", 0) + len(data)
             digest = hashlib.sha1(f"blob {len(data)}\0".encode("ascii") + data).hexdigest()
             if len(data) != node["size"] or digest != node["sha"]:
                 raise ImportFailure("invalid_blob", f"{name}: downloaded bytes do not match the source commit")
@@ -162,7 +184,9 @@ def import_group(group, destination, client, result, *, previous=None, allow_unc
             path = candidate / name
             path.parent.mkdir(parents=True, exist_ok=True)
             path.write_bytes(data)
-        validate_content(candidate, files, require_visual=group.require_visual)
+        # The adapter supplies text without requiring a student media.csv.
+        validate_content(candidate, files, require_visual=group.require_visual,
+                         require_table="text.md" not in generated)
         client.remaining()
         candidate.rename(destination / group.slug)
     result.update(status="imported", files=list(files))

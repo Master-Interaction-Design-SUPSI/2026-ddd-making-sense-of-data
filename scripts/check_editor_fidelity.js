@@ -44,6 +44,11 @@ async page => {
     await editor.locator('#width').selectOption(String(width));
     // Align the iframe to whole device pixels so the capture excludes its scroll container.
     await editor.locator('#preview').evaluate((element, width) => {
+      // A sticky preview panel creates a stacking context below the editor's
+      // fixed bar. Release that test-container position before capturing the
+      // iframe, otherwise the editor bar covers its production-shell bar.
+      const panel = element.closest('.step-preview');
+      if (panel) panel.style.position = 'static';
       Object.assign(element.style, { position: 'fixed', inset: '0 auto auto 0', width: width + 'px', height: '800px', zIndex: '100' });
     }, width);
     for (const target of [production, preview.locator('body')]) {

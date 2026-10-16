@@ -114,6 +114,7 @@ def identity():
 
 
 def require_main(records):
+    legacy_publication.require_publication_active()
     context = identity()
     if records.main_commit() != context['main_commit']:
         raise RecoveryError('main changed; this run is superseded')
@@ -525,6 +526,7 @@ def build(records, url, source, checksum):
             return
         if data['mode'] == 'refresh' and payload['kind'] != 'accepted':
             raise RecoveryError('unarchived candidate content cannot be deployed')
+        latest = None
         if data['mode'] in {'refresh', 'pending'}:
             latest = records.latest()
             previous = data['previous_release']
@@ -555,8 +557,12 @@ def build(records, url, source, checksum):
             if data['mode'] == 'retry':
                 release = archive_release.reconstruct(data['previous_release'], archive, context['main_commit'], context['main_tree'])
             else:
+                verified_record = records.latest_verified() if data['mode'] in {'refresh', 'pending'} else None
+                previous_groups = archive_release.verified_previous_groups(
+                    records, context['repository'], verified_record)
                 release = archive_release.make_release(context['main_commit'], context['main_tree'], archive,
-                                                       context['run_id'], context['run_attempt'])
+                                                       context['run_id'], context['run_attempt'],
+                                                       previous_groups=previous_groups)
         state.update(status='prepared', release=release)
         output('deploy', 'true')
     except Exception as error:
@@ -638,6 +644,7 @@ def finalize(source, checksum, destination):
 
 
 def answer(api, source, checksum, records=None):
+    legacy_publication.require_publication_active()
     context = identity()
     if records is not None and records.main_commit() != context['main_commit']:
         return

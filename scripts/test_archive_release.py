@@ -1,4 +1,5 @@
 import copy
+import hashlib
 import json
 import shutil
 import unittest
@@ -69,6 +70,43 @@ class ReleasePairTests(unittest.TestCase):
         self.assertNotEqual(second['run_id'], self.release['run_id'])
         unchanged = archive_release.probes_for(self.archive.served(), self.archive.served())
         self.assertEqual(unchanged, [])
+
+    def test_changed_media_probe_skips_unchanged_earlier_media(self):
+        current = self.archive.served()
+        previous = copy.deepcopy(current)
+        previous['beta']['files']['media/detail.svg']['sha256'] = '0' * 64
+        probes = archive_release.probes_for(current, previous)
+        self.assertEqual(probes, ['beta/media/detail.svg'])
+
+    def test_previous_served_inventory_requires_verified_v2_archive_and_matching_manifest(self):
+        previous = self.release | {'archive_commit': 'c' * 40,
+                                   'archive_manifest_sha256': hashlib.sha256(self.archive.payload).hexdigest()}
+        verified = {'id': 7, 'payload': previous}
+        records = Mock()
+        records.is_verified.return_value = True
+        records.archive_authority.return_value = 'v2'
+        records.client.raw_file.return_value = self.archive.payload
+        served = archive_release.verified_previous_groups(records, 'course/site', verified)
+        self.assertEqual(set(served), set(self.archive.served()))
+        for slug in served:
+            self.assertEqual(served[slug]['files'], self.archive.served()[slug]['files'])
+        records.client.raw_file.assert_called_once_with('course/site', 'c' * 40, 'publication.json',
+                                                        archive_release.MAX_MANIFEST_BYTES)
+
+        records.is_verified.return_value = False
+        records.client.raw_file.reset_mock()
+        self.assertIsNone(archive_release.verified_previous_groups(records, 'course/site', verified))
+        records.client.raw_file.assert_not_called()
+
+        records.is_verified.return_value = True
+        records.client.raw_file.return_value = b'{}'
+        with self.assertRaisesRegex(RecoveryError, 'manifest differs'):
+            archive_release.verified_previous_groups(records, 'course/site', verified)
+
+        records.client.raw_file.return_value = self.archive.payload
+        records.archive_authority.return_value = 'v1-seed'
+        with self.assertRaisesRegex(RecoveryError, 'V2 archive authority'):
+            archive_release.verified_previous_groups(records, 'course/site', verified)
 
     def test_pending_pair_retry_precedes_import_and_code_change_explicitly_supersedes(self):
         attempted = {'id': 1, 'payload': self.release}

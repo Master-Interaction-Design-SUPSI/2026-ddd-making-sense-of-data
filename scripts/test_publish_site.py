@@ -150,6 +150,20 @@ class PublishingTests(unittest.TestCase):
         self.assertEqual(self.state()["status"], "superseded")
         self.records.create.assert_not_called()
 
+    def test_pause_blocks_normal_preparation_and_mutation_before_any_remote_call(self):
+        self.records.reset_mock()
+        with patch.dict(os.environ, DDD_PUBLICATION_PAUSED='true'):
+            for operation in (lambda: publish_site.prepare(self.records, self.url),
+                              lambda: publish_site.record_candidate(self.records),
+                              lambda: publish_site.restore_candidate(self.records, self.fixture.workspace / 'unused.tar'),
+                              lambda: publish_site.verify(self.records)):
+                with self.subTest(operation=operation), self.assertRaisesRegex(RecoveryError, 'paused'):
+                    operation()
+        self.records.main_commit.assert_not_called()
+        self.records.latest.assert_not_called()
+        self.records.create.assert_not_called()
+        self.records.status.assert_not_called()
+
     def test_coherent_old_site_blocks_the_next_build_after_a_failed_deployment(self):
         self.bootstrap()
         self.fixture.update("alpha")

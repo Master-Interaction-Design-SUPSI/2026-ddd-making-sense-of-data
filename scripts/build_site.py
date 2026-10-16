@@ -16,6 +16,7 @@ from publication_state import (
     MANIFEST, SOURCE_INVENTORY, PublishedSite, encode_manifest, encode_source_inventory, select_publication,
 )
 from archive_state import ArchiveSnapshot
+import multimodal_source
 
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -29,10 +30,13 @@ def write_editor(candidate):
     shell = shell.replace('href="static/', 'href="../static/').replace('src="static/', 'src="../static/')
     shell = shell.replace('<script src="../static/bootstrap.js"></script>',
                           '<script src="protocol.js"></script>\n    <script src="preview.js"></script>')
+    # The preview keeps the bar's pixels, but its editor link would point at editor/editor/.
+    shell = shell.replace('<a class="bar-link" href="editor/">', '<a class="bar-link">')
     (candidate / "editor" / "preview.html").write_text(shell, encoding="utf-8")
     groups = [{"slug": group.slug, "repository": group.repository, "branch": group.branch,
                "exclude": list(group.exclude), "require_visual": group.require_visual,
-               "state": group.publication_state, "editable": group.publication_state == 'live',
+               "state": group.publication_state, "editable": group.publication_state == 'live'
+               and not multimodal_source.handles_repository(group.repository),
                "contract_version": CONTRACT_VERSION} for group in load_registry(ROOT / "groups.json")]
     requests = {'enabled': False, 'repository': None}
     policy = ROOT / '.github/publishing.json'
@@ -97,7 +101,7 @@ def find_entries():
 
 
 def write_site(sources, snapshots=None):
-    entries = sorted(sources, key=lambda name: (name != "example", name.casefold()))
+    entries = sorted(sources, key=lambda name: (name != "materialities-of-ai", name != "example", name.casefold()))
     with tempfile.TemporaryDirectory(prefix=".site-build-", dir=OUTPUT.parent) as temporary:
         candidate = Path(temporary) / "candidate"
         candidate.mkdir()

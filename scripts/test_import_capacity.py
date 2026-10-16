@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 import build_site
 import publish_site
 from publication_state import SOURCE_INVENTORY
-from test_import_groups import SVG, TEXT
+from test_import_groups import SVG, TABLE, TEXT
 import test_publication_state as fixtures
 import test_publish_site as publishing_fixtures
 
@@ -47,7 +47,7 @@ class ImportCapacityTests(unittest.TestCase):
                         published_url='https://site.test/course/', allow_unchanged=True)
         report = fixture.report()
         self.assertEqual(report[0]['transport']['raw_requests'], 1)
-        self.assertEqual(report[0]['reused_bytes'], len(SVG))
+        self.assertEqual(report[0]['reused_bytes'], len(SVG) + len(TABLE))
         self.assertEqual(report[1]['status'], 'unchanged')
         self.assertEqual((fixture.output / 'alpha/text.md').read_bytes(), b'Changed text')
         self.assertEqual((fixture.output / 'alpha/visual.svg').read_bytes(), original['visual.svg'])
@@ -68,7 +68,7 @@ class ImportCapacityTests(unittest.TestCase):
                 if inventory is not None:
                     target.write_bytes(inventory)
                 fixture.build()
-                self.assertTrue(all(result['transport']['raw_requests'] == 3 for result in fixture.report()))
+                self.assertTrue(all(result['transport']['raw_requests'] == 4 for result in fixture.report()))
                 self.assertEqual(fixture.bytes_at(fixture.output / 'alpha'), fixture.bytes_at(fixture.live / 'alpha'))
 
     def test_hint_blob_sha_is_never_trusted_in_place_of_byte_verification(self):
@@ -113,7 +113,7 @@ class CohortWorkloadTests(unittest.TestCase):
                         media_cycle = cycle if workload == 'replacement' else 0
                         text_cycle = cycle if workload != 'unchanged' else 0
                         files = {'text.md': f'{group.slug} edit {text_cycle}'.encode(), **{
-                            f'media/{i}.png': f'{group.slug} media {i} version {media_cycle}'.encode() for i in range(99)}}
+                            f'media/{i}.png': f'{group.slug} media {i} version {media_cycle}'.encode() for i in range(98)}}
                         old_commit, nodes = api.add(group.repository, files)
                         base = '/repos/' + group.repository
                         commit = hashlib.sha1(json.dumps([(name, data.hex()) for name, data in files.items()]).encode()).hexdigest()
@@ -154,7 +154,8 @@ class CohortWorkloadTests(unittest.TestCase):
                             self.assertEqual(previous.metrics['pages_requests'], 1)
                         else:
                             self.assertTrue(all(result['status'] == 'imported' for result in results))
-                            self.assertEqual(raw_requests, 15 if workload == 'text-only' else 1500)
+                            # Replacement refetches text and 98 media per group; media.csv is unchanged and reused.
+                            self.assertEqual(raw_requests, 15 if workload == 'text-only' else 1485)
                             if workload == 'text-only':
                                 self.assertGreater(sum(result['reused_bytes'] for result in results), 0)
                             publish(results, destination)

@@ -1,8 +1,11 @@
 import hashlib
+import contextlib
+import io
 import json
 import shutil
 import subprocess
 import sys
+import tarfile
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -14,6 +17,8 @@ from group_registry import load_registry
 from publication_state import RecoveryError
 from publication_recovery import (capture_v1, compare_v1_seed, stage_rollback,
                                   verify_capture)
+from publish_site import RELEASE
+from content_contract import MAX_SITE_BYTES
 
 
 class PublicationRecoveryTests(unittest.TestCase):
@@ -228,6 +233,142 @@ class PublicationRecoveryTests(unittest.TestCase):
         result = run('verify-capture', '--capture', self.capture, '--expected-release', other)
         self.assertEqual(result.returncode, 2)
         self.assertIn('expected V1 release', result.stderr)
+
+
+class PublicationRecoveryArtifactTests(unittest.TestCase):
+    def setUp(self):
+        fixture = publish_fixtures.PublishingTests()
+        fixture.setUp()
+        self.addCleanup(fixture.doCleanups)
+        fixture.bootstrap()
+        self.fixture = fixture
+        self.site = fixture.fixture.output
+        self.release = json.loads((self.site / 'release.json').read_bytes())
+        self.workspace = fixture.fixture.workspace
+        self.artifact = self.workspace / 'original-pages.tar'
+        with tarfile.open(self.artifact, 'w') as archive:
+            archive.add(self.site, arcname='.')
+        self.destination = self.workspace / 'captured-from-artifact'
+
+    @staticmethod
+    def add_file(archive, name, payload=b'x'):
+        member = tarfile.TarInfo(name)
+        member.size = len(payload)
+        archive.addfile(member, io.BytesIO(payload))
+
+    def test_original_tar_capture_survives_loss_of_build_directory(self):
+        original = {path.relative_to(self.site).as_posix(): path.read_bytes()
+                    for path in self.site.rglob('*') if path.is_file()}
+        shutil.rmtree(self.site)
+
+        metadata = publication_recovery.capture_v1_artifact(self.artifact, self.release, self.destination)
+
+        verified = verify_capture(self.destination, expected_release=self.release)
+        self.assertEqual(metadata, verified)
+        captured = {path.relative_to(self.destination / 'site').as_posix(): path.read_bytes()
+                    for path in (self.destination / 'site').rglob('*') if path.is_file()}
+        self.assertEqual(captured, original)
+
+    def test_rejects_duplicate_traversal_links_oversized_pax_headers_and_excess_tar(self):
+        cases = []
+
+        duplicate = self.workspace / 'duplicate.tar'
+        cases.append((duplicate, lambda archive: (
+            self.add_file(archive, 'duplicate.txt'), self.add_file(archive, 'duplicate.txt'))))
+        traversal = self.workspace / 'traversal.tar'
+        cases.append((traversal, lambda archive: self.add_file(archive, '../escape')))
+
+        link = self.workspace / 'link.tar'
+        def add_link(archive):
+            member = tarfile.TarInfo('linked-file')
+            member.type = tarfile.SYMTYPE
+            member.linkname = '../escape'
+            archive.addfile(member)
+        cases.append((link, add_link))
+
+        pax = self.workspace / 'oversized-pax.tar'
+        def add_oversized_pax(archive):
+            member = tarfile.TarInfo('PaxHeaders/file')
+            member.type = tarfile.XHDTYPE
+            member.size = 4097
+            archive.addfile(member, io.BytesIO(b'x' * member.size))
+        cases.append((pax, add_oversized_pax))
+
+        for artifact, add_members in cases:
+            with self.subTest(artifact=artifact.name), tarfile.open(artifact, 'w') as archive:
+                add_members(archive)
+            target = self.workspace / (artifact.stem + '-capture')
+            with self.assertRaises(RecoveryError):
+                publication_recovery.capture_v1_artifact(artifact, self.release, target)
+            self.assertFalse(target.exists())
+
+        oversized = self.workspace / 'oversized.tar'
+        with oversized.open('wb') as stream:
+            stream.truncate(MAX_SITE_BYTES + 16 * 1024 * 1024 + 1)
+        with self.assertRaisesRegex(RecoveryError, 'oversized'):
+            publication_recovery.capture_v1_artifact(oversized, self.release, self.destination)
+        self.assertFalse(self.destination.exists())
+
+    def test_rejects_file_parent_collision_and_release_mismatch(self):
+        artifact = self.workspace / 'file-parent.tar'
+        with tarfile.open(artifact, 'w') as archive:
+            archive.add(self.site, arcname='.')
+            self.add_file(archive, 'fake-parent')
+            self.add_file(archive, 'fake-parent/child.txt')
+        with self.assertRaisesRegex(RecoveryError, 'file/parent'):
+            publication_recovery.capture_v1_artifact(artifact, self.release, self.destination)
+        self.assertFalse(self.destination.exists())
+
+        wrong_release = dict(self.release, site_sha256='0' * 64)
+        with self.assertRaises(RecoveryError):
+            publication_recovery.capture_v1_artifact(self.artifact, wrong_release, self.destination)
+        self.assertFalse(self.destination.exists())
+
+    def test_release_and_manifest_size_caps_apply_before_any_payload_is_copied(self):
+        cases = (
+            ('oversized-release.tar', RELEASE, publication_recovery.MAX_RELEASE_BYTES + 1,
+             'release metadata.*byte limit'),
+            ('oversized-manifest.tar', 'publication.json', publication_recovery.MAX_MANIFEST_BYTES + 1,
+             'manifest exceeds its byte limit'),
+        )
+        for filename, name, size, message in cases:
+            artifact = self.workspace / filename
+            with tarfile.open(artifact, 'w') as archive:
+                self.add_file(archive, name, b'x' * size)
+                if name == 'publication.json':
+                    self.add_file(archive, RELEASE, b'{}')
+            target = self.workspace / (artifact.stem + '-capture')
+            with self.subTest(filename=filename), \
+                    patch.object(publication_recovery, '_copy_artifact_member',
+                                 side_effect=AssertionError('payload read before metadata cap')):
+                with self.assertRaisesRegex(RecoveryError, message):
+                    publication_recovery.capture_v1_artifact(artifact, self.release, target)
+            self.assertFalse(target.exists())
+
+    def test_inventory_limit_counts_implicit_directories_as_well_as_tar_headers(self):
+        artifact = self.workspace / 'implicit-directories.tar'
+        with tarfile.open(artifact, 'w') as archive:
+            self.add_file(archive, RELEASE, b'x')
+            self.add_file(archive, 'publication.json', b'x')
+            self.add_file(archive, 'alpha/one.wav', b'x')
+            self.add_file(archive, 'beta/two.wav', b'x')
+        target = self.workspace / 'implicit-directories-capture'
+        with patch.object(publication_recovery, 'MAX_INVENTORY_ENTRIES', 4), \
+                patch.object(publication_recovery, '_copy_artifact_member',
+                             side_effect=AssertionError('payload read before inventory bound')):
+            with self.assertRaisesRegex(RecoveryError, 'inventory entry limit'):
+                publication_recovery.capture_v1_artifact(artifact, self.release, target)
+        self.assertFalse(target.exists())
+
+    def test_cli_captures_from_original_artifact_after_site_loss(self):
+        release_path = self.workspace / 'expected-release.json'
+        release_path.write_text(json.dumps(self.release))
+        shutil.rmtree(self.site)
+        with contextlib.redirect_stdout(io.StringIO()):
+            result = publication_recovery.main(['capture-v1-artifact', '--artifact', str(self.artifact),
+                '--release', str(release_path), '--out', str(self.destination)])
+        self.assertEqual(result, 0)
+        self.assertEqual(verify_capture(self.destination, expected_release=self.release)['release'], self.release)
 
 
 if __name__ == '__main__':

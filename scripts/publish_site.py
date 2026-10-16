@@ -151,7 +151,16 @@ def run_url(release):
     return f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{release['run_id']}"
 
 
+def require_publication_active():
+    value = os.environ.get('DDD_PUBLICATION_PAUSED', '')
+    if value not in {'', 'false', 'true'}:
+        raise RecoveryError('DDD_PUBLICATION_PAUSED must be true or false')
+    if value == 'true':
+        raise RecoveryError('Ordinary publication is paused; use the reviewed rollback or resume procedure')
+
+
 def prepare(records, url, first_publication=False, retry_publication=False):
+    require_publication_active()
     state = {"status": "preparing", "url": url}
     save_state(state)
     REPORT.unlink(missing_ok=True)
@@ -230,6 +239,7 @@ def prepare(records, url, first_publication=False, retry_publication=False):
 
 
 def record_candidate(records):
+    require_publication_active()
     state = json.loads(STATE.read_text())
     if state["status"] != "prepared":
         raise ValueError("Only a prepared publication may be recorded")
@@ -250,6 +260,7 @@ def record_candidate(records):
 
 
 def restore_candidate(records, archive):
+    require_publication_active()
     state = json.loads(STATE.read_text())
     latest = records.latest()
     if (state["status"] != "retrying" or not latest or latest["id"] != state["deployment_id"]
@@ -299,6 +310,7 @@ def restore_candidate(records, archive):
 
 
 def verify(records):
+    require_publication_active()
     state = json.loads(STATE.read_text())
     try:
         latest = records.latest()

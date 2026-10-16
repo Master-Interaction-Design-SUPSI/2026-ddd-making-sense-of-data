@@ -19,10 +19,15 @@ class EditorBuildTests(unittest.TestCase):
             expected = production.replace('href="static/', 'href="../static/').replace('src="static/', 'src="../static/')
             expected = expected.replace('<script src="../static/bootstrap.js"></script>',
                                         '<script src="protocol.js"></script>\n    <script src="preview.js"></script>')
+            self.assertIn('<a class="bar-link" href="editor/">', expected)
+            expected = expected.replace('<a class="bar-link" href="editor/">', '<a class="bar-link">')
             self.assertEqual(preview, expected)
             groups = json.loads((destination / 'editor/groups.json').read_text())['groups']
             abstract = next(group for group in groups if group['slug'] == 'ddd-abstract')
             self.assertFalse(abstract['require_visual'])
+            self.assertTrue(abstract['editable'])
+            brief = next(group for group in groups if group['slug'] == 'materialities-of-ai')
+            self.assertFalse(brief['editable'])
             self.assertEqual(abstract['exclude'], ['media/12.mov', 'media/4.mov'])
             template = json.loads((destination / 'editor/template.json').read_text())
             self.assertIn('media/example-tone.mp3', template['files'])

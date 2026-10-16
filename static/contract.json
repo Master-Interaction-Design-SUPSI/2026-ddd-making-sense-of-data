@@ -2,6 +2,7 @@
   "version": 2,
   "limits": {
     "text_bytes": 262144,
+    "table_bytes": 65536,
     "svg_bytes": 5242880,
     "media_bytes": 20971520,
     "group_bytes": 52428800,
@@ -16,6 +17,7 @@
   "path_component": "[a-z0-9][a-z0-9._-]*",
   "required_files": ["text.md"],
   "conditional_visual": "visual.svg",
+  "media_table": "media.csv",
   "visual_viewbox": [0, 0, 1920, 1080],
   "reference_schemes": ["https", "http", "mailto"]
 }

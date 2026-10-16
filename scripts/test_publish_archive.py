@@ -46,7 +46,8 @@ class SplitPublisherTests(unittest.TestCase):
         self.records.create.side_effect = self.create_record
         self.records.status.side_effect = self.status
         self.records.last_refresh.return_value = None
-        self.records.client = SimpleNamespace(api_remaining=None, metrics={'rest_requests': 0, 'rest_bytes': 0})
+        self.records.client = SimpleNamespace(api_remaining=None, metrics={'rest_requests': 0, 'rest_bytes': 0},
+                                              raw_file=self.read_raw_archive_file)
         self.api = API([issue()])
         self.api.client = SimpleNamespace(metrics={'rest_requests': 0, 'rest_bytes': 0})
         self.url = self.publishing.url
@@ -90,6 +91,13 @@ class SplitPublisherTests(unittest.TestCase):
 
     def read_archive(self, records, destination, commit=None):
         return archive_git.snapshot_from_git(self.remote, commit or self.archive_head(), destination), {'archive_transfer_bytes': 1}
+
+    def read_raw_archive_file(self, repository, commit, path, limit):
+        self.assertEqual((repository, path), ('course/site', 'publication.json'))
+        payload = archive_git.git(self.remote, 'show', commit + ':' + path)
+        if len(payload) > limit:
+            raise AssertionError('fixture archive manifest exceeds requested bound')
+        return payload
 
     def create_record(self, release):
         self.counter += 1
@@ -171,6 +179,16 @@ class SplitPublisherTests(unittest.TestCase):
         controller.answer(self.api, result, checksum, self.records)
         self.assertEqual(self.api.issues[1]['state'], 'closed')
         self.assertIn('is published', self.api.comments[1][0]['body'])
+
+    def test_pause_blocks_archive_entry_and_issue_answer_before_remote_calls(self):
+        self.records.reset_mock()
+        with patch.dict(os.environ, DDD_PUBLICATION_PAUSED='true'):
+            with self.assertRaisesRegex(RecoveryError, 'paused'):
+                controller.require_main(self.records)
+            with self.assertRaisesRegex(RecoveryError, 'paused'):
+                controller.answer(self.api, self.folder('unused'), 'f' * 64, self.records)
+        self.records.main_commit.assert_not_called()
+        self.assertFalse(self.api.comments)
 
     def test_seed_downloads_each_distinct_blob_once_and_reports_all_pages_transport(self):
         self.fixture.server.requests.clear()
@@ -341,6 +359,19 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertEqual(controller.state()['status'], 'verified')
         controller.answer(self.api, result, checksum, self.records)
         self.assertEqual(self.api.issues[1]['state'], 'closed')
+
+    def test_release_probes_against_last_verified_archive_after_failed_new_code_attempt(self):
+        self.seed()
+        self.publish()  # Establish the first verified V2 archive and served baseline.
+        failed = copy.deepcopy(self.latest)
+        failed['id'] += 1
+        failed['payload']['main_commit'] = 'f' * 40
+        self.latest = failed  # A newer attempted release must not replace the served baseline.
+        self.counter = failed['id']
+        self.fixture.update('beta', b'New beta text',
+                            visual=SVG.replace(b'width="10"', b'width="11"'))
+        self.publish()
+        self.assertEqual(self.latest['payload']['probes'], ['beta/text.md', 'beta/visual.svg'])
 
     def test_idle_verified_pair_does_not_rebuild_site_on_a_clean_runner(self):
         self.seed()

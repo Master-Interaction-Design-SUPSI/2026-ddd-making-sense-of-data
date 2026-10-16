@@ -13,14 +13,17 @@
     if (!field) return {};
     if (!field.includes("=")) return { marker: field.trim() };
     const modifiers = {};
-    for (const part of field.split(";")) {
-      const pair = part.trim().match(/^(type|style|color)\s*=\s*(.+)$/);
+    // The renderer escapes prose before parsing; an ampersand entity's
+    // semicolon is part of the URL, not a modifier separator.
+    for (const part of field.replace(/&amp;/g, "&").split(";")) {
+      const pair = part.trim().match(/^(type|style|color|source)\s*=\s*(.+)$/);
       if (!pair || Object.hasOwn(modifiers, pair[1])) return null;
       const [, key, value] = pair;
       const trimmed = value.trim();
       if (key === "type" && !types.has(trimmed)) return null;
       if (key === "style" && !styles.has(trimmed)) return null;
       if (key === "color" && !colorPattern.test(trimmed)) return null;
+      if (key === "source" && !/^https?:\/\/[^\s<>"'\\]+$/i.test(trimmed)) return null;
       modifiers[key] = trimmed;
     }
     return modifiers;
@@ -36,7 +39,8 @@
       return {
         source: match[0], index: match.index, label: label.trim(), target, resource,
         valid: modifiers !== null, type,
-        style: modifiers?.style || (type === "note" ? "italic" : "inherit"),
+        style: modifiers?.style || (type === "note" ? "normal" : "inherit"),
+        sourceUrl: modifiers?.source || null,
         color: modifiers?.color || null, marker: modifiers?.marker || null,
       };
     });

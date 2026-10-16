@@ -4,48 +4,80 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DDD — Entry editor</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='72' font-size='72' text-anchor='middle'%3E%E2%9C%B6%3C/text%3E%3C/svg%3E">
+  <link rel="stylesheet" href="../static/main.css">
   <link rel="stylesheet" href="editor.css">
 </head>
 <body>
-  <header><h1>Entry editor</h1><a href="../">Course site ↗</a></header>
-  <main>
-    <section aria-label="Editing controls">
-      <label for="group">Group</label><select id="group" disabled></select>
-      <button id="open" disabled>Open last published version</button>
-      <button id="template" disabled>Start from template</button>
-      <p id="base"></p>
-      <p id="status" role="status">Loading editor…</p>
-      <label for="text">Entry Markdown</label>
-      <textarea id="text" spellcheck="true" disabled></textarea>
-      <div id="tools"><button data-insert="[[label|media/file.svg]]">Insert media</button><button data-insert="[[note|Your note]]">Insert note</button><button data-insert="[source](https://example.org)">Insert link</button></div>
-      <p id="save" role="status">Drafts are saved in this browser only.</p>
-      <button id="saved-download" hidden>Download saved browser text</button>
-      <button id="restore" hidden>Restore browser draft</button>
-      <button id="fallback-restore" hidden>Restore text-only backup instead</button><button id="discard" hidden>Discard browser draft</button>
-      <ul id="saved-files" aria-label="Saved attachments for reconciliation"></ul>
-      <label for="path">Attachment destination, including folders</label>
-      <input id="path" placeholder="media/new-image.png">
-      <label for="attachment">Choose a file</label><input type="file" id="attachment">
-      <button id="attach" disabled>Attach file</button>
-      <p>Use a new filename for replacements so the published text keeps working while you commit.</p>
-      <ul id="files"></ul>
-      <button id="check" disabled>Check and prepare GitHub steps</button>
-      <p id="validation" role="status"></p>
-      <ol id="steps"></ol>
-      <button id="download" disabled>Download text.md</button>
-      <button id="stale" disabled>Compare current GitHub text</button>
-      <p id="freshness"></p>
-      <details><summary>Current GitHub text for reconciliation</summary><pre id="current-text"></pre></details>
-      <p>Upload media, commit the text, then delete obsolete files. Each commit can be published independently. Refreshes are scheduled every ten minutes; publication may take longer.</p>
-    </section>
-    <section aria-label="Preview">
-      <label for="width">Preview width</label><select id="width"><option value="1280">1280 px</option><option value="390">390 px</option></select>
-      <p>Preview uses the course renderer. Local checks do not guarantee publication.</p>
+  <header class="site-bar">
+    <p>Data Driven Design</p>
+    <h1 class="bar-current">Entry editor</h1>
+    <a class="bar-link" href="../">Course site ↗</a>
+  </header>
+  <main class="editor">
+    <div class="steps" role="region" aria-label="Editing controls">
+      <section class="step step-group" aria-labelledby="step-group">
+        <h2 id="step-group"><span class="step-index">01</span> Open</h2>
+        <label for="group">Group</label>
+        <div class="row"><select id="group" disabled></select><button id="open" class="primary" disabled>Open last published version</button><button id="template" disabled>Start from template</button></div>
+        <p id="base"></p>
+        <p id="status" role="status">Loading editor…</p>
+      </section>
+      <section class="step step-text" aria-labelledby="step-text">
+        <h2 id="step-text"><span class="step-index">02</span> Write</h2>
+        <label for="text">Entry Markdown</label>
+        <textarea id="text" spellcheck="true" disabled></textarea>
+        <div id="tools" class="toolbar"><button data-insert="[[name]]">Insert media</button><button data-insert="[[note|Your note]]">Insert note</button><button data-insert="[source](https://example.org)">Insert link</button></div>
+        <p id="save" role="status">Drafts are saved in this browser only.</p>
+        <div class="row">
+          <button id="saved-download" hidden>Download saved browser text</button>
+          <button id="restore" hidden>Restore browser draft</button>
+          <button id="fallback-restore" hidden>Restore text-only backup instead</button><button id="discard" hidden>Discard browser draft</button>
+        </div>
+        <ul id="saved-files" class="files" aria-label="Saved attachments for reconciliation"></ul>
+      </section>
+      <section class="step step-media" aria-labelledby="step-media">
+        <h2 id="step-media"><span class="step-index">03</span> Attach</h2>
+        <label for="attachment">Choose a file</label><input type="file" id="attachment">
+        <label for="path">Attachment destination, including folders</label>
+        <input id="path" placeholder="media/new-image.png">
+        <label for="media-name">Name used in the text</label>
+        <input id="media-name" placeholder="lithium mine">
+        <label for="media-source">Link to the source</label>
+        <input id="media-source" type="url" placeholder="https://…">
+        <div class="row"><button id="attach" class="primary" disabled>Attach file</button></div>
+        <p class="note">Use a new filename for replacements so the published text keeps working while you commit.</p>
+        <h3>media.csv</h3>
+        <p class="note">Every media file the text uses needs a row: the name you write as [[name]] in the text, the link to its source, and the file.</p>
+        <p id="table-status" role="status"></p>
+        <ol id="media-rows" class="media-rows" aria-label="Rows of media.csv"></ol>
+        <div class="row"><button id="add-row" disabled>Add row</button><button id="copy-table" disabled>Copy media.csv</button><button id="download-table" disabled>Download media.csv</button></div>
+        <h3>Files</h3>
+        <ul id="files" class="files"></ul>
+      </section>
+      <section class="step step-github" aria-labelledby="step-github">
+        <h2 id="step-github"><span class="step-index">04</span> Commit</h2>
+        <div class="row"><button id="check" class="primary" disabled>Check and prepare GitHub steps</button></div>
+        <p id="validation" role="status"></p>
+        <ol id="steps"></ol>
+        <div class="row"><button id="download" disabled>Download text.md</button><button id="stale" disabled>Compare current GitHub text</button></div>
+        <p id="freshness"></p>
+        <details><summary>Current GitHub text for reconciliation</summary><pre id="current-text"></pre></details>
+        <p class="note">Upload media, commit media.csv, commit the text, then delete obsolete files. Each commit can be published independently. Refreshes are scheduled every ten minutes; publication may take longer.</p>
+      </section>
+    </div>
+    <section class="step step-preview" aria-labelledby="step-preview">
+      <h2 id="step-preview">Preview</h2>
+      <div class="preview-controls">
+        <label for="width">Preview width</label><select id="width"><option value="1280">1280 px</option><option value="390">390 px</option></select>
+        <p class="note">Preview uses the course renderer. Local checks do not guarantee publication.</p>
+      </div>
       <div class="preview-scroll"><iframe src="preview.html" title="Entry preview" id="preview"></iframe></div>
     </section>
   </main>
   <script src="../static/vendor/marked.min.js"></script>
   <script src="../static/annotations.js"></script>
+  <script src="../static/media-table.js"></script>
   <script src="../static/references.js"></script>
   <script src="protocol.js"></script>
   <script src="model.js"></script>

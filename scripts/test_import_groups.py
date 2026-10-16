@@ -25,13 +25,26 @@ class Response(io.BytesIO):
     headers = {}
 
 
+def with_table(files):
+    """Add the media.csv every imported group needs: one row per media file."""
+    if "media.csv" in files:
+        return files
+    rows = ["name,source,file"] + [f"{name},,{name}" for name in sorted(files) if name not in {"text.md", "visual.svg"}]
+    return {**files, "media.csv": ("\n".join(rows) + "\n").encode()}
+
+
+TABLE = with_table({"media/detail.svg": b""})["media.csv"]
+
+
 class FixtureAPI:
     def __init__(self):
         self.routes = {}
         self.calls = []
 
-    def add(self, repository, files=None, branch="main"):
+    def add(self, repository, files=None, branch="main", table=True):
         files = files or {"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}
+        if table:
+            files = with_table(files)
         base = "/repos/" + repository
         commit = hashlib.sha1(repository.encode()).hexdigest()
         tree = hashlib.sha1((repository + "tree").encode()).hexdigest()
@@ -89,6 +102,7 @@ class ImportTests(unittest.TestCase):
                  "media/sound.mp3": b'ID3 audio fixture', "media/movie.mp4": b'video fixture',
                  "README.md": b'ignored', "index.html": b'<script>bad()</script>',
                  ".github/workflows/run.yml": b'run: bad-command', "media/script.js": b'bad()'}
+        files = with_table(files)
         alpha, nodes = self.api.add("course/alpha", files, branch="draft/content")
         beta, _ = self.api.add("course/beta")
         self.api.add("course/unregistered")
@@ -171,6 +185,44 @@ class ImportTests(unittest.TestCase):
         self.assertEqual(results[0]["commit"], commit)
         self.assertEqual(results[1]["status"], "imported")
         self.assertEqual([p.name for p in (self.root / "imports").iterdir()], ["beta"])
+
+    def test_media_table_is_required_on_import_and_resolves_names(self):
+        table = b'name,source,file\nthe detail,https://example.org/detail,media/detail.svg\n'
+        cases = {
+            "missing": ({"text.md": TEXT, "visual.svg": SVG, "media/detail.svg": SVG}, "media.csv: required"),
+            "header": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"file,name\n"}, "media.csv: the first line"),
+            "encoding": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n\xe9t\xe9,,media/x.svg\n"},
+                         "media.csv: save the table as a UTF-8"),
+            "unknown name": ({"text.md": b"[[elsewhere]]", "visual.svg": SVG, "media.csv": table, "media/detail.svg": SVG},
+                             "text.md: [[elsewhere]] is not a name in media.csv"),
+            "unlisted media": ({"text.md": TEXT, "visual.svg": SVG, "media.csv": b"name,source,file\n", "media/detail.svg": SVG},
+                               "text.md: media/detail.svg is used in the text but has no row in media.csv"),
+        }
+        for case, (files, message) in cases.items():
+            with self.subTest(case=case):
+                self.api = FixtureAPI()
+                self.api.add("course/alpha", files, table=False)
+                result = self.run_import()[0]
+                self.assertEqual(result["error_code"], "invalid_content")
+                self.assertTrue(result["error"].startswith(message), result["error"])
+        self.api = FixtureAPI()
+        self.api.add("course/alpha", {"text.md": b"See [[The Detail]].", "visual.svg": SVG, "media.csv": table,
+                                      "media/detail.svg": SVG}, table=False)
+        result = self.run_import()[0]
+        self.assertEqual(result["status"], "imported", result.get("error"))
+        self.assertEqual((self.root / "imports/alpha/media.csv").read_bytes(), table)
+
+    def test_archive_and_recovery_checks_accept_snapshots_without_a_media_table(self):
+        from import_groups import validate_content
+        folder = self.root / "snapshot"
+        (folder / "media").mkdir(parents=True)
+        (folder / "text.md").write_bytes(TEXT)
+        (folder / "visual.svg").write_bytes(SVG)
+        (folder / "media/detail.svg").write_bytes(SVG)
+        files = ["text.md", "visual.svg", "media/detail.svg"]
+        validate_content(folder, files)
+        with self.assertRaisesRegex(ValueError, "media.csv: required"):
+            validate_content(folder, files, require_table=True)
 
     def test_rejects_private_and_missing_repositories_and_missing_branch(self):
         self.api.add("course/private")
@@ -393,7 +445,8 @@ class TransportTests(unittest.TestCase):
         api = FixtureAPI()
         groups = [Group(f"group-{i}", f"course/group-{i}", "main", True, require_visual=False) for i in range(15)]
         for group in groups:
-            api.add(group.repository, {"text.md": b"Fixture", **{f"media/{i}.png": b"image" for i in range(99)}})
+            # 98 media + text.md + media.csv fill the 100-file limit.
+            api.add(group.repository, {"text.md": b"Fixture", **{f"media/{i}.png": b"image" for i in range(98)}})
         requests = 0
         with tempfile.TemporaryDirectory() as temporary:
             for cycle in range(6):

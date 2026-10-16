@@ -49,7 +49,9 @@ body.lightbox-open {
 
 /* ---------- the bar ---------- */
 
-/* Keep the current-entry readout and markers in the existing fixed bar. */
+/* Keep the current-entry readout and markers in the existing fixed bar.
+   The name sits over the rail; title, authors and markers share the
+   reading column evenly, and the editor link closes the row. */
 .site-bar {
   position: fixed;
   inset-inline: 0;
@@ -57,7 +59,7 @@ body.lightbox-open {
   z-index: 10;
   height: var(--header-height);
   display: grid;
-  grid-template-columns: var(--side-width) minmax(0, 3fr) minmax(0, 7fr) auto;
+  grid-template-columns: var(--side-width) repeat(3, minmax(0, 1fr)) auto;
   gap: var(--space);
   padding-inline: var(--space);
   align-items: center;
@@ -92,8 +94,6 @@ body.lightbox-open {
   margin: 0;
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
-  max-inline-size: 16ch;
   overflow: hidden;
   gap: 0 0.5ch;
   font-family: var(--mono);
@@ -103,6 +103,17 @@ body.lightbox-open {
 
 .bar-markers .current {
   color: var(--signal);
+}
+
+.bar-link {
+  color: var(--signal);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.bar-link:hover {
+  text-decoration: underline;
+  text-decoration-thickness: 1px;
 }
 
 /* ---------- navigation rail and reading area ---------- */
@@ -170,7 +181,7 @@ body.lightbox-open {
 /* Compact metadata above the large abstract; titles and authors may wrap. */
 .entry-caption {
   display: grid;
-  grid-template-columns: minmax(0, 3fr) minmax(0, 7fr);
+  grid-template-columns: minmax(0, calc(var(--entry-author-offset, 70%) - var(--space))) minmax(0, 1fr);
   gap: var(--space);
   overflow-wrap: anywhere;
   align-items: start;
@@ -264,12 +275,17 @@ body.lightbox-open {
   border: 1px solid var(--ink);
 }
 
-/* Native controls keep a usable height within the larger prose. */
+/* Static audio player: activation opens the original source. */
 .entry-text .inline-audio {
-  display: inline-block;
-  inline-size: 9.7em;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.2em;
   max-inline-size: 100%;
   block-size: var(--inline-media-height);
+  padding-inline: 0.3em;
+  border: 1px solid currentColor;
+  font-size: 0.6em;
+  font-style: normal;
   vertical-align: middle;
   margin-inline: 0.1em;
 }
@@ -334,6 +350,14 @@ body.lightbox-open {
   pointer-events: none;
   background: var(--paper);
   box-shadow: 0 8px 45px #0002;
+}
+
+#image-preview,
+#image-preview *,
+body:has(#image-preview:not([hidden]))::before {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
 }
 
 /* A backdrop follows the existing preview visibility and never intercepts input. */
@@ -421,6 +445,7 @@ body:has(#image-preview:not([hidden]))::before {
 .annotation-note {
   --annotation-default: #000;
   color: var(--annotation-color, var(--annotation-default));
+  font-family: Arial, Helvetica, sans-serif;
 }
 
 .annotation-style-italic {
@@ -495,12 +520,14 @@ body:has(#image-preview:not([hidden]))::before {
 }
 
 .annotation-bibliography .annotation-toggle,
-.annotation-bibliography .annotation-content a {
+.annotation-bibliography a {
+  color: inherit;
   text-decoration: none;
 }
 
 .annotation-bibliography .annotation-toggle:hover,
-.annotation-bibliography .annotation-content a:hover {
+.annotation-bibliography a:hover,
+.annotation-bibliography a:focus-visible {
   text-decoration: underline;
   text-decoration-thickness: 1px;
 }
@@ -628,7 +655,8 @@ body.show-grid::after {
     gap: 12px;
   }
 
-  .site-bar h1 {
+  .site-bar h1,
+  .bar-link {
     flex: none;
   }
 
@@ -660,12 +688,6 @@ body.show-grid::after {
 
   .site-footer {
     margin-block-start: 1em;
-  }
-
-  .entry-caption {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.5em var(--u);
   }
 
   body.show-grid::after {

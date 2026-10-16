@@ -19,6 +19,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
+      - name: Check canonical course materials
+        run: python3 scripts/sync_course_materials.py
       - name: Check entry validation
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Check annotation and playback behavior
