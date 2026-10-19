@@ -1,3 +1,6 @@
+import json
+import os
+import subprocess
 import tempfile
 import unittest
 import warnings
@@ -5,6 +8,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import build_site
+from test_fixtures import Course
 
 
 SVG = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080" {attributes}/>'
@@ -113,6 +117,63 @@ class EntryValidationTests(unittest.TestCase):
         with patch.object(build_site, "OUTPUT", output), self.assertRaises(ValueError):
             build_site.main()
         self.assertEqual(previous.read_text(), "previous build")
+
+
+class LocalEntryStampTests(unittest.TestCase):
+    def setUp(self):
+        self.fixture = Course(self)
+        self.root = self.fixture.root
+        folder = self.root / 'materialities-of-ai'
+        folder.mkdir()
+        (folder / 'text.md').write_text('---\ntitle: Materialities of AI\nauthors: Course team\n---\nBrief.')
+
+    def git(self, *args, **kwargs):
+        return subprocess.check_output(['git', '-C', str(self.root), *args], text=True, **kwargs).strip()
+
+    def commit(self):
+        self.git('init', '--quiet')
+        self.git('add', 'materialities-of-ai/text.md')
+        self.git('-c', 'user.name=Test', '-c', 'user.email=test@example.org',
+                 '-c', 'commit.gpgsign=false', '-c', 'core.hooksPath=/dev/null',
+                 'commit', '--quiet', '-m', 'Course brief',
+                 env={**os.environ, 'GIT_AUTHOR_DATE': '2026-10-18T09:00:00+02:00',
+                      'GIT_COMMITTER_DATE': '2026-10-19T14:25:00+02:00'})
+        return self.git('rev-parse', 'HEAD')
+
+    def entries(self):
+        return {item['slug']: item for item in json.loads(
+            (self.fixture.output / 'entries.json').read_text())}
+
+    def test_offline_build_stamps_detached_shallow_checkout_with_commit_time(self):
+        commit = self.commit()
+        clone = self.fixture.workspace / 'shallow'
+        subprocess.run(['git', 'clone', '--quiet', '--depth=1', self.root.as_uri(), str(clone)], check=True)
+        subprocess.run(['git', '-C', str(clone), 'checkout', '--quiet', '--detach', commit], check=True)
+        # Read metadata from the same shallow, detached layout as Actions.
+        with patch.object(build_site, 'ROOT', clone):
+            expected = build_site.local_statuses(['materialities-of-ai'])
+        build_site.main()
+        self.assertEqual(self.entries()['materialities-of-ai']['online'], expected['materialities-of-ai']['online'])
+        self.assertEqual(expected['materialities-of-ai']['online'],
+                         {'commit': commit[:7], 'committed_at': '2026-10-19T14:25:00+02:00'})
+
+    def test_archived_build_keeps_group_stamp_and_rebuilds_identically(self):
+        commit = self.commit()
+        archive = self.fixture.first_archive()
+        build_site.build_archive(archive.folder, archive.commit)
+        entries = self.entries()
+        self.assertEqual(entries['materialities-of-ai']['online'],
+                         {'commit': commit[:7], 'committed_at': '2026-10-19T14:25:00+02:00'})
+        snapshot = archive.groups['alpha']['snapshot']
+        self.assertEqual(entries['alpha']['online'],
+                         {'commit': snapshot['commit'][:7], 'committed_at': snapshot['committed_at']})
+        expected = self.fixture.bytes_at(self.fixture.output)
+        build_site.build_archive(archive.folder, archive.commit)
+        self.assertEqual(self.fixture.bytes_at(self.fixture.output), expected)
+
+    def test_source_export_without_git_does_not_invent_a_stamp(self):
+        build_site.main()
+        self.assertNotIn('online', self.entries()['materialities-of-ai'])
 
 
 if __name__ == "__main__":
