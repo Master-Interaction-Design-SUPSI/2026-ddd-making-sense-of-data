@@ -7,7 +7,7 @@ What can we learn by comparing three values? This is a **demonstration**, not a 
 
 Use your own evidence to explain *what changed* and {#116964|why it matters}. Add a [[short note|These numbers are invented. Replace them with your own data and explanation.]] where more context helps.
 
-A [[Example author, 2026|Three invented values|type=bibliography]] uses a square in parentheses. A [[colored note|This is an explanation, not a finding.|type=note;color=green]] keeps its braces and normal sans serif style. A [[colored italic quote|These numbers are invented.|type=quote;style=italic;color=crimson]] combines all three modifiers.
+An unlinked citation [[Example author, 2026|Three invented values|type=bibliography]] uses a square in parentheses without an underline. A linked citation [[Example author, 2026. Three invented values|https://example.org/demonstration-source|type=bibliography]] is underlined and opens its source in a new tab. This is a placeholder link; replace it with your actual source. A [[colored note|This is an explanation, not a finding.|type=note;color=green]] keeps its braces and normal sans serif style. A [[colored italic quote|These numbers are invented.|type=quote;style=italic;color=crimson]] combines all three modifiers.
 
 Compare this wide detail [[wide detail]] with this [[tall transparent detail]] within the same sentence. Hover or focus an image to enlarge it; click or tap to open its source in a new tab. Replace these images and their references with your own supporting material, or remove both.
 
