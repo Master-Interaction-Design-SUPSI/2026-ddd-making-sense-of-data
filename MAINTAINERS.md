@@ -333,7 +333,7 @@ Keep outside this repository, maintainer-controlled. Per group: name, slug, repo
 ### 10.2 Provisioning
 
 1. Confirm owner and username mapping.
-2. Assign one of the twelve prepared public repositories, `2026-ddd-group-01` through `2026-ddd-group-12`. Their default branch is `main` and their initial contents come from `templates/group/`. For additional groups, copy the **contents** of that folder to a public repository's root. No Pages, secrets or workflows. Personal repositories accepted; private rejected.
+2. Assign one of the twelve prepared public repositories, `2026-ddd-group-01` through `2026-ddd-group-12`. Their default branch is `main` and their initial contents come from `templates/group/`. For additional groups, copy the **contents**, including `.github/`, of that folder to a public repository's root. No group Pages site is needed. For repositories in `Master-Interaction-Design-SUPSI`, grant access to the `DDD_PUBLISHING` organization secret and verify the notification workflow (§9). Personal public repositories remain supported through scheduled/manual central refreshes; the notification workflow deliberately skips other owners. Private repositories are rejected.
 3. Owner adds teammates with **Write** (**Settings → Collaborators and teams**). Track acceptance; an invitation is not access.
 4. Audit effective permissions: organization base permission, team grants including parent teams, direct grants, custom roles. Organization-wide Write, Maintain or Admin breaks isolation. A lower direct grant does not cancel a higher inherited one. Changing organization defaults affects other projects; assess first. Record results.
 5. Check rulesets on the group's `main`: direct commits, no mandatory PR or approval.
