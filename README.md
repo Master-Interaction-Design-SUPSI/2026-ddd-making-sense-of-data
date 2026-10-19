@@ -105,13 +105,12 @@ Your text becomes one continuous, justified passage: line breaks and blank lines
 | --- | --- | --- |
 | Research question | `*Where and how is AI computation performed?*` | Sans serif italic. |
 | Keyword or key concept | `**Data centres**` | Sans serif bold. |
-| Data source | `[Dataset XX](https://example.org/data)` | Underlined; opens in a new tab. |
+| Data source | `[Dataset XX](https://example.org/data)` | Sans serif, underlined; opens in a new tab. Use links for data sources; ordinary words have no underline formatting option. |
 | Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`, open; the label folds it. |
-| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`. Put a link where the title goes and the whole citation opens it. |
+| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`, with author and title both underlined. For a linked citation, use `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]`. |
 | Quote | `[[a quotation\|Quoted words\|type=quote]]` | The label reveals the words in quotation marks. |
 | Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
 | Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |
-| Underline | `{underline\|Dataset XX}` | Underlined text, e.g. a data source without a link. |
 
 Notes, citations and quotes take optional modifiers after a second `|`, separated by `;`: `[[a note|More context|type=note;color=green]]`.
 

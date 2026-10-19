@@ -26,8 +26,6 @@ def write_editor(candidate):
     shell = shell.replace('href="static/', 'href="../static/').replace('src="static/', 'src="../static/')
     shell = shell.replace('<script src="../static/bootstrap.js"></script>',
                           '<script src="protocol.js"></script>\n    <script src="preview.js"></script>')
-    # The preview keeps the bar's pixels, but its editor link would point at editor/editor/.
-    shell = shell.replace('<a class="bar-link" href="editor/">', '<a class="bar-link">')
     (candidate / "editor" / "preview.html").write_text(shell, encoding="utf-8")
     groups = [{"slug": group.slug, "repository": group.repository, "branch": group.branch,
                "exclude": list(group.exclude), "state": group.state, "editable": group.state == 'live',
