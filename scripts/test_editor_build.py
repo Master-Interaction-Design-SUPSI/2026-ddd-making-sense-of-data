@@ -21,8 +21,6 @@ class EditorBuildTests(unittest.TestCase):
             expected = production.replace('href="static/', 'href="../static/').replace('src="static/', 'src="../static/')
             expected = expected.replace('<script src="../static/bootstrap.js"></script>',
                                         '<script src="protocol.js"></script>\n    <script src="preview.js"></script>')
-            self.assertIn('<a class="bar-link" href="editor/">', expected)
-            expected = expected.replace('<a class="bar-link" href="editor/">', '<a class="bar-link">')
             self.assertEqual(preview, expected)
             groups = json.loads((destination / 'editor/groups.json').read_text())['groups']
             self.assertEqual(groups, [
