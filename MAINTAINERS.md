@@ -389,6 +389,8 @@ For a requested history purge, first set the pause switch. Inventory the affecte
 
 Offline preview builds contain local entries only and must never be deployed over an imported publication. Build `_site` again before browser checks.
 
+Typography uses ABC Areal Sans for prose, navigation, interface text, code, and source editing; bibliography/source annotations use Georgia. The four unchanged WOFF2 files (`ABCAreal-Regular`, `ABCAreal-RegularItalic`, `ABCAreal-Bold`, `ABCAreal-BoldItalic`) and the supplied licensing PDF belong in `static/fonts/areal/`, which is excluded from Git. The build copies them into the output. GitHub publication requires privately supplying these assets before building; this provisioning is not yet configured. Never commit the plaintext fonts to the public repository.
+
 ```sh
 python3 scripts/sync_course_materials.py
 python3 -m unittest discover -s scripts -p 'test_*.py'

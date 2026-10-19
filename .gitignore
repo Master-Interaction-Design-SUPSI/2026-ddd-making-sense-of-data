@@ -23,3 +23,6 @@ test-results/
 *.tmp
 *.swp
 *~
+
+# Licensed webfonts stay outside the public Git repository.
+/static/fonts/areal/

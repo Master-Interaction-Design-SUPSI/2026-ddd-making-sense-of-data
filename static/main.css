@@ -1,7 +1,39 @@
 /* Data Driven Design — MAInD SUPSI
-   Broad Arial prose and inline media, with a separate left navigation rail.
+   Broad sans-serif prose and inline media, with a separate left navigation rail.
    Prose uses fixed 41.6px leading. Inline media stays at or
    below 24px so it cannot expand the reading lines. Press g for guides. */
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-RegularItalic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
 
 :root {
   --paper: #ffffff;
@@ -17,13 +49,15 @@
   --space: clamp(20px, 3.2vw, 58px);
   --side-width: 180px;
   --header-height: 40px;
+  --ui-size: 16px;
+  --ui-leading: 22px;
   --prose-size: clamp(19.2px, 1.76vw, 25.6px);
   --prose-leading: 41.6px;
   --reading-row: var(--prose-leading);
   --inline-media-height: 24px;
   --annotation-default: var(--signal);
   --u: 20px; /* compact interface spacing */
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --sans: "ABC Areal", Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -35,11 +69,18 @@ body {
   position: relative; /* anchors the .show-grid overlay */
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/20px Arial, Helvetica, sans-serif;
+  font: 400 var(--ui-size)/var(--ui-leading) var(--sans);
 }
 
 body.lightbox-open {
   overflow: hidden;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--sans);
 }
 
 :focus-visible {
@@ -53,6 +94,8 @@ body.lightbox-open {
    The name sits over the rail; title, authors and markers share the
    reading column evenly, and the editor link closes the row. */
 .site-bar {
+  font-family: var(--sans);
+  font-weight: 400;
   position: fixed;
   inset-inline: 0;
   top: 0;
@@ -69,8 +112,8 @@ body.lightbox-open {
 
 .site-bar h1 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 400;
+  font-size: var(--ui-size);
+  font-weight: inherit;
 }
 
 .bar-current {
@@ -96,7 +139,7 @@ body.lightbox-open {
   flex-wrap: wrap;
   overflow: hidden;
   gap: 0 0.5ch;
-  font-family: var(--mono);
+  font-family: var(--sans);
   line-height: 18px;
   color: var(--mid);
 }
@@ -129,6 +172,8 @@ body.lightbox-open {
 }
 
 .site-side {
+  font-family: var(--sans);
+  font-weight: 400;
   padding-block: var(--space);
   position: sticky;
   top: var(--header-height);
@@ -162,7 +207,7 @@ body.lightbox-open {
 }
 
 .site-nav .nav-index {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .site-nav a:hover {
@@ -197,7 +242,7 @@ body.lightbox-open {
 
 .entry-caption h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--ui-size);
   font-weight: 400;
 }
 
@@ -272,7 +317,7 @@ body.lightbox-open {
 }
 
 .entry-text code {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.875em;
 }
 
@@ -453,7 +498,7 @@ body:has(#image-preview:not([hidden]))::before {
 .annotation-note {
   --annotation-default: #000;
   color: var(--annotation-color, var(--annotation-default));
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--sans);
 }
 
 .annotation-style-italic {
@@ -596,7 +641,7 @@ body:has(#image-preview:not([hidden]))::before {
   border: 0;
   background: none;
   cursor: pointer;
-  font: 400 14px/20px var(--mono);
+  font: 400 var(--ui-size)/var(--ui-leading) var(--sans);
   color: var(--ink);
 }
 
