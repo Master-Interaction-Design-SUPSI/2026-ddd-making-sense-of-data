@@ -1,0 +1,34 @@
+name: Request course publication
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions: {}
+
+# The central workflow reads the latest commits from its trusted registry.
+# A pending notification can therefore be replaced by a newer one.
+concurrency:
+  group: request-course-publication
+  cancel-in-progress: false
+
+jobs:
+  request:
+    if: github.repository_owner == 'Master-Interaction-Design-SUPSI'
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      # No checkout: this job only notifies the trusted central publisher.
+      - name: Trigger the central publishing workflow
+        env:
+          GH_TOKEN: ${{ secrets.DDD_PUBLISHING }}
+        run: |
+          if [ -z "$GH_TOKEN" ]; then
+            echo '::error::The course team must configure the DDD_PUBLISHING Actions secret for this repository.'
+            exit 1
+          fi
+          gh api --method POST \
+            repos/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data/actions/workflows/pages.yml/dispatches \
+            -f ref=main
+          echo 'Refresh requested. Publication is complete only when the course site shows your commit.' >> "$GITHUB_STEP_SUMMARY"
