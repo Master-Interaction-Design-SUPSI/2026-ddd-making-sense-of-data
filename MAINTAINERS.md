@@ -1,6 +1,6 @@
 # Maintainer manual
 
-Scope: course site, registry, import, publication, editor, archive. Revision: 2026-10-16.
+Scope: course site, registry, import, publication, editor, archive. Revision: 2026-10-19.
 
 Use this manual for current operating instructions. [Acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md) track unfinished validation. Update operating instructions when behavior changes and acceptance checks when validation completes; keep dated evidence (deployments, test results) outside the repository.
 
@@ -132,14 +132,14 @@ Invariants:
 | --- | --- |
 | Annotation | `[[label\|target\|type=…;style=…;color=…]]`. Keys in any order. Duplicate or unknown key, or bad value: literal text. The older two-field form stays valid. |
 | Note | Expanded by default. Marker and content in braces. Normal sans serif; `style=italic` explicitly adds italic. |
-| Bibliography | Inline serif `(■ Author, year. Title)`. Black; overrides surrounding and modifier colors. Text targets expand by default; URL targets make the entire citation a source link, underlined on hover, opening in a new tab. |
+| Bibliography | Inline serif `(■ Author, year. Title)`. Black; overrides surrounding and modifier colors. Text targets expand by default; URL targets make the entire citation an underlined source link, opening in a new tab. Unlinked citations have no underline. |
 | Quote | Native quotation marks on reveal. |
 | Inline image | Thumbnail. Hover/focus preview anchored to the thumbnail, opaque, fitted to viewport. Click/tap/Enter opens the original source in a new tab. |
 | Inline video | No buttons. Muted loop when half-visible, page visible, lightbox closed. Hover enlarges with sound; keyboard focus enlarges with sound. Click opens the original source in a new tab. Reduced motion: still; browser playback policy applies. |
 | Inline audio | Hover plays with sound; leaving stops playback. Click opens the original source in a new tab. Audio and video offer **Enable sound** if the browser blocks audible hover playback. |
 | External embed | Manual. Loads on reveal; unloads on inactivity; provider link shown. |
 | Dismissal | Escape, outside activation, scroll, resize, navigation, focus loss, page hide. |
-| Prose | Newlines and blank lines between adjacent paragraphs become spaces. Headings, lists, quotes, code stay separate. Responsive 24–32 px type (`--prose-size: clamp(24px, 2.2vw, 32px)`), fixed 52 px leading (`--prose-leading`). Source: `static/main.css`. |
+| Prose | Newlines and blank lines between adjacent paragraphs become spaces. Headings, lists, quotes, code stay separate. Responsive 19.2–25.6 px type (`--prose-size: clamp(19.2px, 1.76vw, 25.6px)`); at viewport widths ≤ 700 px, 16–20.8 px (`clamp(16px, 3.6vw, 20.8px)`). Fixed 41.6 px leading (`--prose-leading`). Source: `static/main.css`. |
 | Main visual | Image element; lightbox. Escape closes lightbox before playback refresh. |
 
 The student guide teaches one form per idea. These forms remain supported but are no longer taught there: media by path (`[[label|media/x.svg]]`, `![alt](media/x.svg)`, `[![alt](media/x.svg)](https://…)`); the `source=` modifier, whose URL must encode `;`, `|`, `[` and `]`, overriding the `media.csv` source; emoji markers in the third field. An explicit `color` overrides a surrounding `{color|…}` span; `{color|✶ text}` renders in braces; Markdown `*italics*` works in labels. Path references still need a `media.csv` row.
@@ -164,13 +164,14 @@ Drafts:
 - Storage denied: localStorage text-only fallback; missing media listed. Old backups kept until explicit migration.
 - Label: "Saved in this browser only."
 
-Hand-off, generated per draft, in any order (until every commit is in, the page shows what is not there yet as missing):
+Hand-off, generated per draft. Teach this order; intermediate updates may show missing media until all the commits are in:
 
 1. Review current `text.md` on GitHub. Stale-text comparison warns; equality is not proof of freshness.
 2. Upload new media; commit. Replace referenced media under a new name.
-3. Paste text into `text.md`; commit.
-4. Delete removed files.
-5. Submit request (if enabled), then look at the entry on the site.
+3. Copy the editor's `media.csv` into the root file (create it if absent); commit when changed.
+4. Paste text into `text.md`; commit.
+5. Delete removed files.
+6. Submit request (if enabled), then look at the entry on the site. The online commit identifies the published version; saving a GitHub commit or checking an editor checkbox does not confirm publication.
 
 The final file set is checked against the limits. Names and files that do not resolve are notes, not errors.
 
