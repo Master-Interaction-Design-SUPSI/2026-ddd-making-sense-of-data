@@ -218,6 +218,20 @@ Workflow **Publish course website** (`.github/workflows/pages.yml`). Pushes to `
 
 GitHub may delay or drop scheduled runs. If schedules stop after 60 days without repository activity, use **Actions → Publish course website → Enable workflow**, then **Run workflow → main**.
 
+#### Publish after a group commit
+
+The canonical notification workflow is `templates/group/.github/workflows/publish-course.yml`. Install it as `.github/workflows/publish-course.yml` in each registered group repository. Every push to that repository's `main` requests the existing central `pages.yml` workflow on central `main`; **Run workflow** can retry a failed notification. There is no checkout and no student code runs in the notification job. The central publisher still reads its trusted registry, validates current group commits, and retains previous accepted content after invalid updates. Keep the schedule as a fallback.
+
+Before installing the workflow, configure `DDD_PUBLISHING`:
+
+1. Create a fine-grained personal access token owned by a course maintainer, with resource owner `Master-Interaction-Design-SUPSI` and access to **only** `2026-ddd-making-sense-of-data`. Grant **Actions: Read and write**; leave other optional permissions disabled. Choose an expiry covering the course and record a rotation reminder. Complete organization approval if required.
+2. Store the token in the organization's **Settings → Secrets and variables → Actions**, as `DDD_PUBLISHING`, with **Selected repositories** access limited to the twelve registered group repositories. If organization secrets are unavailable, set that same Actions secret separately in each group repository. Never place the token in a file or a commit.
+3. Install the notification workflow in each group repository without replacing student files. Confirm its first push-triggered run succeeds, then confirm the central publication run succeeds and the served `publication.json` names the expected group commit. A successful notification alone only confirms that GitHub accepted the request.
+
+GitHub's Actions-write permission is broader than permission to trigger this one workflow: it can also manage the central repository's Actions runs and workflows. Group members who can edit workflows can use the shared secret. The token must therefore have no Contents-write or organization permissions. To disable this connection, revoke the token and remove the notification workflows; manual publication and the schedule remain available.
+
+Publication still takes time for Actions jobs and Pages propagation. Closely spaced notifications can be coalesced; the publisher imports current group tips, so it need not deploy every intermediate commit. If notification fails, check secret visibility, token expiry/approval and Actions permissions, then use **Run workflow**. Installation is an operational step in the group repositories; adding this template to the central repository does not activate those repositories.
+
 An unverified release is retried from the recorded code/archive pair before any new import (§9.3). On a fresh repository the first run creates the archive (§9.4).
 
 ### 9.1 Switches

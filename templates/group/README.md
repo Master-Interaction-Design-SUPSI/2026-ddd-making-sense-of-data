@@ -86,7 +86,7 @@ SVG: static, self-contained. No scripts, links, animation or external files. Onl
 
 ## 6. Check publication
 
-Open the site and look at your entry: it says which commit is online, or what to fix. Commits publish automatically, usually within a few hours.
+Every commit to `main` requests a website refresh. Allow a few minutes for the checks and publication; GitHub can delay the jobs. Open the site and look at your entry: it says which commit is online, or what to fix.
 
 ## 7. Syntax
 
