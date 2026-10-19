@@ -266,8 +266,8 @@ const COMMIT_TIME = new Intl.DateTimeFormat("en-GB", {
   day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Zurich",
 });
 
-/* One quiet line under a group's title: which commit is online, or which
-   commit was not published and why. Course-team pages have neither. */
+/* Which commit is online, or which group commit was not published and why.
+   Course-team pages identify the pinned course repository checkout. */
 function statusLine({ online, problem }) {
   if (problem) {
     const reason = problem.message.replace(/[.\s]+$/, "");

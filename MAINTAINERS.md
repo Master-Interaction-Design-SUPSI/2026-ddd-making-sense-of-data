@@ -86,6 +86,8 @@ Exclusion never alters the source repository.
 
 The course-team page is a folder at the repository root, published with every build: `materialities-of-ai` (the opening brief, generated once from `ginevraterenghi/multimodal-abstract-ddd` at `1c07295`). Edit it by reviewed PR. `build_site.py` gives each course-team folder the content checks of an import; only the main visual is optional. Order on the site: `materialities-of-ai`, then alphabetical. Each individual starter repository provides the demonstration content; there is no separate example entry.
 
+Course-team entries, including `materialities-of-ai`, show the build checkout's short Git commit and its commit timestamp in their headers, using the same Europe/Zurich display as groups. This identifies the course repository revision, not the entry's last content edit or deployment time. The stamp comes from the pinned checkout and stays identical on release retries; source exports without `.git` show `—`. Group stamps continue to identify their accepted source commits.
+
 ## 5. Content contract
 
 Source: `static/contract.json` (version 2). Python constants are adapters.

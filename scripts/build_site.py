@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import shutil
+import subprocess
 import tempfile
 import warnings
 import xml.etree.ElementTree as ET
@@ -148,6 +149,22 @@ def group_statuses(groups):
     return statuses
 
 
+def local_statuses(names):
+    """Stamp course-team entries with the pinned checkout, including shallow clones.
+
+    Use the commit's own time so release retries reproduce the same bytes.
+    Source exports without Git metadata keep the existing unstamped preview.
+    """
+    if not names or not (ROOT / '.git').exists():
+        return {}
+    revision = subprocess.check_output(
+        ['git', '-C', str(ROOT), 'show', '--no-patch', '--format=%H%n%cI', 'HEAD'],
+        text=True).strip().splitlines()
+    commit, committed_at = revision
+    return {name: {'online': {'commit': commit[:7], 'committed_at': committed_at}}
+            for name in names}
+
+
 def build_archive(folder, commit=None):
     """Build from archived bytes and trusted current site code; no source or Pages reads."""
     archive = ArchiveSnapshot(folder, commit)
@@ -155,8 +172,9 @@ def build_archive(folder, commit=None):
     sources = {name: ROOT / name for name in find_entries()}
     if set(snapshots) & set(sources):
         raise ValueError('archive group collides with a local entry')
+    statuses = {**local_statuses(sources), **group_statuses(archive.groups)}
     sources.update({slug: archive.folder / slug for slug in snapshots})
-    write_site(sources, snapshots, group_statuses(archive.groups))
+    write_site(sources, snapshots, statuses)
     return {'archive_commit': archive.commit,
             'archive_manifest_sha256': hashlib.sha256(archive.payload).hexdigest(),
             'served_manifest_sha256': hashlib.sha256((OUTPUT / MANIFEST).read_bytes()).hexdigest()}
@@ -167,7 +185,8 @@ def main():
     for group in load_registry(ROOT / "groups.json"):
         if (ROOT / group.slug).exists() or (ROOT / group.slug).is_symlink():
             raise ValueError(f"{group.slug}: registered group collides with a local path")
-    write_site({name: ROOT / name for name in find_entries()})
+    sources = {name: ROOT / name for name in find_entries()}
+    write_site(sources, statuses=local_statuses(sources))
 
 
 if __name__ == "__main__":
