@@ -46,9 +46,12 @@
   --accent-green: #00e279;
   --accent-yellow: #e5b800;
   --rule: #dedede;
-  --space: clamp(20px, 3.2vw, 58px);
-  --side-width: 180px;
-  --header-height: 40px;
+  --space: calc(var(--u) * 1);
+  --page-inset: var(--u);
+  --side-width: calc(var(--u) * 3);
+  --editor-width: 72px;
+  --brief-row-height: var(--ui-leading);
+  --header-height: 44px;
   --ui-size: 16px;
   --ui-leading: 22px;
   --prose-size: clamp(19.2px, 1.76vw, 25.6px);
@@ -56,7 +59,7 @@
   --reading-row: var(--prose-leading);
   --inline-media-height: 24px;
   --annotation-default: var(--signal);
-  --u: 20px; /* compact interface spacing */
+  --u: 22px; /* compact interface spacing */
   --sans: "ABC Areal", Arial, Helvetica, sans-serif;
 }
 
@@ -104,7 +107,7 @@ pre {
   display: grid;
   grid-template-columns: var(--side-width) repeat(3, minmax(0, 1fr)) auto;
   gap: var(--space);
-  padding-inline: var(--space);
+  padding-inline: var(--page-inset);
   align-items: center;
   background: var(--paper);
   border-bottom: 1px solid var(--rule);
@@ -149,6 +152,7 @@ pre {
 }
 
 .bar-link {
+  justify-self: end;
   color: var(--signal);
   text-decoration: none;
   white-space: nowrap;
@@ -165,28 +169,29 @@ pre {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: var(--side-width) minmax(0, 1fr);
+  grid-template-columns: var(--side-width) minmax(0, 1fr) var(--editor-width);
   gap: var(--space);
-  padding-inline: var(--space);
+  padding-inline: var(--page-inset);
   margin-block-start: var(--header-height);
 }
 
 .site-side {
   font-family: var(--sans);
   font-weight: 400;
+  display: flex;
+  flex-direction: column;
+  block-size: calc(100dvh - var(--header-height));
   padding-block: var(--space);
   position: sticky;
   top: var(--header-height);
   align-self: start;
   max-height: calc(100dvh - var(--header-height));
-  overflow-y: auto;
   overflow-wrap: anywhere;
 }
 
 #entries {
   min-inline-size: 0;
   inline-size: 100%;
-  max-inline-size: 1800px;
   padding-block: var(--space);
 }
 
@@ -195,10 +200,13 @@ pre {
 .site-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
+  min-block-size: 0;
+  overflow-y: auto;
+  gap: calc(var(--u) / 2);
 }
 
 .site-nav a {
+  flex: none;
   color: var(--mid);
   text-decoration: none;
   white-space: nowrap;
@@ -216,6 +224,19 @@ pre {
 
 .site-nav a.active {
   color: var(--signal);
+}
+
+/* One empty navigation row separates the course brief from the groups. */
+.site-side:has(.site-nav a[data-folder="materialities-of-ai"]) {
+  /* Match the first prose line's cap top across the two Areal font sizes. */
+  padding-block-start: calc(var(--space) + (var(--prose-leading) - var(--brief-row-height)) / 2 - (var(--prose-size) - var(--ui-size)) * 0.375);
+}
+
+.site-nav a[data-folder="materialities-of-ai"] {
+  display: block;
+  block-size: var(--brief-row-height);
+  line-height: var(--brief-row-height);
+  margin-block-end: calc(var(--ui-leading) + var(--u) / 2);
 }
 
 /* ---------- entries ---------- */
@@ -277,6 +298,10 @@ pre {
   object-fit: contain;
   object-position: left top;
   cursor: zoom-in;
+}
+
+#materialities-of-ai > .entry-caption {
+  display: none;
 }
 
 /* ---------- markdown body ---------- */
@@ -652,7 +677,9 @@ body:has(#image-preview:not([hidden]))::before {
 }
 
 .site-footer {
-  margin-block-start: 2em;
+  flex: none;
+  margin-block-start: auto;
+  padding-block-start: calc(var(--u) * 2);
   color: var(--mid);
 }
 
@@ -663,6 +690,40 @@ body:has(#image-preview:not([hidden]))::before {
 
 .site-footer a:hover {
   color: var(--ink);
+}
+
+.institution {
+  display: grid;
+  gap: calc(var(--u) / 2);
+  max-inline-size: var(--side-width);
+  text-align: left;
+  text-align-last: left;
+}
+
+.institution-acronyms {
+  display: flex;
+  justify-content: flex-start;
+  gap: 1ch;
+  color: var(--ink);
+}
+
+/* DDD and MAInD spell themselves out on hover or focus, on one line over
+   whatever sits beside them. */
+.acronym {
+  position: relative;
+  z-index: 2;
+  display: inline-block;
+  white-space: nowrap;
+  background: var(--paper);
+}
+
+.acronym-full,
+.acronym:is(:hover, :focus-visible) .acronym-short {
+  display: none;
+}
+
+.acronym:is(:hover, :focus-visible) .acronym-full {
+  display: inline;
 }
 
 /* ---------- reading rhythm and column guides (press g) ---------- */
@@ -681,13 +742,13 @@ body.show-grid::after {
       var(--grid-line) calc(var(--reading-row) - 1px) var(--reading-row)
     ),
     linear-gradient(to right,
-      transparent var(--space),
-      var(--grid-line) var(--space) calc(var(--space) + 1px),
-      transparent calc(var(--space) + 1px) calc(var(--space) + var(--side-width)),
-      var(--grid-line) calc(var(--space) + var(--side-width)) calc(var(--space) + var(--side-width) + 1px),
-      transparent calc(var(--space) + var(--side-width) + 1px) calc(2 * var(--space) + var(--side-width)),
-      var(--grid-line) calc(2 * var(--space) + var(--side-width)) calc(2 * var(--space) + var(--side-width) + 1px),
-      transparent calc(2 * var(--space) + var(--side-width) + 1px)
+      transparent var(--page-inset),
+      var(--grid-line) var(--page-inset) calc(var(--page-inset) + 1px),
+      transparent calc(var(--page-inset) + 1px) calc(var(--page-inset) + var(--side-width)),
+      var(--grid-line) calc(var(--page-inset) + var(--side-width)) calc(var(--page-inset) + var(--side-width) + 1px),
+      transparent calc(var(--page-inset) + var(--side-width) + 1px) calc(var(--page-inset) + var(--space) + var(--side-width)),
+      var(--grid-line) calc(var(--page-inset) + var(--space) + var(--side-width)) calc(var(--page-inset) + var(--space) + var(--side-width) + 1px),
+      transparent calc(var(--page-inset) + var(--space) + var(--side-width) + 1px)
     );
 }
 
@@ -695,12 +756,13 @@ body.show-grid::after {
 
 @media (width <= 700px) {
   :root {
-    --space: 16px;
+    --space: var(--u);
+    --editor-width: 66px;
     --prose-size: clamp(16px, 3.6vw, 20.8px);
   }
 
   .layout {
-    display: block;
+    grid-template-columns: minmax(0, 1fr) var(--editor-width);
   }
 
   .site-bar {
@@ -727,20 +789,31 @@ body.show-grid::after {
     line-height: 10px;
   }
 
-  .site-side {
+  .site-side,
+  .site-side:has(.site-nav a[data-folder="materialities-of-ai"]) {
+    display: block;
+    block-size: auto;
     position: static;
     max-height: none;
-    padding-block: 20px 0;
+    overflow: visible;
+    padding-block: var(--u) 0;
+    grid-column: 1;
   }
 
   .site-nav {
+    overflow: visible;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.5em var(--u);
+    gap: calc(var(--u) / 2) var(--u);
+  }
+
+  .site-nav a[data-folder="materialities-of-ai"] {
+    flex-basis: 100%;
   }
 
   .site-footer {
-    margin-block-start: 1em;
+    margin-block-start: var(--u);
+    padding-block-start: 0;
   }
 
   body.show-grid::after {
@@ -752,7 +825,8 @@ body.show-grid::after {
   }
 
   #entries {
-    padding-block: 20px;
+    grid-column: 1;
+    padding-block: var(--u);
   }
 
   .entry-text .inline-image img,

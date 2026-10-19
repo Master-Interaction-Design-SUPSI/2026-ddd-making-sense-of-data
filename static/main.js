@@ -279,6 +279,12 @@ function statusLine({ online, problem }) {
   return `Online: commit ${online.commit}, ${time.day} ${time.month} ${time.hour}:${time.minute}`;
 }
 
+function entryIdentifier(folder) {
+  if (folder === "materialities-of-ai") return "M-AI";
+  const group = /^group-(\d+)$/.exec(folder);
+  return group ? `G-${pad(Number(group[1]))}` : folder;
+}
+
 /* ---------- rendering ---------- */
 
 function renderEntry(entry) {
@@ -402,31 +408,18 @@ function prepareInlineImages(textEl) {
 function buildNav(entries) {
   const nav = document.getElementById("nav");
   nav.replaceChildren();
-  entries.forEach((entry, i) => {
+  entries.forEach((entry) => {
     const a = document.createElement("a");
     a.href = `#${entry.folder}`;
     a.dataset.folder = entry.folder;
     const idx = document.createElement("span");
     idx.className = "nav-index";
-    const group = /^group-(\d+)$/.exec(entry.folder);
-    idx.textContent = entry.folder === "materialities-of-ai"
-      ? "M-AI"
-      : group ? `G-${pad(Number(group[1]))}` : pad(i + 1);
-    let title = entry.title.trim().replace(/\s+/g, " ");
-    if (group) {
-      const repeated = /^(?:group\s*|g\s*-\s*)(\d+)(?:\s*[:–—-]\s*|\s+|$)/i.exec(title);
-      if (repeated && Number(repeated[1]) === Number(group[1])) {
-        title = title.slice(repeated[0].length).trim() || "Untitled";
-      }
-    }
+    idx.textContent = entryIdentifier(entry.folder);
+    const title = entry.title;
     const fullLabel = `${idx.textContent} ${title}`;
-    const budget = 24 - Array.from(idx.textContent).length - 1;
-    const characters = Array.from(title);
-    const shortTitle = characters.length > budget
-      ? characters.slice(0, budget - 1).join("").trimEnd() + "…" : title;
     a.title = fullLabel;
     a.setAttribute("aria-label", fullLabel);
-    a.append(idx, ` ${shortTitle}`);
+    a.append(idx);
     nav.appendChild(a);
   });
 }
