@@ -370,8 +370,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
       "snapshot": {
-        "commit": "9740e97ea1d4425762b15715aea866e2424ebf3f",
-        "committed_at": "2026-10-16T17:49:47Z",
+        "commit": "099545c2038435d4963587776a75dae9fc581c81",
+        "committed_at": "2026-10-19T12:46:48Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -412,7 +412,7 @@
             "size": 832
           }
         },
-        "tree": "419b3e4a016aa66f22963e1ada92420fdf288b42"
+        "tree": "f638df7dbee55ce0413c2ee62400ea5686e26f62"
       },
       "state": "live"
     },
@@ -422,8 +422,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
-        "commit": "b3e6d28b0c809b2198e8dd480fcb80c69ed81102",
-        "committed_at": "2026-10-16T17:49:49Z",
+        "commit": "bd64da29183da9d22a251debcc617e47eb4f5d3f",
+        "committed_at": "2026-10-19T12:47:08Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -464,7 +464,7 @@
             "size": 832
           }
         },
-        "tree": "6ed96874e3cb9881a7f6cc8096d3293afc487dce"
+        "tree": "343d6e6b2d71300a186a9b95a052fc2c219945cf"
       },
       "state": "live"
     },
@@ -474,8 +474,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-10",
       "snapshot": {
-        "commit": "1fbd0557a50e939627d261a66b6c98034fcc06e1",
-        "committed_at": "2026-10-16T17:49:50Z",
+        "commit": "b19abe9b1c59660beced901e285e9ded787969d3",
+        "committed_at": "2026-10-19T12:47:12Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -516,7 +516,7 @@
             "size": 832
           }
         },
-        "tree": "0c39912d721b592db3effdd6dc32a3af23f51cf1"
+        "tree": "eca4a3bc2b9c2434fd0459aacfaef0d550309cc7"
       },
       "state": "live"
     },
@@ -526,8 +526,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-11",
       "snapshot": {
-        "commit": "934d2ac32b8e58fdc526e003006a940f75a1cf03",
-        "committed_at": "2026-10-16T17:49:52Z",
+        "commit": "3d297fb6f83ffb280936020305d690979cd9c17a",
+        "committed_at": "2026-10-19T12:47:17Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -568,7 +568,7 @@
             "size": 832
           }
         },
-        "tree": "0f12999b652652994191651101f931a9f11de7cf"
+        "tree": "d92a0620caad107826ef43b63e0e2ed1ab3274a4"
       },
       "state": "live"
     },
@@ -578,8 +578,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-12",
       "snapshot": {
-        "commit": "5cbdf22a4768db0544bcdb0589dce7ead8ec13af",
-        "committed_at": "2026-10-16T17:49:54Z",
+        "commit": "a641a90b2cffe8ed907604821d0088949785a360",
+        "committed_at": "2026-10-19T12:47:21Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -620,7 +620,7 @@
             "size": 832
           }
         },
-        "tree": "052c3d1d0d2cbc7513f8e5cef7fb34dd9afad833"
+        "tree": "a679118843db77ecc426984c24737eb5fd216c91"
       },
       "state": "live"
     }
