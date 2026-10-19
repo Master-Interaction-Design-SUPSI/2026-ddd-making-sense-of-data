@@ -12,9 +12,13 @@
   <body>
     <header class="site-bar">
       <h1 aria-label="Data Driven Design"><span class="acronym"><span class="acronym-short">DDD</span><span class="acronym-full">Data Driven Design</span></span></h1>
-      <p id="current" class="bar-current"></p>
-      <p id="current-authors" class="bar-authors"></p>
-      <p id="markers" class="bar-markers" aria-hidden="true"></p>
+      <div class="bar-metadata">
+        <p id="current-id" class="entry-id"></p>
+        <p id="current" class="bar-current"></p>
+        <p id="current-authors" class="bar-authors"></p>
+        <p id="current-commit" class="entry-commit"></p>
+        <time id="current-time" class="entry-time"></time>
+      </div>
       <a class="bar-link" href="editor/">Editor ↗</a>
     </header>
 

@@ -50,6 +50,7 @@
   --page-inset: var(--u);
   --side-width: calc(var(--u) * 3);
   --editor-width: 72px;
+  --metadata-columns: calc(var(--u) * 2.5) minmax(0, 1.2fr) minmax(0, 1fr) calc(var(--u) * 4) calc(var(--u) * 6);
   --brief-row-height: var(--ui-leading);
   --header-height: 44px;
   --ui-size: 16px;
@@ -93,9 +94,8 @@ pre {
 
 /* ---------- the bar ---------- */
 
-/* Keep the current-entry readout and markers in the existing fixed bar.
-   The name sits over the rail; title, authors and markers share the
-   reading column evenly, and the editor link closes the row. */
+/* The bar and page share three tracks: navigation, reading, and Editor.
+   Metadata uses the same five columns in the bar and every entry. */
 .site-bar {
   font-family: var(--sans);
   font-weight: 400;
@@ -105,7 +105,7 @@ pre {
   z-index: 10;
   height: var(--header-height);
   display: grid;
-  grid-template-columns: var(--side-width) repeat(3, minmax(0, 1fr)) auto;
+  grid-template-columns: var(--side-width) minmax(0, 1fr) var(--editor-width);
   gap: var(--space);
   padding-inline: var(--page-inset);
   align-items: center;
@@ -132,23 +132,6 @@ pre {
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--mid);
-}
-
-/* One marker per Entry, still; the current one is lit in the signal
-   colour. */
-.bar-markers {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  overflow: hidden;
-  gap: 0 0.5ch;
-  font-family: var(--sans);
-  line-height: 18px;
-  color: var(--mid);
-}
-
-.bar-markers .current {
-  color: var(--signal);
 }
 
 .bar-link {
@@ -247,18 +230,79 @@ pre {
   scroll-margin-block-start: calc(var(--header-height) + var(--space));
 }
 
-/* Compact metadata above the large abstract; titles and authors may wrap. */
-.entry-caption {
+/* Titles and members may wrap in entries; the fixed bar uses ellipses. */
+.entry-caption,
+.bar-metadata {
   display: grid;
-  grid-template-columns: minmax(0, calc(var(--entry-author-offset, 70%) - var(--space))) minmax(0, 1fr);
+  grid-template-columns: var(--metadata-columns);
   gap: 0.4em var(--space);
+  min-inline-size: 0;
   overflow-wrap: anywhere;
-  align-items: start;
+  align-items: baseline;
+}
+
+.entry-caption {
   margin-block-end: var(--u);
 }
 
-.entry-caption > div {
-  display: contents;
+.entry-caption > *,
+.bar-metadata > * {
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.bar-metadata > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Blank until the current Entry's caption has scrolled under the bar. */
+.bar-metadata:not(.docked) {
+  visibility: hidden;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bar-metadata {
+    transition: opacity 0.15s linear, visibility 0.15s;
+  }
+}
+
+/* The navigation rail already shows the group number, so the title takes
+   its column and starts on the reading edge, in the bar and every caption. */
+.entry-id {
+  display: none;
+}
+
+.entry-caption h2,
+.bar-metadata .bar-current {
+  grid-column: span 2;
+}
+
+/* The bar clears while DDD spells itself out across it. */
+.site-bar:has(.acronym:hover) .bar-metadata {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.entry-id,
+.entry-commit,
+.entry-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entry-commit,
+.entry-time {
+  color: var(--mid);
+  font-size: var(--ui-size);
+  line-height: var(--ui-leading);
+  white-space: nowrap;
+}
+
+#materialities-of-ai > .entry-caption {
+  display: none;
 }
 
 .entry-caption h2 {
@@ -272,7 +316,6 @@ pre {
   color: var(--mid);
 }
 
-/* Which commit is online: the author line's style, on its own row below title and authors. */
 .entry-status {
   grid-column: 1 / -1;
 }
@@ -298,10 +341,6 @@ pre {
   object-fit: contain;
   object-position: left top;
   cursor: zoom-in;
-}
-
-#materialities-of-ai > .entry-caption {
-  display: none;
 }
 
 /* ---------- markdown body ---------- */
@@ -752,13 +791,26 @@ body.show-grid::after {
     );
 }
 
-/* ---------- narrow screens: keep the existing navigation above the text ---------- */
+/* At smaller widths, metadata keeps its order on two aligned rows. */
+@media (700px < width <= 1100px) {
+  :root {
+    --header-height: 76px;
+    --metadata-columns: calc(var(--u) * 2.5) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .entry-commit { grid-column: 1 / 3; }
+  .entry-time { grid-column: 3; }
+}
+
+/* ---------- narrow screens: navigation above text; Editor track stays clear ---------- */
 
 @media (width <= 700px) {
   :root {
     --space: var(--u);
-    --editor-width: 66px;
     --prose-size: clamp(16px, 3.6vw, 20.8px);
+    --header-height: 156px;
+    --editor-width: 66px;
+    --metadata-columns: calc(var(--u) * 2.5) minmax(0, 1fr);
   }
 
   .layout {
@@ -766,27 +818,47 @@ body.show-grid::after {
   }
 
   .site-bar {
-    display: flex;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) var(--editor-width);
+    grid-template-rows: 44px 1fr;
+    gap: 0 var(--space);
   }
 
-  .site-bar h1,
+  .site-bar h1 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .bar-link {
-    flex: none;
+    grid-column: 2;
+    grid-row: 1;
   }
 
-  .bar-current,
-  .bar-authors {
-    flex: 1;
-    min-width: 0;
+  .bar-metadata {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    row-gap: 0;
   }
 
-  .bar-markers {
-    flex: 0 1 auto;
-    min-inline-size: 0;
-    max-inline-size: 15%;
-    font-size: 10px;
-    line-height: 10px;
+  /* The navigation scrolls away here, so the group number stays. */
+  .entry-id {
+    display: block;
+  }
+
+  .entry-caption h2,
+  .bar-metadata .bar-current {
+    grid-column: auto;
+  }
+
+  .bar-authors,
+  .entry-authors,
+  .entry-commit,
+  .entry-time {
+    grid-column: 2;
+  }
+
+  .entry-status {
+    grid-column: 1 / -1;
   }
 
   .site-side,
