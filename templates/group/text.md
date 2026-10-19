@@ -18,4 +18,4 @@ but continues on the same justified passage.
 
 This sentence starts after a blank line in the source and joins that passage too.
 
-The research question is *What can we learn by comparing three values?* Key concepts can be **comparison** or {#116964|variation}. Describe the {underline|invented demonstration dataset}; a real [data source](https://example.org/data) should link to its published dataset.
+The research question is *What can we learn by comparing three values?* Key concepts can be **comparison** or {#116964|variation}. Describe the invented demonstration dataset; a real [data source](https://example.org/data) should link to its published dataset.

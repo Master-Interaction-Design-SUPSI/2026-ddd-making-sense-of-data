@@ -369,11 +369,6 @@ pre {
   text-underline-offset: 0.12em;
 }
 
-.entry-text u {
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.12em;
-}
-
 .entry-text blockquote {
   margin: 1lh 0;
   padding-inline-start: var(--u);
@@ -636,17 +631,18 @@ body:has(#image-preview:not([hidden]))::before {
   color: #000;
 }
 
-.annotation-bibliography .annotation-toggle,
-.annotation-bibliography a {
+.annotation-bibliography .annotation-toggle {
   color: inherit;
   text-decoration: none;
 }
 
-.annotation-bibliography .annotation-toggle:hover,
-.annotation-bibliography a:hover,
-.annotation-bibliography a:focus-visible {
+.annotation-bibliography .bibliography-label,
+.annotation-bibliography .annotation-content,
+.annotation-bibliography a {
+  color: inherit;
   text-decoration: underline;
   text-decoration-thickness: 1px;
+  text-underline-offset: 0.12em;
 }
 
 .annotation-quote .annotation-text::before {

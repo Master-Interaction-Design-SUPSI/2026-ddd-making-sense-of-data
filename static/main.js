@@ -86,7 +86,7 @@ function expandAnnotations(src) {
     if (!annotation.valid || (color && !CSS.supports("color", color))) return annotation.source;
     const bibliography = type === "bibliography";
     if (bibliography && resource) {
-      return `<span class="annotation annotation-bibliography"><a href="${esc(target)}" target="_blank" rel="noopener noreferrer">(■ ${label})</a></span>`;
+      return `<span class="annotation annotation-bibliography">(■ <a href="${esc(target)}" target="_blank" rel="noopener noreferrer">${label}</a>)</span>`;
     }
     const open = bibliography || type === "note";
     let content = target;
@@ -98,7 +98,7 @@ function expandAnnotations(src) {
     const mark = marker || ({ note: DEFAULT_MARKER, bibliography: "■" }[type] || DEFAULT_MARKER);
     const glyph = `<span class="annotation-marker" aria-hidden="true">${esc(mark)}</span>`;
     const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
-    const heading = bibliography ? `(${glyph} ${label}` : type === "note" ? label : `${label}${glyph}`;
+    const heading = bibliography ? `(${glyph} <span class="bibliography-label">${label}</span>` : type === "note" ? label : `${label}${glyph}`;
     if (bibliography) content = `. ${content}`;
     if (type === "note") content = ` &#123;${glyph} ${content}&#125;`;
     return (
@@ -180,7 +180,6 @@ function expandColours(src) {
   for (let guard = 0; guard < 500; guard++) {
     const next = out.replace(COLOUR_RE, (_, colour, text) => {
       const value = colour.trim();
-      if (value === "underline") return `<u>${text}</u>`;
       if (!CSS.supports("color", value)) return text;
       const content = /^\*?✶\s/.test(text.trim()) ? `&#123;${text}&#125;` : text;
       return `<span class="tinted" style="color:${value};--annotation-color:${value}">${content}</span>`;

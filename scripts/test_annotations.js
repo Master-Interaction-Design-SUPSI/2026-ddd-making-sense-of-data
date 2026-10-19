@@ -72,7 +72,7 @@ test('defaults distinguish notes, bibliography and unchanged media annotations',
   assert.equal(media.type, 'resource');
   assert.equal(media.style, 'inherit');
   assert.match(context.renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
-  assert.match(context.renderMarkdown(bibliography.source), /\(■ source\)/);
+  assert.match(context.renderMarkdown(bibliography.source), /\(■ <a [^>]+>source<\/a>\)/);
   assert.match(context.renderMarkdown(media.source), /src="media\/sketch.svg"/);
 });
 
@@ -85,7 +85,7 @@ test('bibliography starts open and resource references stay links rather than pl
       assert.match(html, /aria-expanded="true"/);
     } else {
       assert.match(html, /target="_blank" rel="noopener noreferrer"/);
-      assert.match(html, /\(■ source\)<\/a>/);
+      assert.match(html, /\(■ <a [^>]+>source<\/a>\)/);
       assert.doesNotMatch(html, /<button/);
     }
     assert.doesNotMatch(html, / hidden|color:crimson|<iframe|<img|<audio|<video/);
@@ -205,8 +205,15 @@ test('original media sources are collected and unsafe source modifiers stay lite
   }
 });
 
-test('data source underlines preserve text and Markdown emphasis', () => {
-  assert.match(context.renderMarkdown('{underline|Dataset **XX**}'), /<u>Dataset <strong>XX<\/strong><\/u>/);
+test('generic underline formatting is removed without losing words or emphasis', () => {
+  assert.equal(context.renderMarkdown('{underline|Ordinary **words**}'), '<p>Ordinary <strong>words</strong></p>\n');
+  assert.equal(context.renderMarkdown('[Dataset **XX**](https://example.org/data)'),
+    '<p><a href="https://example.org/data">Dataset <strong>XX</strong></a></p>\n');
+});
+
+test('citation links include the complete author and title inside the parentheses', () => {
+  const html = context.renderMarkdown('[[Parikka, 2015. A geology of media|https://example.org/book|type=bibliography]]');
+  assert.match(html, /\(■ <a [^>]+>Parikka, 2015\. A geology of media<\/a>\)/);
 });
 
 test('media.csv names render their file with the source link; unknown names stay literal for the page to mark', () => {
