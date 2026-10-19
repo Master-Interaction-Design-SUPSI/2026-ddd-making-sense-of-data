@@ -3,8 +3,7 @@ title: Group 01: Sample project
 authors: Group 01 — replace with your names
 ---
 
-test test test
-
+test 123
 What can we learn by comparing three values? This is a **demonstration**, not a research finding. The main visual uses invented numbers: 20, 35 and 50.
 
 Use your own evidence to explain *what changed* and {#116964|why it matters}. Add a [[short note|These numbers are invented. Replace them with your own data and explanation.]] where more context helps.
