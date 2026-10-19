@@ -1,7 +1,39 @@
 /* Data Driven Design — MAInD SUPSI
-   Broad Arial prose and inline media, with a separate left navigation rail.
+   Broad sans-serif prose and inline media, with a separate left navigation rail.
    Prose uses fixed 41.6px leading. Inline media stays at or
    below 24px so it cannot expand the reading lines. Press g for guides. */
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-Regular.woff2") format("woff2");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-RegularItalic.woff2") format("woff2");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-Bold.woff2") format("woff2");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "ABC Areal";
+  src: url("fonts/areal/ABCAreal-BoldItalic.woff2") format("woff2");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
 
 :root {
   --paper: #ffffff;
@@ -14,16 +46,22 @@
   --accent-green: #00e279;
   --accent-yellow: #e5b800;
   --rule: #dedede;
-  --space: clamp(20px, 3.2vw, 58px);
-  --side-width: 180px;
-  --header-height: 40px;
+  --space: calc(var(--u) * 1);
+  --page-inset: var(--u);
+  --side-width: calc(var(--u) * 3);
+  --editor-width: 72px;
+  --metadata-columns: calc(var(--u) * 2.5) minmax(0, 1.2fr) minmax(0, 1fr) calc(var(--u) * 4) calc(var(--u) * 6);
+  --brief-row-height: var(--ui-leading);
+  --header-height: 44px;
+  --ui-size: 16px;
+  --ui-leading: 22px;
   --prose-size: clamp(19.2px, 1.76vw, 25.6px);
   --prose-leading: 41.6px;
   --reading-row: var(--prose-leading);
   --inline-media-height: 24px;
   --annotation-default: var(--signal);
-  --u: 20px; /* compact interface spacing */
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --u: 22px; /* compact interface spacing */
+  --sans: "ABC Areal", Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -35,11 +73,18 @@ body {
   position: relative; /* anchors the .show-grid overlay */
   background: var(--paper);
   color: var(--ink);
-  font: 400 14px/20px Arial, Helvetica, sans-serif;
+  font: 400 var(--ui-size)/var(--ui-leading) var(--sans);
 }
 
 body.lightbox-open {
   overflow: hidden;
+}
+
+code,
+kbd,
+samp,
+pre {
+  font-family: var(--sans);
 }
 
 :focus-visible {
@@ -49,19 +94,20 @@ body.lightbox-open {
 
 /* ---------- the bar ---------- */
 
-/* Keep the current-entry readout and markers in the existing fixed bar.
-   The name sits over the rail; title, authors and markers share the
-   reading column evenly, and the editor link closes the row. */
+/* The bar and page share three tracks: navigation, reading, and Editor.
+   Metadata uses the same five columns in the bar and every entry. */
 .site-bar {
+  font-family: var(--sans);
+  font-weight: 400;
   position: fixed;
   inset-inline: 0;
   top: 0;
   z-index: 10;
   height: var(--header-height);
   display: grid;
-  grid-template-columns: var(--side-width) repeat(3, minmax(0, 1fr)) auto;
+  grid-template-columns: var(--side-width) minmax(0, 1fr) var(--editor-width);
   gap: var(--space);
-  padding-inline: var(--space);
+  padding-inline: var(--page-inset);
   align-items: center;
   background: var(--paper);
   border-bottom: 1px solid var(--rule);
@@ -69,8 +115,8 @@ body.lightbox-open {
 
 .site-bar h1 {
   margin: 0;
-  font-size: 14px;
-  font-weight: 400;
+  font-size: var(--ui-size);
+  font-weight: inherit;
 }
 
 .bar-current {
@@ -88,24 +134,8 @@ body.lightbox-open {
   color: var(--mid);
 }
 
-/* One marker per Entry, still; the current one is lit in the signal
-   colour. */
-.bar-markers {
-  margin: 0;
-  display: flex;
-  flex-wrap: wrap;
-  overflow: hidden;
-  gap: 0 0.5ch;
-  font-family: var(--mono);
-  line-height: 18px;
-  color: var(--mid);
-}
-
-.bar-markers .current {
-  color: var(--signal);
-}
-
 .bar-link {
+  justify-self: end;
   color: var(--signal);
   text-decoration: none;
   white-space: nowrap;
@@ -122,26 +152,29 @@ body.lightbox-open {
   position: relative;
   z-index: 1;
   display: grid;
-  grid-template-columns: var(--side-width) minmax(0, 1fr);
+  grid-template-columns: var(--side-width) minmax(0, 1fr) var(--editor-width);
   gap: var(--space);
-  padding-inline: var(--space);
+  padding-inline: var(--page-inset);
   margin-block-start: var(--header-height);
 }
 
 .site-side {
+  font-family: var(--sans);
+  font-weight: 400;
+  display: flex;
+  flex-direction: column;
+  block-size: calc(100dvh - var(--header-height));
   padding-block: var(--space);
   position: sticky;
   top: var(--header-height);
   align-self: start;
   max-height: calc(100dvh - var(--header-height));
-  overflow-y: auto;
   overflow-wrap: anywhere;
 }
 
 #entries {
   min-inline-size: 0;
   inline-size: 100%;
-  max-inline-size: 1800px;
   padding-block: var(--space);
 }
 
@@ -150,10 +183,13 @@ body.lightbox-open {
 .site-nav {
   display: flex;
   flex-direction: column;
-  gap: 0.5em;
+  min-block-size: 0;
+  overflow-y: auto;
+  gap: calc(var(--u) / 2);
 }
 
 .site-nav a {
+  flex: none;
   color: var(--mid);
   text-decoration: none;
   white-space: nowrap;
@@ -162,7 +198,7 @@ body.lightbox-open {
 }
 
 .site-nav .nav-index {
-  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .site-nav a:hover {
@@ -173,6 +209,19 @@ body.lightbox-open {
   color: var(--signal);
 }
 
+/* One empty navigation row separates the course brief from the groups. */
+.site-side:has(.site-nav a[data-folder="materialities-of-ai"]) {
+  /* Match the first prose line's cap top across the two Areal font sizes. */
+  padding-block-start: calc(var(--space) + (var(--prose-leading) - var(--brief-row-height)) / 2 - (var(--prose-size) - var(--ui-size)) * 0.375);
+}
+
+.site-nav a[data-folder="materialities-of-ai"] {
+  display: block;
+  block-size: var(--brief-row-height);
+  line-height: var(--brief-row-height);
+  margin-block-end: calc(var(--ui-leading) + var(--u) / 2);
+}
+
 /* ---------- entries ---------- */
 
 .entry {
@@ -181,23 +230,84 @@ body.lightbox-open {
   scroll-margin-block-start: calc(var(--header-height) + var(--space));
 }
 
-/* Compact metadata above the large abstract; titles and authors may wrap. */
-.entry-caption {
+/* Titles and members may wrap in entries; the fixed bar uses ellipses. */
+.entry-caption,
+.bar-metadata {
   display: grid;
-  grid-template-columns: minmax(0, calc(var(--entry-author-offset, 70%) - var(--space))) minmax(0, 1fr);
+  grid-template-columns: var(--metadata-columns);
   gap: 0.4em var(--space);
+  min-inline-size: 0;
   overflow-wrap: anywhere;
-  align-items: start;
+  align-items: baseline;
+}
+
+.entry-caption {
   margin-block-end: var(--u);
 }
 
-.entry-caption > div {
-  display: contents;
+.entry-caption > *,
+.bar-metadata > * {
+  min-inline-size: 0;
+  margin: 0;
+}
+
+.bar-metadata > * {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Blank until the current Entry's caption has scrolled under the bar. */
+.bar-metadata:not(.docked) {
+  visibility: hidden;
+  opacity: 0;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .bar-metadata {
+    transition: opacity 0.15s linear, visibility 0.15s;
+  }
+}
+
+/* The navigation rail already shows the group number, so the title takes
+   its column and starts on the reading edge, in the bar and every caption. */
+.entry-id {
+  display: none;
+}
+
+.entry-caption h2,
+.bar-metadata .bar-current {
+  grid-column: span 2;
+}
+
+/* The bar clears while DDD spells itself out across it. */
+.site-bar:has(.acronym:hover) .bar-metadata {
+  visibility: hidden;
+  opacity: 0;
+}
+
+.entry-id,
+.entry-commit,
+.entry-time {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.entry-commit,
+.entry-time {
+  color: var(--mid);
+  font-size: var(--ui-size);
+  line-height: var(--ui-leading);
+  white-space: nowrap;
+}
+
+#materialities-of-ai > .entry-caption {
+  display: none;
 }
 
 .entry-caption h2 {
   margin: 0;
-  font-size: 14px;
+  font-size: var(--ui-size);
   font-weight: 400;
 }
 
@@ -206,7 +316,6 @@ body.lightbox-open {
   color: var(--mid);
 }
 
-/* Which commit is online: the author line's style, on its own row below title and authors. */
 .entry-status {
   grid-column: 1 / -1;
 }
@@ -272,7 +381,7 @@ body.lightbox-open {
 }
 
 .entry-text code {
-  font-family: var(--mono);
+  font-family: var(--sans);
   font-size: 0.875em;
 }
 
@@ -453,7 +562,7 @@ body:has(#image-preview:not([hidden]))::before {
 .annotation-note {
   --annotation-default: #000;
   color: var(--annotation-color, var(--annotation-default));
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--sans);
 }
 
 .annotation-style-italic {
@@ -596,7 +705,7 @@ body:has(#image-preview:not([hidden]))::before {
   border: 0;
   background: none;
   cursor: pointer;
-  font: 400 14px/20px var(--mono);
+  font: 400 var(--ui-size)/var(--ui-leading) var(--sans);
   color: var(--ink);
 }
 
@@ -607,7 +716,9 @@ body:has(#image-preview:not([hidden]))::before {
 }
 
 .site-footer {
-  margin-block-start: 2em;
+  flex: none;
+  margin-block-start: auto;
+  padding-block-start: calc(var(--u) * 2);
   color: var(--mid);
 }
 
@@ -618,6 +729,40 @@ body:has(#image-preview:not([hidden]))::before {
 
 .site-footer a:hover {
   color: var(--ink);
+}
+
+.institution {
+  display: grid;
+  gap: calc(var(--u) / 2);
+  max-inline-size: var(--side-width);
+  text-align: left;
+  text-align-last: left;
+}
+
+.institution-acronyms {
+  display: flex;
+  justify-content: flex-start;
+  gap: 1ch;
+  color: var(--ink);
+}
+
+/* DDD and MAInD spell themselves out on hover or focus, on one line over
+   whatever sits beside them. */
+.acronym {
+  position: relative;
+  z-index: 2;
+  display: inline-block;
+  white-space: nowrap;
+  background: var(--paper);
+}
+
+.acronym-full,
+.acronym:is(:hover, :focus-visible) .acronym-short {
+  display: none;
+}
+
+.acronym:is(:hover, :focus-visible) .acronym-full {
+  display: inline;
 }
 
 /* ---------- reading rhythm and column guides (press g) ---------- */
@@ -636,66 +781,111 @@ body.show-grid::after {
       var(--grid-line) calc(var(--reading-row) - 1px) var(--reading-row)
     ),
     linear-gradient(to right,
-      transparent var(--space),
-      var(--grid-line) var(--space) calc(var(--space) + 1px),
-      transparent calc(var(--space) + 1px) calc(var(--space) + var(--side-width)),
-      var(--grid-line) calc(var(--space) + var(--side-width)) calc(var(--space) + var(--side-width) + 1px),
-      transparent calc(var(--space) + var(--side-width) + 1px) calc(2 * var(--space) + var(--side-width)),
-      var(--grid-line) calc(2 * var(--space) + var(--side-width)) calc(2 * var(--space) + var(--side-width) + 1px),
-      transparent calc(2 * var(--space) + var(--side-width) + 1px)
+      transparent var(--page-inset),
+      var(--grid-line) var(--page-inset) calc(var(--page-inset) + 1px),
+      transparent calc(var(--page-inset) + 1px) calc(var(--page-inset) + var(--side-width)),
+      var(--grid-line) calc(var(--page-inset) + var(--side-width)) calc(var(--page-inset) + var(--side-width) + 1px),
+      transparent calc(var(--page-inset) + var(--side-width) + 1px) calc(var(--page-inset) + var(--space) + var(--side-width)),
+      var(--grid-line) calc(var(--page-inset) + var(--space) + var(--side-width)) calc(var(--page-inset) + var(--space) + var(--side-width) + 1px),
+      transparent calc(var(--page-inset) + var(--space) + var(--side-width) + 1px)
     );
 }
 
-/* ---------- narrow screens: keep the existing navigation above the text ---------- */
+/* At smaller widths, metadata keeps its order on two aligned rows. */
+@media (700px < width <= 1100px) {
+  :root {
+    --header-height: 76px;
+    --metadata-columns: calc(var(--u) * 2.5) minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .entry-commit { grid-column: 1 / 3; }
+  .entry-time { grid-column: 3; }
+}
+
+/* ---------- narrow screens: navigation above text; Editor track stays clear ---------- */
 
 @media (width <= 700px) {
   :root {
-    --space: 16px;
+    --space: var(--u);
     --prose-size: clamp(16px, 3.6vw, 20.8px);
+    --header-height: 156px;
+    --editor-width: 66px;
+    --metadata-columns: calc(var(--u) * 2.5) minmax(0, 1fr);
   }
 
   .layout {
-    display: block;
+    grid-template-columns: minmax(0, 1fr) var(--editor-width);
   }
 
   .site-bar {
-    display: flex;
-    gap: 12px;
+    grid-template-columns: minmax(0, 1fr) var(--editor-width);
+    grid-template-rows: 44px 1fr;
+    gap: 0 var(--space);
   }
 
-  .site-bar h1,
+  .site-bar h1 {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
   .bar-link {
-    flex: none;
+    grid-column: 2;
+    grid-row: 1;
   }
 
-  .bar-current,
-  .bar-authors {
-    flex: 1;
-    min-width: 0;
+  .bar-metadata {
+    grid-column: 1;
+    grid-row: 2;
+    align-self: start;
+    row-gap: 0;
   }
 
-  .bar-markers {
-    flex: 0 1 auto;
-    min-inline-size: 0;
-    max-inline-size: 15%;
-    font-size: 10px;
-    line-height: 10px;
+  /* The navigation scrolls away here, so the group number stays. */
+  .entry-id {
+    display: block;
   }
 
-  .site-side {
+  .entry-caption h2,
+  .bar-metadata .bar-current {
+    grid-column: auto;
+  }
+
+  .bar-authors,
+  .entry-authors,
+  .entry-commit,
+  .entry-time {
+    grid-column: 2;
+  }
+
+  .entry-status {
+    grid-column: 1 / -1;
+  }
+
+  .site-side,
+  .site-side:has(.site-nav a[data-folder="materialities-of-ai"]) {
+    display: block;
+    block-size: auto;
     position: static;
     max-height: none;
-    padding-block: 20px 0;
+    overflow: visible;
+    padding-block: var(--u) 0;
+    grid-column: 1;
   }
 
   .site-nav {
+    overflow: visible;
     flex-direction: row;
     flex-wrap: wrap;
-    gap: 0.5em var(--u);
+    gap: calc(var(--u) / 2) var(--u);
+  }
+
+  .site-nav a[data-folder="materialities-of-ai"] {
+    flex-basis: 100%;
   }
 
   .site-footer {
-    margin-block-start: 1em;
+    margin-block-start: var(--u);
+    padding-block-start: 0;
   }
 
   body.show-grid::after {
@@ -707,7 +897,8 @@ body.show-grid::after {
   }
 
   #entries {
-    padding-block: 20px;
+    grid-column: 1;
+    padding-block: var(--u);
   }
 
   .entry-text .inline-image img,

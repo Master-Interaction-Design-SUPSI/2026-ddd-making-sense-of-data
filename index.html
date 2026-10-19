@@ -6,14 +6,19 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="Data Driven Design — MAInD, Master of Arts in Interaction Design, SUPSI" />
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext x='50' y='72' font-size='72' text-anchor='middle'%3E%E2%9C%B6%3C/text%3E%3C/svg%3E" />
+    <link rel="preload" href="static/fonts/areal/ABCAreal-Regular.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="stylesheet" href="static/main.css" />
   </head>
   <body>
     <header class="site-bar">
-      <h1>Data Driven Design</h1>
-      <p id="current" class="bar-current"></p>
-      <p id="current-authors" class="bar-authors"></p>
-      <p id="markers" class="bar-markers" aria-hidden="true"></p>
+      <h1 aria-label="Data Driven Design"><span class="acronym"><span class="acronym-short">DDD</span><span class="acronym-full">Data Driven Design</span></span></h1>
+      <div class="bar-metadata">
+        <p id="current-id" class="entry-id"></p>
+        <p id="current" class="bar-current"></p>
+        <p id="current-authors" class="bar-authors"></p>
+        <p id="current-commit" class="entry-commit"></p>
+        <time id="current-time" class="entry-time"></time>
+      </div>
       <a class="bar-link" href="editor/">Editor ↗</a>
     </header>
 
@@ -24,7 +29,11 @@
       <aside class="site-side">
         <nav id="nav" class="site-nav" aria-label="Entries"></nav>
         <footer class="site-footer">
-          <a href="https://maind.supsi.ch/master-interaction-design/en" target="_blank" rel="noopener">MAInD — Master of Arts in Interaction Design, SUPSI</a>
+          <div class="institution">
+            <div class="institution-acronyms">
+              <a class="acronym" href="https://maind.supsi.ch/master-interaction-design/en" target="_blank" rel="noopener" aria-label="Master of Arts in Interaction Design, SUPSI"><span class="acronym-short">MAInD</span><span class="acronym-full">Master of Arts in Interaction Design, SUPSI</span></a>
+            </div>
+          </div>
         </footer>
       </aside>
 

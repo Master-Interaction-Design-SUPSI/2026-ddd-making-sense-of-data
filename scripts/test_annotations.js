@@ -36,6 +36,18 @@ test('a group entry says which commit is online, or which commit was not publish
   assert.equal(context.statusLine({}), null);
 });
 
+test('metadata removes only the matching group prefix and retains actual titles and members', () => {
+  assert.equal(context.entryIdentifier('materialities-of-ai'), 'M-AI');
+  assert.equal(context.entryIdentifier('group-02'), 'G-02');
+  assert.equal(context.withoutGroupPrefix('Group 02: Sample project', 'group-02'), 'Sample project');
+  assert.equal(context.withoutGroupPrefix('Group 02 — Ada, Bruno', 'group-02'), 'Ada, Bruno');
+  assert.equal(context.withoutGroupPrefix('G-02 - Ada, Bruno', 'group-02'), 'Ada, Bruno');
+  assert.equal(context.withoutGroupPrefix('Group 20: Research', 'group-02'), 'Group 20: Research');
+  assert.equal(context.withoutGroupPrefix('Research on Group 02', 'group-02'), 'Research on Group 02');
+  assert.equal(context.commitTime(), '—');
+  assert.equal(context.commitTime({ committed_at: '2026-10-16T12:20:00Z' }), '16 Oct 14:20');
+});
+
 test('semantic type, style and color are independent and order does not matter', () => {
   for (const modifiers of ['type=quote;style=italic;color=crimson', 'color=crimson;type=quote;style=italic']) {
     const [annotation] = annotations.parseAll(`[[the quote|Quoted words|${modifiers}]]`);

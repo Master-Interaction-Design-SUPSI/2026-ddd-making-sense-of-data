@@ -279,21 +279,42 @@ function statusLine({ online, problem }) {
   return `Online: commit ${online.commit}, ${time.day} ${time.month} ${time.hour}:${time.minute}`;
 }
 
+function entryIdentifier(folder) {
+  if (folder === "materialities-of-ai") return "M-AI";
+  const group = /^group-(\d+)$/.exec(folder);
+  return group ? `G-${pad(Number(group[1]))}` : folder;
+}
+
+function withoutGroupPrefix(value, folder) {
+  const text = value.trim().replace(/\s+/g, " ");
+  const group = /^group-(\d+)$/.exec(folder);
+  const prefix = /^(?:group\s*|g\s*-\s*)(\d+)(?:\s*[:–—-]\s*|\s+|$)/i.exec(text);
+  return group && prefix && Number(group[1]) === Number(prefix[1])
+    ? text.slice(prefix[0].length).trim() : text;
+}
+
+function commitTime(online) {
+  if (!online?.committed_at || Number.isNaN(Date.parse(online.committed_at))) return "—";
+  return COMMIT_TIME.format(new Date(online.committed_at)).replace(",", "");
+}
+
 /* ---------- rendering ---------- */
 
 function renderEntry(entry) {
   const { meta, body } = parseFrontmatter(entry.text || "");
-  entry.title = meta.title || entry.folder;
-  entry.authors = meta.authors || "";
+  entry.title = withoutGroupPrefix(meta.title || entry.folder, entry.folder) || "Untitled";
+  entry.authors = withoutGroupPrefix(meta.authors || "", entry.folder);
 
   const section = document.createElement("section");
   section.className = "entry";
   section.id = entry.folder;
 
   let html = `<header class="entry-caption">`;
-  html += `<div><h2>${esc(entry.title)}</h2>`;
-  if (entry.authors) html += `<p class="entry-authors">${esc(entry.authors)}</p>`;
-  html += `</div>`;
+  html += `<p class="entry-id">${esc(entryIdentifier(entry.folder))}</p>`;
+  html += `<h2>${esc(entry.title)}</h2>`;
+  html += `<p class="entry-authors">${esc(entry.authors)}</p>`;
+  html += `<p class="entry-commit" title="${esc(statusLine(entry) || 'No published commit metadata')}">${esc(entry.online?.commit || '—')}</p>`;
+  html += `<time class="entry-time"${entry.online?.committed_at ? ` datetime="${esc(entry.online.committed_at)}"` : ''} title="Commit time · Europe/Zurich">${esc(commitTime(entry.online))}</time>`;
   html += `</header>`;
   let table = null;
   try { table = entry.table ? CourseMediaTable.read(entry.table) : null; }
@@ -312,11 +333,11 @@ function renderEntry(entry) {
   const template = document.createElement("template");
   template.innerHTML = html;
   const status = statusLine(entry);
-  if (status) {
+  if (entry.problem && status) {
     const line = document.createElement("p");
     line.className = "entry-authors entry-status";
     line.textContent = status;
-    template.content.querySelector(".entry-caption > div").append(line);
+    template.content.querySelector(".entry-caption").append(line);
   }
 
   /* One resolution pass: every relative path in the rendered text —
@@ -402,73 +423,93 @@ function prepareInlineImages(textEl) {
 function buildNav(entries) {
   const nav = document.getElementById("nav");
   nav.replaceChildren();
-  entries.forEach((entry, i) => {
+  entries.forEach((entry) => {
     const a = document.createElement("a");
     a.href = `#${entry.folder}`;
     a.dataset.folder = entry.folder;
     const idx = document.createElement("span");
     idx.className = "nav-index";
-    const group = /^group-(\d+)$/.exec(entry.folder);
-    idx.textContent = entry.folder === "materialities-of-ai"
-      ? "M-AI"
-      : group ? `G-${pad(Number(group[1]))}` : pad(i + 1);
-    let title = entry.title.trim().replace(/\s+/g, " ");
-    if (group) {
-      const repeated = /^(?:group\s*|g\s*-\s*)(\d+)(?:\s*[:–—-]\s*|\s+|$)/i.exec(title);
-      if (repeated && Number(repeated[1]) === Number(group[1])) {
-        title = title.slice(repeated[0].length).trim() || "Untitled";
-      }
-    }
+    idx.textContent = entryIdentifier(entry.folder);
+    const title = entry.title;
     const fullLabel = `${idx.textContent} ${title}`;
-    const budget = 24 - Array.from(idx.textContent).length - 1;
-    const characters = Array.from(title);
-    const shortTitle = characters.length > budget
-      ? characters.slice(0, budget - 1).join("").trimEnd() + "…" : title;
     a.title = fullLabel;
     a.setAttribute("aria-label", fullLabel);
-    a.append(idx, ` ${shortTitle}`);
+    a.append(idx);
     nav.appendChild(a);
   });
 }
 
-/* The bar readout: the Entry currently under the reading band. The
-   markers at the right edge follow it — one ✶ per Entry, the current
-   one lit in the signal colour. */
-function setCurrent(entry, index) {
+/* The bar readout: the Entry at the top of the reading area. */
+function setCurrent(entry) {
   const title = document.getElementById("current");
   if (title) title.textContent = entry.title;
   const authors = document.getElementById("current-authors");
   if (authors) authors.textContent = entry.authors || "";
-  document
-    .querySelectorAll("#markers span")
-    .forEach((m, i) => m.classList.toggle("current", i === index));
-}
-
-function buildMarkers(entries) {
-  const el = document.getElementById("markers");
-  if (!el) return;
-  el.innerHTML = entries.map(() => `<span>${DEFAULT_MARKER}</span>`).join("");
+  const identifier = document.getElementById("current-id");
+  if (identifier) identifier.textContent = entry.folder ? entryIdentifier(entry.folder) : "";
+  const commit = document.getElementById("current-commit");
+  if (commit) {
+    commit.textContent = entry.folder ? entry.online?.commit || "—" : "";
+    commit.title = entry.folder ? statusLine(entry) || "No published commit metadata" : "";
+  }
+  const time = document.getElementById("current-time");
+  if (time) {
+    time.textContent = entry.folder ? commitTime(entry.online) : "";
+    if (entry.online?.committed_at) time.dateTime = entry.online.committed_at;
+    else time.removeAttribute("datetime");
+    time.title = "Commit time · Europe/Zurich";
+  }
+  if (title) title.title = entry.title;
+  if (authors) authors.title = entry.authors || "";
 }
 
 function watchSections(entries) {
   const links = new Map(
     [...document.querySelectorAll("#nav a")].map((a) => [a.dataset.folder, a])
   );
-  const indexOf = new Map(entries.map((e, i) => [e.folder, i]));
   const observer = new IntersectionObserver(
     (hits) => {
       for (const hit of hits) {
         links.get(hit.target.id)?.classList.toggle("active", hit.isIntersecting);
-        if (hit.isIntersecting && indexOf.has(hit.target.id)) {
-          const i = indexOf.get(hit.target.id);
-          setCurrent(entries[i], i);
-        }
       }
     },
     { rootMargin: "-20% 0px -55% 0px" }
   );
-  document.querySelectorAll(".entry").forEach((s) => observer.observe(s));
-  return () => observer.disconnect();
+  const sections = [...document.querySelectorAll(".entry")];
+  sections.forEach((s) => observer.observe(s));
+
+  /* One copy of the metadata at a time: the readout stays blank while the
+     Entry's own caption is in view and takes over once it slides under the
+     bar. Shared columns make the hand-off read as the caption docking. */
+  const bar = document.querySelector(".site-bar");
+  const readout = bar.querySelector(".bar-metadata");
+  let frame = 0;
+  let current = -1;
+  const update = () => {
+    frame = 0;
+    const edge = bar.getBoundingClientRect().bottom;
+    const i = sections.findIndex((s) => s.getBoundingClientRect().bottom > edge);
+    const caption = sections[i]?.querySelector(".entry-caption");
+    const captionInView = caption?.getClientRects().length > 0 && caption.getBoundingClientRect().bottom > edge;
+    const docked = i >= 0 && !captionInView;
+    if (docked && i !== current) {
+      setCurrent(entries[i]);
+      current = i;
+    }
+    readout.classList.toggle("docked", docked);
+  };
+  const schedule = () => {
+    if (!frame) frame = requestAnimationFrame(update);
+  };
+  update();
+  window.addEventListener("scroll", schedule, { passive: true });
+  window.addEventListener("resize", schedule);
+  return () => {
+    observer.disconnect();
+    window.removeEventListener("scroll", schedule);
+    window.removeEventListener("resize", schedule);
+    cancelAnimationFrame(frame);
+  };
 }
 
 /* ---------- interactions ---------- */
@@ -760,18 +801,9 @@ function disposeRender() {
   playback?.dispose();
 }
 
-function alignEntryCaptionAuthors() {
-  const barAuthors = document.getElementById("current-authors");
-  const caption = document.querySelector(".entry-caption");
-  if (!barAuthors || !caption) return;
-  const offset = barAuthors.getBoundingClientRect().left - caption.getBoundingClientRect().left;
-  document.documentElement.style.setProperty("--entry-author-offset", `${offset}px`);
-}
-
 function render(entries) {
   if (!clearInteractions) {
     clearInteractions = setupInteractions();
-    window.addEventListener("resize", alignEntryCaptionAuthors);
   }
   if (!playback) playback = CoursePlayback.setup();
   const position = { x: window.scrollX, y: window.scrollY };
@@ -779,13 +811,6 @@ function render(entries) {
   const shown = entries.filter(entry => entry.text !== null || entry.visual !== null || entry.problem);
   document.getElementById("entries").replaceChildren(...shown.map(renderEntry));
   buildNav(shown);
-  buildMarkers(shown);
-  if (shown.length) setCurrent(shown[0], 0);
-  else {
-    document.getElementById("current").textContent = "";
-    document.getElementById("current-authors").textContent = "";
-  }
-  alignEntryCaptionAuthors();
   disposeSections = watchSections(shown);
   playback.mount();
   window.scrollTo(position.x, position.y);
