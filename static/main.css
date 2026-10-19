@@ -1,7 +1,7 @@
 /* Data Driven Design — MAInD SUPSI
    Broad Arial prose and inline media, with a separate left navigation rail.
-   Prose uses fixed 52px leading. Inline media stays at or
-   below 30px so it cannot expand the reading lines. Press g for guides. */
+   Prose uses fixed 41.6px leading. Inline media stays at or
+   below 24px so it cannot expand the reading lines. Press g for guides. */
 
 :root {
   --paper: #ffffff;
@@ -17,10 +17,10 @@
   --space: clamp(20px, 3.2vw, 58px);
   --side-width: 180px;
   --header-height: 40px;
-  --prose-size: clamp(24px, 2.2vw, 32px);
-  --prose-leading: 52px;
+  --prose-size: clamp(19.2px, 1.76vw, 25.6px);
+  --prose-leading: 41.6px;
   --reading-row: var(--prose-leading);
-  --inline-media-height: 30px;
+  --inline-media-height: 24px;
   --annotation-default: var(--signal);
   --u: 20px; /* compact interface spacing */
   --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
@@ -651,7 +651,7 @@ body.show-grid::after {
 @media (width <= 700px) {
   :root {
     --space: 16px;
-    --prose-size: clamp(20px, 4.5vw, 26px);
+    --prose-size: clamp(16px, 3.6vw, 20.8px);
   }
 
   .layout {
