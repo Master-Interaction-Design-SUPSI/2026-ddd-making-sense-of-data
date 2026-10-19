@@ -107,7 +107,7 @@ Your text becomes one continuous, justified passage: line breaks and blank lines
 | Keyword or key concept | `**Data centres**` | Sans serif bold. |
 | Data source | `[Dataset XX](https://example.org/data)` | Sans serif, underlined; opens in a new tab. Use links for data sources; ordinary words have no underline formatting option. |
 | Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`, open; the label folds it. |
-| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`, with author and title both underlined. For a linked citation, use `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]`. |
+| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`, without underlining unless linked to its source. For an underlined source citation, use `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]`. |
 | Quote | `[[a quotation\|Quoted words\|type=quote]]` | The label reveals the words in quotation marks. |
 | Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
 | Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |

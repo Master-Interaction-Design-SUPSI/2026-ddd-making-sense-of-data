@@ -301,6 +301,10 @@ pre {
   white-space: nowrap;
 }
 
+.entry-time {
+  text-align: right;
+}
+
 #materialities-of-ai > .entry-caption {
   display: none;
 }
@@ -364,6 +368,11 @@ pre {
 
 .entry-text a {
   color: var(--signal);
+  text-decoration: none;
+}
+
+/* Underlines identify textual source links, never media or ordinary prose. */
+.entry-text a[href]:not(.inline-image, .inline-playback, .inline-audio) {
   text-decoration: underline;
   text-decoration-thickness: 1px;
   text-underline-offset: 0.12em;
@@ -537,9 +546,7 @@ body:has(#image-preview:not([hidden]))::before {
   all: unset;
   cursor: pointer;
   color: var(--annotation-color, var(--annotation-default));
-  text-decoration: underline dotted;
-  text-decoration-color: currentColor;
-  text-underline-offset: 0.12em;
+  text-decoration: none;
 }
 
 .annotation-toggle:focus-visible {
@@ -566,10 +573,6 @@ body:has(#image-preview:not([hidden]))::before {
 
 .annotation-style-normal {
   font-style: normal;
-}
-
-.annotation.open .annotation-toggle {
-  text-decoration-style: solid;
 }
 
 /* An open annotation is not appended into the sentence: it drops in as its
@@ -640,9 +643,6 @@ body:has(#image-preview:not([hidden]))::before {
 .annotation-bibliography .annotation-content,
 .annotation-bibliography a {
   color: inherit;
-  text-decoration: underline;
-  text-decoration-thickness: 1px;
-  text-underline-offset: 0.12em;
 }
 
 .annotation-quote .annotation-text::before {

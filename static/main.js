@@ -752,7 +752,7 @@ function setupImagePreviews() {
   });
   document.addEventListener("click", event => {
     if (event.target.closest(".enable-hover-sound")) return;
-    const sourceLink = event.target.closest("a.inline-image, a.inline-playback");
+    const sourceLink = event.target.closest("a.inline-image, a.inline-playback, a.inline-audio");
     if (sourceLink) { clear(); return; }
     const target = event.target.closest("button.inline-image, .inline-playback");
     if (target) {
