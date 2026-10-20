@@ -118,9 +118,8 @@ Your text becomes one continuous, justified passage: line breaks and blank lines
 | Research question | `*Where and how is AI computation performed?*` | Sans serif italic. |
 | Keyword or key concept | `**Data centres**` | Sans serif bold. |
 | Data source | `[Dataset XX](https://example.org/data)` | Sans serif, underlined; opens in a new tab. Use links for data sources; ordinary words have no underline formatting option. |
-| Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`, open; the label folds it. |
-| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`, without underlining unless linked to its source. For an underlined source citation, use `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]`. |
-| Quote | `[[a quotation\|Quoted words\|type=quote]]` | The label reveals the words in quotation marks. |
+| Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`. |
+| Citation | `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]` | Serif, black, underlined: `[[Parikka, 2015. A geology of media|https://example.org/source|type=bibliography]]`
 | Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
 | Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |
 
@@ -152,23 +151,9 @@ The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/
 - With reduced motion turned on, videos stay still and previews do not animate.
 - Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. If sound is blocked, choose **Enable sound**, then hover again. The source link always works. Check your entry on the site.
 
-## 9. Editor (preview)
-
-Use the [course editor](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/editor/) only after the course team announces it. It lets you draft your text and preview the page before saving your changes on GitHub.
-
-1. Select your group in **Group**, then choose **Open last published version**. Use **Start from template** only if your group has no published version; check GitHub first so you do not overwrite a teammate's work.
-2. Edit the text using the formatting examples in §7 (called Markdown). To add media, use **Choose a file**, enter its destination, such as `media/new-photo.png`, a name and a source link, then click **Attach file**. Use a new filename when replacing media the text already uses. The editor adds its row to `media.csv`; **Insert in text** writes `[[name]]`.
-3. **Check and prepare GitHub steps**. Resolve every error.
-4. Follow the generated steps on GitHub: compare the current GitHub text with your draft and keep your teammates' changes, upload media, commit `media.csv`, commit `text.md`, then delete removed files. Checking a box in the editor only records your progress; you still need to save each change on GitHub.
-5. If shown, **Request publication** after all commits. Read the answer on the issue.
-
-Drafts are saved in this browser only. Restore brings back text and attachments together. If storage is denied or full, the editor lists what was not saved; a text-only backup needs its media reattached or discarded. If saving is unavailable, **Download text.md** before leaving.
-
-Nothing is published until the commits are on GitHub. After the last one, look at your entry on the site (§6).
-
 <!-- END GENERATED STUDENT GUIDE -->
 
-## 10. Repository layout
+## 9. Repository layout
 
 | Path | Content |
 | --- | --- |
@@ -181,7 +166,7 @@ Nothing is published until the commits are on GitHub. After the last one, look a
 
 Edit shared instructions and demonstration files in `templates/group/`, then run `python3 scripts/sync_course_materials.py --write`. CI checks the generated copies; see the [operating manual](MAINTAINERS.md#102-provisioning) for the distribution workflow.
 
-## 11. Prepared group repositories
+## 10. Prepared group repositories
 
 Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `live`; their sample entries appear on the course website and can be opened in the editor. The course team assigns repository access to group members.
 
