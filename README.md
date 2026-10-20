@@ -15,6 +15,9 @@ Each group edits its own public repository. This repository imports the register
 
 ## 1. Prerequisites
 
+
+
+
 - A GitHub account and a browser. Nothing to install.
 - Your group has its own project folder on GitHub, called a repository. Open the link assigned by the course team and accept your GitHub invitation. Each teammate needs permission to save changes, called **Write** access. If you have not received a repository link, ask the course team before creating another repository.
 - The course team sends you your group identifier, such as `group-01` (also called a slug), and the website link, and tells you when publication starts.
