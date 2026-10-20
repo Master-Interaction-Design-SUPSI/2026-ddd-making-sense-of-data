@@ -6,8 +6,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
       "snapshot": {
-        "commit": "ef87e63ea9ff4eab96f86e46aab305907bc70025",
-        "committed_at": "2026-10-20T13:07:54Z",
+        "commit": "c8aeb9c9be3025832dc95665b5191b90e3877050",
+        "committed_at": "2026-10-20T13:22:13Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -38,9 +38,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "dcd7d811a836712d9e3b2d082f30bc9957fd78de",
-            "sha256": "d0f6529664634673edd9a696f1cf72a53ef62ca8c2ce62e175b0a997c8dd4290",
-            "size": 2109
+            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
+            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
+            "size": 2060
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -48,7 +48,7 @@
             "size": 832
           }
         },
-        "tree": "bf6bb6c7c38cf7751026a47de35c1b3b4b2f34e0"
+        "tree": "90626b45990f7e6129fd9f2093acdd8f52bb35be"
       },
       "state": "live"
     },
@@ -58,8 +58,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-02",
       "snapshot": {
-        "commit": "666b814650639f73b0a1700be71563b0079256a3",
-        "committed_at": "2026-10-19T17:19:06Z",
+        "commit": "69ef24901ac3e7d58cbe657a4f6c8dbf897e3cf3",
+        "committed_at": "2026-10-20T13:22:43Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -90,9 +90,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "4ed1c9271d3b99d52a9c7f56a5e782c989cd6ec1",
-            "sha256": "2ad5c867ebf235a5330d7ab785ff205ef38e2f73e3681dd701fa2e9c60d7daab",
-            "size": 2321
+            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
+            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
+            "size": 2060
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -100,7 +100,7 @@
             "size": 832
           }
         },
-        "tree": "99e54300c4e24a4187a8a1fbd5878e91cba56e6e"
+        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
       },
       "state": "live"
     },
@@ -110,8 +110,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-03",
       "snapshot": {
-        "commit": "da460e6a9c6e1e7341b22426630e1730b62423c3",
-        "committed_at": "2026-10-19T17:19:10Z",
+        "commit": "4d3464302466a9132d6fa480933edf3303cae933",
+        "committed_at": "2026-10-20T13:23:23Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -142,9 +142,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "ef1ade03c1c4e4035421c06e931abd9b71b94a83",
-            "sha256": "23139c09535a1d4f52abe47b3ec66b4638ad7df5d1d5db0ca188c1a8302805df",
-            "size": 2321
+            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
+            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
+            "size": 2060
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -152,7 +152,7 @@
             "size": 832
           }
         },
-        "tree": "3875ba95781a54ad32db79638051d0753e45f964"
+        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
       },
       "state": "live"
     },
@@ -162,8 +162,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-04",
       "snapshot": {
-        "commit": "044e012aaf38eaf4e3b0adfc204592a80c84dbdf",
-        "committed_at": "2026-10-19T17:19:13Z",
+        "commit": "198867a5b8f0db38250f3127b66ada820eb227ff",
+        "committed_at": "2026-10-20T13:23:53Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -194,9 +194,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "e5efdfd0f9c90f2cc402d674b78d89cace1806a4",
-            "sha256": "fbdfb966fbcf69986d21f7766dafa7d408099bf93416aedc54d309814c5daea9",
-            "size": 2321
+            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
+            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
+            "size": 2060
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -204,7 +204,7 @@
             "size": 832
           }
         },
-        "tree": "95c374888744fcd66f71bf4604413bd4320d1296"
+        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
       },
       "state": "live"
     },
@@ -214,8 +214,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-05",
       "snapshot": {
-        "commit": "fc9be70f45cd00e7e5ff34d25cae807fda88f1e8",
-        "committed_at": "2026-10-19T17:19:17Z",
+        "commit": "7a0b2f44b8a915603c1c819b62abcc51a28542d6",
+        "committed_at": "2026-10-20T13:24:15Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -246,9 +246,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "86d0a78c709e15d538471920793527b0db7a8808",
-            "sha256": "716e630bcc12d2a117d6713d439b6132d189d83a46e468565c950c59c64f9738",
-            "size": 2321
+            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
+            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
+            "size": 2060
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -256,7 +256,7 @@
             "size": 832
           }
         },
-        "tree": "ab21436ebf8d4d36f99be5814fbb908e752acb2a"
+        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
       },
       "state": "live"
     },
