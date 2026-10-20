@@ -7,27 +7,25 @@ Your group's public repository. You write your text and add your media here. The
 ## 1. Prerequisites
 
 - A GitHub account and a browser. Nothing to install.
-- Your group has its own project folder on GitHub, called a repository. Open the link assigned by the course team and accept your GitHub invitation. Each teammate needs permission to save changes, called **Write** access. If you have not received a repository link, ask the course team before creating another repository.
-- The course team sends you your group identifier, such as `group-01` (also called a slug), and the website link, and tells you when publication starts.
+- One repository per group. Open the repository assigned by the course team and accept your GitHub invitation. The course team adds each teammate with Write access. If you have not received a repository link, ask the course team before creating another repository.
+- The course team sends you your group identifier (slug) and the website link, and tells you when publication starts.
 - Edit only your group repository, never the course repository.
 - The text, visual, `media.csv` and `media/example-*` files you start with are demonstrations with invented numbers. Replace them.
 
 ## 2. Files
 
-Open your repository's **Code** tab. The first file list, where you see `text.md`, is the repository root. Keep `text.md`, `media.csv` and `visual.svg` here; put extra images, audio and video inside the `media` folder.
-
 | Path | Role | Rule |
 | --- | --- | --- |
-| `text.md` | Text | Required. Title and authors go between the two `---` lines at the top. |
+| `text.md` | Text | Required. Front matter: title, authors. |
 | `media.csv` | Media table | When you use media. First line `name,source,file`; one row per media file used in `text.md`. |
 | `visual.svg` | Main visual | Required. 1920 × 1080 SVG. |
 | `media/…` | Extra images, audio, video | Optional. Listed in `media.csv`, named in `text.md`. |
 
-The course website ignores other files, including this README, design sources, HTML and scripts. They remain visible in your public GitHub repository.
+Everything else (this README, design sources, HTML, scripts) is ignored and never published.
 
 ## 3. Edit text
 
-1. Sign in and open your group's repository after accepting the invitation. On the **Code** tab, check that the branch selector above the file list says **main**. This is the version the website reads.
+1. Sign in. Open your group's repository. Accept the invitation first if another student owns it. Branch menu: **main**.
 2. Open `text.md`; click the pencil icon.
 3. Replace title, authors and paragraphs. Keep both `---` lines:
 
@@ -42,31 +40,23 @@ The course website ignores other files, including this README, design sources, H
    Explain what you found and how you worked with the data.
    ```
 
-4. Click **Commit changes**. Enter a short description, such as `Update project text`, select **Commit directly to the main branch**, then confirm with **Commit changes**. A commit is a saved version of your changes on GitHub. Use these same steps whenever this guide says to commit.
+4. **Commit changes** → **Commit directly to the main branch** → confirm.
 
-If GitHub offers only a fork or a proposed change, stop and ask the course team to check the repository link, your invitation, your access and the branch settings. Reference: [GitHub editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files).
+If GitHub offers only a fork or a proposed change, you are in the wrong repository or have not accepted the invitation yet. Ask the course team to check your access. Reference: [GitHub editing guide](https://docs.github.com/en/repositories/working-with-files/managing-files/editing-files).
 
 ## 4. Upload main visual
 
-1. In your design application, set the frame or page to 1920 × 1080 px. Select the whole frame or page and export it in **SVG** format as `visual.svg`. Renaming a PNG or JPG to `.svg` does not convert it.
-2. Open your repository's **Code** tab. Stay on the file list where you see `text.md`. Choose **Add file → Upload files**, upload `visual.svg`, then commit to **main**. The same name replaces the previous file.
-3. Keep one main visual only. If an old `visual.png` or `visual.jpg` is present, open it, choose **… → Delete file**, then commit to **main**.
+1. Export the whole 1920 × 1080 px frame as SVG, named `visual.svg`. Renaming a PNG or JPG to `.svg` converts nothing.
+2. Repository root → **Add file → Upload files** → `visual.svg` → commit to **main**. The same name replaces the previous file.
+3. Required attribute: `viewBox="0 0 1920 1080"`. Width and height, if present: 1920 and 1080 px.
+4. One main visual only. Delete any `visual.png` or `visual.jpg`: **… → Delete file** → commit to **main**.
 
 `text.md` and `visual.svg` stay at the root. No group folder.
 
-<details>
-<summary>If publication reports incorrect SVG dimensions</summary>
-
-Open `visual.svg` on GitHub and click the pencil icon to see its code. Near the beginning, find `<svg` and check for `viewBox="0 0 1920 1080"`. This records the drawing's dimensions. If `width` and `height` are present, they must be `1920` and `1080`, optionally followed by `px`.
-
-If these values differ, return to your design application and export the correct frame again; changing the numbers alone does not resize the drawing. Leave the code without saving. Ask the course team if you cannot find these values or the export is rejected again.
-
-</details>
-
 ## 5. Add media
 
-1. Give the file a name using lowercase letters, digits and hyphens, such as `mine.jpg`. Open the existing `media` folder in your group repository, choose **Add file → Upload files**, upload the file, then commit to **main**. A file uploaded here as `mine.jpg` has the path `media/mine.jpg`.
-2. Return to the repository's **Code** tab, open `media.csv` and click the pencil icon. Keep the first line `name,source,file`. Add one line below it for your file: a short name to use in the text, the original source link, and the exact path. For your own material, leave the source empty but keep both commas: `my photo,,media/my-photo.jpg`. Commit.
+1. Open `media/` (or the root) → **Add file → Upload files** → commit to **main**.
+2. Add a row to `media.csv` at the root: the name you write in the text, the link to the original source, the file's exact path. Commit.
 
    ```text
    name,source,file
@@ -75,9 +65,9 @@ If these values differ, return to your design application and export the correct
    ```
 
 3. Write the name in double brackets in `text.md`: `[[interview]]`, `[[lithium mine]]`. Commit. The file appears there; a click opens its source.
-4. To remove media, delete its `[[name]]` reference from `text.md` and its row from `media.csv`, committing each change. Then open the file in `media`, choose **… → Delete file**, and commit.
+4. To remove a file: delete its name from `text.md`, the file and its row.
 
-Follow the order above for each new file. If the website refreshes before all your changes are saved, it may temporarily show *missing: its name*. Finish the remaining steps and check publication again.
+Commit in any order. Until a file is there, your page shows *missing: its name* in its place.
 
 List your media in `media.csv` when you use media. Names: unique, ignoring case; no `[`, `]` or `|`. Source: a full `https://` link, or empty for your own material. A spreadsheet can save it as **CSV UTF-8**; commas or semicolons both work. Typing in GitHub: put a value containing a comma in double quotes.
 
@@ -96,9 +86,7 @@ SVG: static, self-contained. No scripts, links, animation or external files. Onl
 
 ## 6. Check publication
 
-Every commit to `main` requests a website refresh. Publication takes time for checks and processing; GitHub can delay it. Saving on GitHub does not mean the change is online yet.
-
-Open the course website and select your group. The line under the title identifies the commit currently online. Compare it with the short commit identifier shown beside your latest change on GitHub. If the site says your update was not published, correct the stated problem and commit again; the previous accepted version stays online. If your latest change still does not appear after checking again later, send the course team your repository link and the commit identifier.
+Every commit to `main` requests a website refresh. Allow a few minutes for the checks and publication; GitHub can delay the jobs. Open the site and look at your entry: it says which commit is online, or what to fix.
 
 ## 7. Syntax
 
@@ -110,8 +98,7 @@ Your text becomes one continuous, justified passage: line breaks and blank lines
 | Keyword or key concept | `**Data centres**` | Sans serif bold. |
 | Data source | `[Dataset XX](https://example.org/data)` | Sans serif, underlined; opens in a new tab. Use links for data sources; ordinary words have no underline formatting option. |
 | Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`, open; the label folds it. |
-| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`, without underlining unless linked to its source. For an underlined source citation, use `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]`. |
-| Quote | `[[a quotation\|Quoted words\|type=quote]]` | The label reveals the words in quotation marks. |
+| Citation | `[[Author, XX. Title\|https://example.org/book\|type=bibliography]]` | Serif, black, underlined: `(■ Author, XX. Title)`. |
 | Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
 | Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |
 
@@ -143,16 +130,5 @@ The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/
 - With reduced motion turned on, videos stay still and previews do not animate.
 - Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. If sound is blocked, choose **Enable sound**, then hover again. The source link always works. Check your entry on the site.
 
-## 9. Editor (preview)
 
-Use the [course editor](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/editor/) only after the course team announces it. It lets you draft your text and preview the page before saving your changes on GitHub.
-
-1. Select your group in **Group**, then choose **Open last published version**. Use **Start from template** only if your group has no published version; check GitHub first so you do not overwrite a teammate's work.
-2. Edit the text using the formatting examples in §7 (called Markdown). To add media, use **Choose a file**, enter its destination, such as `media/new-photo.png`, a name and a source link, then click **Attach file**. Use a new filename when replacing media the text already uses. The editor adds its row to `media.csv`; **Insert in text** writes `[[name]]`.
-3. **Check and prepare GitHub steps**. Resolve every error.
-4. Follow the generated steps on GitHub: compare the current GitHub text with your draft and keep your teammates' changes, upload media, commit `media.csv`, commit `text.md`, then delete removed files. Checking a box in the editor only records your progress; you still need to save each change on GitHub.
-5. If shown, **Request publication** after all commits. Read the answer on the issue.
-
-Drafts are saved in this browser only. Restore brings back text and attachments together. If storage is denied or full, the editor lists what was not saved; a text-only backup needs its media reattached or discarded. If saving is unavailable, **Download text.md** before leaving.
-
-Nothing is published until the commits are on GitHub. After the last one, look at your entry on the site (§6).
+Nothing is published until the commits are on GitHub. You can check your last entry from the top right corner of your abstract on the site (§6).
