@@ -119,7 +119,7 @@ Your text becomes one continuous, justified passage: line breaks and blank lines
 | Keyword or key concept | `**Data centres**` | Sans serif bold. |
 | Data source | `[Dataset XX](https://example.org/data)` | Sans serif, underlined; opens in a new tab. Use links for data sources; ordinary words have no underline formatting option. |
 | Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`. |
-| Citation | `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]` | Serif, black, underlined: `[[Parikka, 2015. A geology of media|https://example.org/source|type=bibliography]]`
+| Citation | `[[Author, XX. Title\|https://example.org/book\|type=bibliography]]` | Serif, black, underlined: `[[Author, XX. Title|https://example.org/source|type=bibliography]]`
 | Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
 | Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |
 
