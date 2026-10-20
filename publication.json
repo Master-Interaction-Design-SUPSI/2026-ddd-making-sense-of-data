@@ -3,14 +3,11 @@
     "group-01": {
       "branch": "main",
       "exclude": [],
-      "problem": {
-        "commit": "b770dec6f8acea403daf73852e0a80c4f876523a",
-        "message": "text.md: Reference must stay inside this group: [https://example.org/data](https://docs.google.com/spreadsheets/d/1LWvUgTXjC1hTR25QaVxBK4ac7rWNT9eA_RxUUULJbvk/edit?gid=0#gid=0)"
-      },
+      "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
       "snapshot": {
-        "commit": "fffcecdc521a055847a16f831168213cff79ec6c",
-        "committed_at": "2026-10-20T12:32:13Z",
+        "commit": "e0a19a726eb883def562e10b777157305d8430f5",
+        "committed_at": "2026-10-20T12:39:58Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -41,9 +38,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "d581e104cc95da020f7120bce03caba3a8a570cf",
-            "sha256": "a22f910e5f45f43cfedd70f338dd530ba6ef662aa8274623b3ffb1c9e866faa0",
-            "size": 1979
+            "blob_sha": "dcd7d811a836712d9e3b2d082f30bc9957fd78de",
+            "sha256": "d0f6529664634673edd9a696f1cf72a53ef62ca8c2ce62e175b0a997c8dd4290",
+            "size": 2109
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -51,7 +48,7 @@
             "size": 832
           }
         },
-        "tree": "b98523ebd5e969b8a8f1ea8c768c67f62776c99d"
+        "tree": "4234296f388bc9d2f722d99a16b7a18ea956228d"
       },
       "state": "live"
     },
