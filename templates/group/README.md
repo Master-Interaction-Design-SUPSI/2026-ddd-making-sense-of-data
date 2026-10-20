@@ -1,8 +1,17 @@
-# Group repository: student guide
+# Data Driven Design: course website
 
-Your group's public repository. You write your text and add your media here. The [course repository](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-making-sense-of-data) collects every group's page and publishes the course website.
+Source of the [course website](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/), part of [Data Driven Design at MAInD — SUPSI](https://maind.supsi.ch/master-interaction-design/en).
 
-**WARNING**: Everything here is public. Upload only material cleared for publication.
+Each group edits its own public repository. This repository imports the registered groups and publishes them together. The course team maintains it; students do not edit it.
+
+| Reader | Document |
+| --- | --- |
+| Student | This README, §1–9. The same guide is the README of every group repository. |
+| Maintainer | [Operating manual](MAINTAINERS.md), [acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md). |
+
+**WARNING**: Group repositories are public. Upload only material cleared for publication.
+
+<!-- BEGIN GENERATED STUDENT GUIDE: templates/group/README.md -->
 
 ## 1. Prerequisites
 
@@ -109,9 +118,8 @@ Your text becomes one continuous, justified passage: line breaks and blank lines
 | Research question | `*Where and how is AI computation performed?*` | Sans serif italic. |
 | Keyword or key concept | `**Data centres**` | Sans serif bold. |
 | Data source | `[Dataset XX](https://example.org/data)` | Sans serif, underlined; opens in a new tab. Use links for data sources; ordinary words have no underline formatting option. |
-| Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`, open; the label folds it. |
-| Citation | `[[Parikka, 2015\|A geology of media\|type=bibliography]]` | Serif, black: `(■ Parikka, 2015. A geology of media)`, without underlining unless linked to its source. For an underlined source citation, use `[[Parikka, 2015. A geology of media\|https://example.org/book\|type=bibliography]]`. |
-| Quote | `[[a quotation\|Quoted words\|type=quote]]` | The label reveals the words in quotation marks. |
+| Note | `[[a detail\|A short explanation]]` | `{✶ A short explanation}`. |
+| Citation | `[[Author, XX. Title\|https://example.org/book\|type=bibliography]]` | Serif, black, underlined: `[[Author, XX. Title|https://example.org/source|type=bibliography]]`
 | Media | `[[interview]]` | The image, audio or video named in `media.csv`. |
 | Color | `{crimson\|a key finding}` | Colored text. Any CSS color works, e.g. `{#116964\|…}`. |
 
@@ -143,16 +151,36 @@ The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/
 - With reduced motion turned on, videos stay still and previews do not animate.
 - Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. If sound is blocked, choose **Enable sound**, then hover again. The source link always works. Check your entry on the site.
 
-## 9. Editor (preview)
+<!-- END GENERATED STUDENT GUIDE -->
 
-Use the [course editor](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/editor/) only after the course team announces it. It lets you draft your text and preview the page before saving your changes on GitHub.
+## 9. Repository layout
 
-1. Select your group in **Group**, then choose **Open last published version**. Use **Start from template** only if your group has no published version; check GitHub first so you do not overwrite a teammate's work.
-2. Edit the text using the formatting examples in §7 (called Markdown). To add media, use **Choose a file**, enter its destination, such as `media/new-photo.png`, a name and a source link, then click **Attach file**. Use a new filename when replacing media the text already uses. The editor adds its row to `media.csv`; **Insert in text** writes `[[name]]`.
-3. **Check and prepare GitHub steps**. Resolve every error.
-4. Follow the generated steps on GitHub: compare the current GitHub text with your draft and keep your teammates' changes, upload media, commit `media.csv`, commit `text.md`, then delete removed files. Checking a box in the editor only records your progress; you still need to save each change on GitHub.
-5. If shown, **Request publication** after all commits. Read the answer on the issue.
+| Path | Content |
+| --- | --- |
+| `groups.json` | Registry of group repositories. |
+| `materialities-of-ai/` | Course-team pages, published as they are. |
+| `templates/group/` | Canonical student guide and demonstration. Copy its contents, not the folder. |
+| `editor/` | Entry editor. |
+| `static/` | Renderer, styles, content contract. |
+| `scripts/` | Build, import, publication, tests. |
 
-Drafts are saved in this browser only. Restore brings back text and attachments together. If storage is denied or full, the editor lists what was not saved; a text-only backup needs its media reattached or discarded. If saving is unavailable, **Download text.md** before leaving.
+Edit shared instructions and demonstration files in `templates/group/`, then run `python3 scripts/sync_course_materials.py --write`. CI checks the generated copies; see the [operating manual](MAINTAINERS.md#102-provisioning) for the distribution workflow.
 
-Nothing is published until the commits are on GitHub. After the last one, look at your entry on the site (§6).
+## 10. Prepared group repositories
+
+Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `live`; their sample entries appear on the course website and can be opened in the editor. The course team assigns repository access to group members.
+
+| Group | Repository |
+| --- | --- |
+| 01 | [2026-ddd-group-01](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-01) |
+| 02 | [2026-ddd-group-02](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-02) |
+| 03 | [2026-ddd-group-03](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-03) |
+| 04 | [2026-ddd-group-04](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-04) |
+| 05 | [2026-ddd-group-05](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-05) |
+| 06 | [2026-ddd-group-06](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-06) |
+| 07 | [2026-ddd-group-07](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-07) |
+| 08 | [2026-ddd-group-08](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-08) |
+| 09 | [2026-ddd-group-09](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-09) |
+| 10 | [2026-ddd-group-10](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-10) |
+| 11 | [2026-ddd-group-11](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-11) |
+| 12 | [2026-ddd-group-12](https://github.com/Master-Interaction-Design-SUPSI/2026-ddd-group-12) |
