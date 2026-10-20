@@ -6,8 +6,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
       "snapshot": {
-        "commit": "820b4c4bb7bbf5544f2f42d1951b2330e6f91ca3",
-        "committed_at": "2026-10-20T14:04:06Z",
+        "commit": "ebf8e820b0a5e3c0991c343ddc623618dd5bf637",
+        "committed_at": "2026-10-20T14:11:51Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -48,7 +48,7 @@
             "size": 832
           }
         },
-        "tree": "d8aadd5f5c053a0b5da196eb7a908df1a6487a4a"
+        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
       },
       "state": "live"
     },
@@ -474,8 +474,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-10",
       "snapshot": {
-        "commit": "c708131ed7a3db66fb693dc03a60178c937f0a8f",
-        "committed_at": "2026-10-20T13:26:26Z",
+        "commit": "f395ce5f4be8632fdd8ca64af6240cc2afd28e97",
+        "committed_at": "2026-10-20T14:13:46Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -516,7 +516,7 @@
             "size": 832
           }
         },
-        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
+        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
       },
       "state": "live"
     },
@@ -526,8 +526,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-11",
       "snapshot": {
-        "commit": "425b1dfb357cf37361b04025b366f7d52212ef07",
-        "committed_at": "2026-10-20T13:26:52Z",
+        "commit": "c9b4029829ee817817770612b231dd99672f2b48",
+        "committed_at": "2026-10-20T14:13:21Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -568,7 +568,7 @@
             "size": 832
           }
         },
-        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
+        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
       },
       "state": "live"
     },
@@ -578,8 +578,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-12",
       "snapshot": {
-        "commit": "ab8dfcaf815166b4581d014d2ec95cd3f58bd461",
-        "committed_at": "2026-10-20T13:27:19Z",
+        "commit": "1ac100ae67d75c12ba49b9d1e824afb699a66062",
+        "committed_at": "2026-10-20T14:12:54Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -620,7 +620,7 @@
             "size": 832
           }
         },
-        "tree": "c073771f2b4b40413155fb090d49d3e8b9f2ff95"
+        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
       },
       "state": "live"
     }
