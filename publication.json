@@ -3,7 +3,10 @@
     "group-01": {
       "branch": "main",
       "exclude": [],
-      "problem": null,
+      "problem": {
+        "commit": "b770dec6f8acea403daf73852e0a80c4f876523a",
+        "message": "text.md: Reference must stay inside this group: [https://example.org/data](https://docs.google.com/spreadsheets/d/1LWvUgTXjC1hTR25QaVxBK4ac7rWNT9eA_RxUUULJbvk/edit?gid=0#gid=0)"
+      },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
       "snapshot": {
         "commit": "fffcecdc521a055847a16f831168213cff79ec6c",
