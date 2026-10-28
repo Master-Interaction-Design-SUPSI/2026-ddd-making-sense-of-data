@@ -1,5 +1,5 @@
 ---
-title: Comparing Three Values
+title: Sample group one
 authors: Replace with your group members
 ---
 
