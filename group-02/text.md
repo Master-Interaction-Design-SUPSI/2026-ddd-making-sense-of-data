@@ -1,5 +1,5 @@
 ---
-title: Biomikirky
+title: Biomimicry AI & Natural-Inspired Algorithms
 authors: Boschiroli Carlo, Molnar Mark
 ---
 
