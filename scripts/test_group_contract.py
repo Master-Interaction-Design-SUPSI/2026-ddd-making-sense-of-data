@@ -175,7 +175,7 @@ class GroupContractTests(unittest.TestCase):
         (template / "text.md").write_text("not a student entry")
         (template / "visual.svg").write_text("not even a valid SVG")
         with patch.object(build_site, "ROOT", self.root):
-            self.assertEqual(build_site.find_entries(), [])
+            self.assertEqual(list(build_site.find_entries()), [])
 
     def test_invalid_registry_preserves_previous_build(self):
         self.registry.write_text('{"groups": "wrong"}')

@@ -50,7 +50,7 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | --- | --- |
 | `groups.json` | Registry. |
 | `static/contract.json` | Content contract (version 2); read by Python and editor. |
-| `static/main.js`, `bootstrap.js`, `playback.js` | Renderer, production bootstrap, media lifecycle. |
+| `static/main.js`, `markup.js`, `bootstrap.js`, `playback.js` | Page rendering, Markdown transformation, production bootstrap, media lifecycle. |
 | `static/annotations.js`, `references.js` | Annotation parser; sole reference collector (browser, Node, Python). |
 | `editor/` | Editor. Static; no compilation. |
 | `scripts/build_site.py` | Build `_site`. Offline by default. |

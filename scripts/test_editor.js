@@ -74,7 +74,7 @@ test('preview schema rejects unsafe paths, payloads, duplicate assets and byte e
 test('renderer import has no automatic fetching or start', () => {
   const vm = require('node:vm');
   let calls = 0;
-  const context = vm.createContext({ fetch() { calls++; }, URL, document: {} });
+  const context = vm.createContext({ fetch() { calls++; }, URL, document: {}, CourseMarkup: require('../static/markup.js') });
   vm.runInContext(fs.readFileSync(require.resolve('../static/main.js'), 'utf8'), context);
   assert.equal(calls, 0);
   assert.equal(typeof context.CourseSite.start, 'function');
@@ -191,4 +191,77 @@ test('drafts carry media.csv, start one from existing media and note what does n
   assert.throws(() => draft.attach('media.csv', new Blob(['x']), 'a'.repeat(64)), /media table/);
   draft.text = 'A [[field photo]] and a [[later sketch]].';
   assert.deepEqual(draft.validate().notes[0], 'text.md: [[later sketch]] is not a name in media.csv');
+});
+
+test('generated media names stay unique across repeated basenames and existing rows', () => {
+  const { startingTable, rowsFor } = require('../editor/model.js');
+  const media = require('../static/media-table.js');
+  const paths = ['media/a/photo.png', 'media/b/photo.png', 'media/c/photo.png'];
+  const files = new Map(paths.map(path => [path, { size: 1 }]));
+  const table = media.read(startingTable(files, contract));
+  assert.equal(table.byName.size, 3);
+  assert.deepEqual(table.rows.map(row => row.file), paths);
+  const added = rowsFor(['media/d/photo.png', 'media/e/PHOTO.png'], table.rows);
+  assert.equal(new Set([...table.rows, ...added].map(row => row.name.toLowerCase())).size, 5);
+});
+
+test('adding a media row invalidates prepared steps and saves the changed table', async () => {
+  const vm = require('node:vm');
+  const media = require('../static/media-table.js');
+  const model = require('../editor/model.js');
+  class Element {
+    children = []; listeners = {}; dataset = {}; value = ''; disabled = false;
+    contentWindow = { postMessage() {} };
+    style = {};
+    get options() { return this.children; }
+    get lastElementChild() { return this.children.at(-1); }
+    append(...children) { this.children.push(...children); if (!this.value) this.value = children[0]?.value || ''; }
+    replaceChildren(...children) { this.children = children; }
+    addEventListener(type, handler) { this.listeners[type] = handler; }
+    querySelector() { return new Element(); }
+    focus() {}
+  }
+  const elements = new Map();
+  const element = id => { if (!elements.has(id)) elements.set(id, new Element()); return elements.get(id); };
+  const text = new Blob(['Draft text']);
+  const files = { 'text.md': { size: text.size, sha256: await digest(text) },
+    'visual.svg': { size: 1, sha256: 'a'.repeat(64) } };
+  let saved;
+  const context = vm.createContext({
+    URL, Blob, TextEncoder, AbortController, setTimeout, clearTimeout,
+    location: new URL('https://site.test/course/editor/'),
+    window: { addEventListener() {} }, localStorage: { getItem: () => null },
+    document: { getElementById: element, createElement: () => new Element() },
+    CourseDraft: model, CourseMediaTable: media, CourseReferences: references,
+    CoursePreviewProtocol: require('../editor/protocol.js'),
+    CourseDraftStorage: { DraftStore: class {
+      async read() { return null; }
+      async save(key, payload, revision) { saved = payload; return revision + 1; }
+    } },
+    fetch: async url => {
+      if (String(url).endsWith('contract.json')) return Response.json(contract);
+      if (String(url).endsWith('groups.json')) return Response.json({ groups: [
+        { slug: 'group-01', repository: 'course/group-01', branch: 'main', editable: true, exclude: [] }] });
+      if (String(url).endsWith('template.json')) return Response.json({ files, digest: 'template' });
+      return new Response(text);
+    },
+  });
+  vm.runInContext(fs.readFileSync(require.resolve('../editor/editor.js'), 'utf8'), context);
+  const until = async predicate => {
+    for (let attempts = 0; attempts < 100; attempts++) {
+      if (predicate()) return;
+      await new Promise(resolve => setImmediate(resolve));
+    }
+    assert.fail('Editor did not reach expected state: ' + element('status').textContent);
+  };
+  await until(() => element('template').listeners.click);
+  element('template').listeners.click();
+  await until(() => element('status').textContent?.startsWith('Ready to edit'));
+  element('validation').textContent = 'Known local checks passed';
+  element('steps').append(new Element());
+  element('add-row').listeners.click();
+  await until(() => saved);
+  assert.match(element('validation').textContent, /Draft changed/);
+  assert.equal(element('steps').children.length, 0);
+  assert.equal(saved.table, 'name,source,file\n,,media/\n');
 });

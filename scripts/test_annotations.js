@@ -5,19 +5,22 @@ const { test } = require('node:test');
 const vm = require('node:vm');
 const annotations = require('../static/annotations.js');
 const mediaTable = require('../static/media-table.js');
-const marked = require('../static/vendor/marked.min.js');
+const markup = require('../static/markup.js');
 
 const context = vm.createContext({
-  CourseAnnotations: annotations, CourseMediaTable: mediaTable, marked, URL,
+  CourseMediaTable: mediaTable, CourseMarkup: markup, URL,
   CSS: { supports: (_, value) => /^(crimson|green|red|#116964|rgb\(10, 20, 30\))$/.test(value) },
   document: { baseURI: 'https://site.test/course/', getElementById: () => null },
   fetch: () => new Promise(() => {}),
 });
 vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/main.js'), 'utf8'), context);
 
+const renderMarkdown = (body, table) => markup.renderMarkdown(body, table,
+  value => /^(crimson|green|red|#116964|rgb\(10, 20, 30\))$/.test(value));
+
 test('unknown [[name]]s stay literal text, escaped, for the page to mark as missing', () => {
   const table = mediaTable.read('name,source,file\nknown,,media/known.png\n');
-  const html = context.renderMarkdown('A [[ghost <b>]], a [[known]] and a [[note|A detail]].', table);
+  const html = renderMarkdown('A [[ghost <b>]], a [[known]] and a [[note|A detail]].', table);
   assert.match(html, /\[\[ghost &lt;b&gt;\]\]/);
   assert.doesNotMatch(html, /<b>/);
   assert.match(html, /media\/known\.png/);
@@ -55,7 +58,7 @@ test('semantic type, style and color are independent and order does not matter',
     assert.equal(annotation.type, 'quote');
     assert.equal(annotation.style, 'italic');
     assert.equal(annotation.color, 'crimson');
-    const html = context.renderMarkdown(annotation.source);
+    const html = renderMarkdown(annotation.source);
     assert.match(html, /annotation-quote annotation-style-italic/);
     assert.match(html, /color:crimson;--annotation-color:crimson/);
     assert.match(html, /<q>Quoted words<\/q>/);
@@ -71,15 +74,15 @@ test('defaults distinguish notes, bibliography and unchanged media annotations',
   assert.equal(bibliography.resource, true);
   assert.equal(media.type, 'resource');
   assert.equal(media.style, 'inherit');
-  assert.match(context.renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
-  assert.match(context.renderMarkdown(bibliography.source), /\(■ <a [^>]+>source<\/a>\)/);
-  assert.match(context.renderMarkdown(media.source), /src="media\/sketch.svg"/);
+  assert.match(renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
+  assert.match(renderMarkdown(bibliography.source), /\(■ <a [^>]+>source<\/a>\)/);
+  assert.match(renderMarkdown(media.source), /src="media\/sketch.svg"/);
 });
 
 test('bibliography starts open and resource references stay links rather than players', () => {
   for (const target of ['A written reference', 'https://example.org/data', 'media/sketch.svg',
     'media/example-tone.mp3', 'https://youtu.be/abcdefghijk']) {
-    const html = context.renderMarkdown(`[[source|${target}|type=bibliography;color=crimson]]`);
+    const html = renderMarkdown(`[[source|${target}|type=bibliography;color=crimson]]`);
     if (target === 'A written reference') {
       assert.match(html, /annotation-bibliography annotation-style-inherit open/);
       assert.match(html, /aria-expanded="true"/);
@@ -91,7 +94,7 @@ test('bibliography starts open and resource references stay links rather than pl
     assert.doesNotMatch(html, / hidden|color:crimson|<iframe|<img|<audio|<video/);
     if (target !== 'A written reference') assert.match(html, /<a href=/);
   }
-  const note = context.renderMarkdown('[[note|A detail]]');
+  const note = renderMarkdown('[[note|A detail]]');
   assert.match(note, /annotation-note annotation-style-normal open/);
   assert.match(note, /aria-expanded="true"/);
   assert.doesNotMatch(note, / hidden>/);
@@ -101,16 +104,16 @@ test('explicit appearance overrides defaults and preserves legacy markers and co
   const [note] = annotations.parseAll('[[note|A detail|style=normal;color=green;type=note]]');
   assert.equal(note.style, 'normal');
   assert.equal(note.color, 'green');
-  assert.match(context.renderMarkdown(note.source), /annotation-note annotation-style-normal/);
-  assert.match(context.renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
-  assert.match(context.renderMarkdown('[[note|A detail|💡]]'), /&#123;<span class="annotation-marker" aria-hidden="true">💡<\/span> A detail&#125;/);
-  const nested = context.renderMarkdown('{crimson|[[note|A detail|color=green]]}');
+  assert.match(renderMarkdown(note.source), /annotation-note annotation-style-normal/);
+  assert.match(renderMarkdown(note.source), /&#123;<span class="annotation-marker" aria-hidden="true">✶<\/span> A detail&#125;/);
+  assert.match(renderMarkdown('[[note|A detail|💡]]'), /&#123;<span class="annotation-marker" aria-hidden="true">💡<\/span> A detail&#125;/);
+  const nested = renderMarkdown('{crimson|[[note|A detail|color=green]]}');
   assert.match(nested, /class="tinted" style="color:crimson/);
   assert.match(nested, /annotation-note[^>]+color:green;--annotation-color:green/);
 });
 
 test('Markdown italics work in prose and annotation labels', () => {
-  const html = context.renderMarkdown('*Prose* and [[*label*|A detail|type=note]]');
+  const html = renderMarkdown('*Prose* and [[*label*|A detail|type=note]]');
   assert.match(html, /<em>Prose<\/em>/);
   assert.match(html, /<em>label<\/em>/);
 });
@@ -119,7 +122,7 @@ test('unknown, duplicate and malformed modifiers stay readable', () => {
   for (const field of ['type=unknown', 'style=bold', 'color=not-a-color', 'color=red;unknown=x',
     'type=note;type=quote', 'type=note;', 'style=', 'color=red" onclick="bad()', 'color=rgb(0;0;0)']) {
     const source = `[[label|A detail|${field}]]`;
-    const html = context.renderMarkdown(source);
+    const html = renderMarkdown(source);
     assert.ok(html.includes('label|A detail|'), html);
     assert.doesNotMatch(html, /class="annotation /);
     assert.doesNotMatch(html, /<[^>]+\bonclick=/);
@@ -127,7 +130,7 @@ test('unknown, duplicate and malformed modifiers stay readable', () => {
 });
 
 test('contributor HTML stays escaped and unsafe links/media stay rejected', () => {
-  const html = context.renderMarkdown('[[<img onerror=bad()>|<script>bad()</script>|type=quote;color=crimson]]');
+  const html = renderMarkdown('[[<img onerror=bad()>|<script>bad()</script>|type=quote;color=crimson]]');
   assert.doesNotMatch(html, /<script>|<img onerror/);
   assert.match(html, /&lt;script&gt;/);
   for (const target of ['javascript:alert(1)', 'data:text/html,bad', 'file:///tmp/secret', 'https:\\bad.test']) {
@@ -138,16 +141,16 @@ test('contributor HTML stays escaped and unsafe links/media stay rejected', () =
 });
 
 test('source line breaks and blank lines produce the same continuous prose', () => {
-  const expected = context.renderMarkdown('First words continue. Second thought follows.');
+  const expected = renderMarkdown('First words continue. Second thought follows.');
   for (const separator of ['\n', '\r\n', '\n\n', '\r\n\r\n', '\n \t\n', '  \n', '\\\n']) {
-    assert.equal(context.renderMarkdown(`First words${separator}continue.${separator}Second thought follows.`), expected);
+    assert.equal(renderMarkdown(`First words${separator}continue.${separator}Second thought follows.`), expected);
   }
-  assert.equal(context.renderMarkdown('First\n   words'), context.renderMarkdown('First words'));
-  assert.equal(context.renderMarkdown('*First\nwords*'), context.renderMarkdown('*First words*'));
+  assert.equal(renderMarkdown('First\n   words'), renderMarkdown('First words'));
+  assert.equal(renderMarkdown('*First\nwords*'), renderMarkdown('*First words*'));
 });
 
 test('continuous prose preserves structural Markdown boundaries and code newlines', () => {
-  const html = context.renderMarkdown('First\nparagraph.\n\nSecond paragraph.\n\n### Heading\n\n- First\n  item\n- Second item\n\n> Quoted\n> words\n\n```text\nfirst\nsecond\n```\n\n    indented\n    code\n\nFinal paragraph.\n\nContinues here.');
+  const html = renderMarkdown('First\nparagraph.\n\nSecond paragraph.\n\n### Heading\n\n- First\n  item\n- Second item\n\n> Quoted\n> words\n\n```text\nfirst\nsecond\n```\n\n    indented\n    code\n\nFinal paragraph.\n\nContinues here.');
   assert.match(html, /<p>First paragraph\. Second paragraph\.<\/p>/);
   assert.match(html, /<h3>Heading<\/h3>/);
   assert.match(html, /<ul>\n<li>First item<\/li>\n<li>Second item<\/li>\n<\/ul>/);
@@ -155,11 +158,11 @@ test('continuous prose preserves structural Markdown boundaries and code newline
   assert.match(html, /<code class="language-text">first\nsecond\n<\/code>/);
   assert.match(html, /<code>indented\ncode\n<\/code>/);
   assert.match(html, /<p>Final paragraph\. Continues here\.<\/p>/);
-  assert.match(context.renderMarkdown('Keep `first  second` intact.'), /<code>first  second<\/code>/);
+  assert.match(renderMarkdown('Keep `first  second` intact.'), /<code>first  second<\/code>/);
 });
 
 test('wrapped annotations, links, media and escaped HTML survive prose normalization', () => {
-  const html = context.renderMarkdown('A [[wrapped\nlabel|A wrapped\nnote|type=note]]\n\nwith [a\nlink](https://example.org/data?q=1&v=2) and\n![detail](media/example-detail.svg)\n\n[[audio|media/example-tone.mp3]]\n\n[[video|media/example-motion.mp4]]. <script>bad()</script>');
+  const html = renderMarkdown('A [[wrapped\nlabel|A wrapped\nnote|type=note]]\n\nwith [a\nlink](https://example.org/data?q=1&v=2) and\n![detail](media/example-detail.svg)\n\n[[audio|media/example-tone.mp3]]\n\n[[video|media/example-motion.mp4]]. <script>bad()</script>');
   assert.equal((html.match(/<p>/g) || []).length, 1);
   assert.match(html, /wrapped label<\/button>/);
   assert.match(html, /A wrapped note&#125;<\/span>/);
@@ -174,22 +177,22 @@ test('wrapped annotations, links, media and escaped HTML survive prose normaliza
 test('LF and CRLF front matter stay outside the merged prose', () => {
   for (const newline of ['\n', '\r\n']) {
     const raw = '\uFEFF' + ['---', 'title: A title', 'authors: A, B', '---', '', 'First words.', '', 'Second words.'].join(newline);
-    const { meta, body } = context.parseFrontmatter(raw);
+    const { meta, body } = markup.parseFrontmatter(raw);
     assert.equal(meta.title, 'A title');
     assert.equal(meta.authors, 'A, B');
-    assert.equal(context.renderMarkdown(body), '<p>First words. Second words.</p>\n');
+    assert.equal(renderMarkdown(body), '<p>First words. Second words.</p>\n');
   }
 });
 
 
 test('reference punctuation surrounds marker, author and title together', () => {
-  const html = context.renderMarkdown('[[Parikka, 2015|A geology of media|type=bibliography]]');
+  const html = renderMarkdown('[[Parikka, 2015|A geology of media|type=bibliography]]');
   const text = html.replace(/<[^>]*>/g, '').trim();
   assert.equal(text, '(■ Parikka, 2015. A geology of media)');
 });
 
 test('colored starred questions are enclosed in braces', () => {
-  const html = context.renderMarkdown('{crimson|*✶ Where and how is AI computation performed?*}');
+  const html = renderMarkdown('{crimson|*✶ Where and how is AI computation performed?*}');
   assert.match(html, /&#123;<em>✶ Where and how is AI computation performed\?<\/em>&#125;/);
 });
 
@@ -197,34 +200,34 @@ test('colored starred questions are enclosed in braces', () => {
 test('original media sources are collected and unsafe source modifiers stay literal', () => {
   const references = require('../static/references.js');
   const source = '[[video|media/clip.mp4|source=https://example.org/original]]';
-  assert.match(context.renderMarkdown('[[video|media/clip.mp4|source=https://example.org/original?a=1&b=2]]'), /href="https:\/\/example.org\/original\?a=1&amp;b=2"/);
+  assert.match(renderMarkdown('[[video|media/clip.mp4|source=https://example.org/original?a=1&b=2]]'), /href="https:\/\/example.org\/original\?a=1&amp;b=2"/);
   assert.deepEqual(references.collect(source), ['media/clip.mp4', 'https://example.org/original']);
-  assert.match(context.renderMarkdown(source), /<a href="https:\/\/example.org\/original" target="_blank" rel="noopener noreferrer"><video/);
+  assert.match(renderMarkdown(source), /<a href="https:\/\/example.org\/original" target="_blank" rel="noopener noreferrer"><video/);
   for (const url of ['javascript:alert(1)', 'data:text/html,bad', 'https://bad.test/"onclick="bad']) {
     assert.equal(annotations.parseAll(`[[video|media/clip.mp4|source=${url}]]`)[0].valid, false);
   }
 });
 
 test('generic underline formatting is removed without losing words or emphasis', () => {
-  assert.equal(context.renderMarkdown('{underline|Ordinary **words**}'), '<p>Ordinary <strong>words</strong></p>\n');
-  assert.equal(context.renderMarkdown('[Dataset **XX**](https://example.org/data)'),
+  assert.equal(renderMarkdown('{underline|Ordinary **words**}'), '<p>Ordinary <strong>words</strong></p>\n');
+  assert.equal(renderMarkdown('[Dataset **XX**](https://example.org/data)'),
     '<p><a href="https://example.org/data">Dataset <strong>XX</strong></a></p>\n');
 });
 
 test('citation links include the complete author and title inside the parentheses', () => {
-  const html = context.renderMarkdown('[[Parikka, 2015. A geology of media|https://example.org/book|type=bibliography]]');
+  const html = renderMarkdown('[[Parikka, 2015. A geology of media|https://example.org/book|type=bibliography]]');
   assert.match(html, /\(■ <a [^>]+>Parikka, 2015\. A geology of media<\/a>\)/);
 });
 
 test('media.csv names render their file with the source link; unknown names stay literal for the page to mark', () => {
   const table = mediaTable.read('name,source,file\nlithium mine,https://example.org/mine?a=1&b=2,media/mine.jpg\ninterview,,media/interview.mp3\nclip,https://example.org/clip;v=2,media/clip.mp4\n');
-  const image = context.renderMarkdown('The [[Lithium Mine]] near the river.', table);
+  const image = renderMarkdown('The [[Lithium Mine]] near the river.', table);
   assert.match(image, /<a href="https:\/\/example.org\/mine\?a=1&amp;b=2" target="_blank" rel="noopener noreferrer"><img src="media\/mine.jpg"/);
   assert.match(image, /aria-expanded="false">Lithium Mine/);
-  assert.match(context.renderMarkdown('[[interview]]', table), /<audio controls preload="none" src="media\/interview.mp3">/);
-  assert.doesNotMatch(context.renderMarkdown('[[interview]]', table), /<a href/);
-  assert.match(context.renderMarkdown('[[clip]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
-  assert.match(context.renderMarkdown('[[a recording|media/clip.mp4]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
-  assert.match(context.renderMarkdown('[[unknown name]]', table), /\[\[unknown name\]\]/);
-  assert.match(context.renderMarkdown('[[lithium mine]]'), /\[\[lithium mine\]\]/);
+  assert.match(renderMarkdown('[[interview]]', table), /<audio controls preload="none" src="media\/interview.mp3">/);
+  assert.doesNotMatch(renderMarkdown('[[interview]]', table), /<a href/);
+  assert.match(renderMarkdown('[[clip]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
+  assert.match(renderMarkdown('[[a recording|media/clip.mp4]]', table), /href="https:\/\/example.org\/clip%3Bv=2"/);
+  assert.match(renderMarkdown('[[unknown name]]', table), /\[\[unknown name\]\]/);
+  assert.match(renderMarkdown('[[lithium mine]]'), /\[\[lithium mine\]\]/);
 });

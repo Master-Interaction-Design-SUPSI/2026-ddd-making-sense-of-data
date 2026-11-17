@@ -40,11 +40,11 @@ class EntryValidationTests(unittest.TestCase):
             ("example", 'width="1920.0" height="1080"'),
         ):
             self.entry(name, SVG.format(attributes=attributes))
-        self.assertEqual(build_site.find_entries(), ["alpha", "example", "zebra"])
+        self.assertEqual(list(build_site.find_entries()), ["alpha", "example", "zebra"])
 
     def test_accepts_comma_separated_viewbox(self):
         self.entry(visual=SVG.format(attributes="").replace("0 0 1920 1080", "0,0,1920,1080"))
-        self.assertEqual(build_site.find_entries(), ["group"])
+        self.assertEqual(list(build_site.find_entries()), ["group"])
 
     def test_rejects_wrong_format_and_duplicate_visuals(self):
         for filename in ("visual.png", "visual.jpg", "visual.avif", "visual.SVG"):
@@ -79,7 +79,7 @@ class EntryValidationTests(unittest.TestCase):
         (folder / "photo.jpg").write_bytes(b"extra media")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            self.assertEqual(build_site.find_entries(), ["complete", "text-only"])
+            self.assertEqual(list(build_site.find_entries()), ["complete", "text-only"])
         self.assertEqual(len(caught), 1)
 
     def test_course_team_folders_get_the_same_content_checks_as_an_import(self):
@@ -103,7 +103,7 @@ class EntryValidationTests(unittest.TestCase):
         (folder / "text.md").write_text("See [[ghost]] and ![x](media/later.png).")
         with warnings.catch_warnings(record=True) as caught:
             warnings.simplefilter("always")
-            self.assertEqual(build_site.find_entries(), ["brief"])
+            self.assertEqual(list(build_site.find_entries()), ["brief"])
         self.assertEqual([str(warning.message) for warning in caught], [
             "brief: text.md: [[ghost]] is not a name in media.csv",
             "brief: text.md: media/later.png is not in this group yet"])
@@ -170,6 +170,22 @@ class LocalEntryStampTests(unittest.TestCase):
         expected = self.fixture.bytes_at(self.fixture.output)
         build_site.build_archive(archive.folder, archive.commit)
         self.assertEqual(self.fixture.bytes_at(self.fixture.output), expected)
+
+    def test_builds_copy_only_selected_course_team_files(self):
+        folder = self.root / 'materialities-of-ai'
+        (folder / 'notes.txt').write_text('unpublished notes')
+        (folder / 'unused.html').write_text('<html/>')
+        (folder / 'media').mkdir()
+        (folder / 'media/detail.png').write_bytes(b'image')
+        archive = self.fixture.first_archive()
+        for build in (build_site.main, lambda: build_site.build_archive(archive.folder, archive.commit)):
+            with self.subTest(build=build):
+                build()
+                files = self.entries()['materialities-of-ai']['files']
+                self.assertEqual(files, ['media/detail.png', 'text.md'])
+                self.assertFalse((self.fixture.output / 'materialities-of-ai/notes.txt').exists())
+                self.assertFalse((self.fixture.output / 'materialities-of-ai/unused.html').exists())
+
 
     def test_source_export_without_git_does_not_invent_a_stamp(self):
         build_site.main()

@@ -103,20 +103,26 @@
      named after the file, so only the source links remain to be filled in.
      Without media it needs no table: null. */
   function startingTable(files, contract) {
-    const taken = new Set();
     const mediaFiles = [...files.keys()].filter(file => ![...contract.required_files, contract.media_table].includes(file));
     if (!mediaFiles.length) return null;
-    const rows = mediaFiles.sort().map(file => {
-      const base = file.split('/').pop();
-      let name = base.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || base;
-      if (taken.has(name.toLowerCase())) name = base;
-      taken.add(name.toLowerCase());
-      return { name, source: '', file };
-    });
+    const rows = rowsFor(mediaFiles.sort());
     return media.serialize(rows);
   }
 
-  const api = { bytes, digest, select, startingTable, Draft };
+  function rowsFor(paths, existingRows = []) {
+    const taken = new Set(existingRows.map(row => row.name.toLowerCase()));
+    return paths.map(file => {
+      const filename = file.split('/').pop();
+      const stem = filename.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || filename;
+      let name = stem;
+      if (taken.has(name.toLowerCase())) name = filename;
+      for (let suffix = 2; taken.has(name.toLowerCase()); suffix++) name = `${filename} ${suffix}`;
+      taken.add(name.toLowerCase());
+      return { name, source: '', file };
+    });
+  }
+
+  const api = { bytes, digest, select, startingTable, rowsFor, Draft };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CourseDraft = api;
 })(globalThis);

@@ -9,6 +9,7 @@ import tempfile
 import warnings
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from dataclasses import dataclass
 
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files
 from group_registry import SITE_DIRECTORIES, load_registry
@@ -19,6 +20,12 @@ from archive_state import ArchiveSnapshot
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT = ROOT / "_site"
+
+
+@dataclass(frozen=True)
+class EntrySource:
+    folder: Path
+    files: tuple[str, ...]
 
 
 def write_editor(candidate):
@@ -63,7 +70,7 @@ def enforce_site_budget(candidate):
 
 def find_entries():
     """Course-team folders at the root: the checks of an import, but the main visual is optional."""
-    entries = []
+    entries = {}
     for folder in ROOT.iterdir():
         if not folder.is_dir() or folder.name.startswith(".") or folder.name in SITE_DIRECTORIES:
             continue
@@ -75,13 +82,14 @@ def find_entries():
                  for path in folder.rglob("*") if path.is_file()}
         try:
             # Every group needs the main visual; a course-team folder may leave it out.
-            notes = validate_content(folder, select_content_files(sizes, required=("text.md",)))
+            files = select_content_files(sizes, required=("text.md",))
+            notes = validate_content(folder, files)
         except (ValueError, ET.ParseError) as error:
             raise ValueError(f"{folder.name}: {error}") from error
         for note in notes:
             warnings.warn(f"{folder.name}: {note}")
-        entries.append(folder.name)
-    return sorted(entries, key=str.casefold)
+        entries[folder.name] = EntrySource(folder, tuple(files))
+    return dict(sorted(entries.items(), key=lambda item: item[0].casefold()))
 
 
 def write_site(sources, snapshots=None, statuses=None):
@@ -100,10 +108,12 @@ def write_site(sources, snapshots=None, statuses=None):
         for name in entries:
             files = []
             if name in sources:
-                shutil.copytree(sources[name], candidate / name)
-                # The page marks a referenced file as missing when it is not in this list.
-                files = sorted(path.relative_to(candidate / name).as_posix()
-                               for path in (candidate / name).rglob("*") if path.is_file())
+                source = sources[name]
+                files = sorted(source.files)
+                for relative in files:
+                    target = candidate / name / relative
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.copy2(source.folder / relative, target)
             listing.append({"slug": name, "files": files, **statuses.get(name, {})})
         (candidate / "entries.json").write_text(json.dumps(listing, ensure_ascii=False) + "\n", encoding="utf-8")
         if snapshots is not None:
@@ -157,11 +167,12 @@ def build_archive(folder, commit=None):
     """Build from archived bytes and trusted current site code; no source or Pages reads."""
     archive = ArchiveSnapshot(folder, commit)
     snapshots = archive.served()
-    sources = {name: ROOT / name for name in find_entries()}
+    sources = find_entries()
     if set(snapshots) & set(sources):
         raise ValueError('archive group collides with a local entry')
     statuses = {**local_statuses(sources), **group_statuses(archive.groups)}
-    sources.update({slug: archive.folder / slug for slug in snapshots})
+    sources.update({slug: EntrySource(archive.folder / slug, tuple(entry["files"]))
+                    for slug, entry in snapshots.items()})
     write_site(sources, snapshots, statuses)
     return {'archive_commit': archive.commit,
             'archive_manifest_sha256': hashlib.sha256(archive.payload).hexdigest(),
@@ -173,7 +184,7 @@ def main():
     for group in load_registry(ROOT / "groups.json"):
         if (ROOT / group.slug).exists() or (ROOT / group.slug).is_symlink():
             raise ValueError(f"{group.slug}: registered group collides with a local path")
-    sources = {name: ROOT / name for name in find_entries()}
+    sources = find_entries()
     write_site(sources, statuses=local_statuses(sources))
 
 

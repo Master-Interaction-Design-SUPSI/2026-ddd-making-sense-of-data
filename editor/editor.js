@@ -49,6 +49,12 @@
     $('validation').textContent = 'Draft changed — check again before committing.';
     $('steps').replaceChildren();
   }
+  function recordChange() {
+    invalidate();
+    save();
+    clearTimeout(timer);
+    timer = setTimeout(() => run(preview), 150);
+  }
   const sent = new Map();
   const rawUrl = (revision, path) => `https://raw.githubusercontent.com/${config.repository}/${encodeURIComponent(revision)}/${path.split('/').map(encodeURIComponent).join('/')}`;
   const github = (action, path = '') => `https://github.com/${config.repository}/${action}/${encodeURIComponent(config.branch)}/${path.split('/').map(encodeURIComponent).join('/')}`;
@@ -238,7 +244,7 @@
       remove.addEventListener('click', () => run(async () => {
         draft.remove(path); missingAttachments.delete(path);
         tableRows = tableRows.filter(entry => entry.file !== path); storeRows(); renderRows();
-        invalidate(); save(); listFiles(); await preview();
+        recordChange(); listFiles();
       }));
       row.append(remove);
       $('files').append(row);
@@ -247,7 +253,7 @@
       if (draft.files().has(path)) continue;
       const row = document.createElement('li'); row.textContent = `${path} · reattachment required `;
       const discard = document.createElement('button'); discard.textContent = 'Discard missing attachment';
-      discard.addEventListener('click', () => { missingAttachments.delete(path); invalidate(); save(); listFiles(); });
+      discard.addEventListener('click', () => { missingAttachments.delete(path); recordChange(); listFiles(); });
       row.append(discard); $('files').append(row);
     }
     for (const path of draft.deletions) {
@@ -256,7 +262,7 @@
       undo.addEventListener('click', () => run(async () => {
         draft.deletions.delete(path);
         if (!tableRows.some(entry => entry.file === path)) { tableRows.push(...rowsFor([path])); storeRows(); renderRows(); }
-        invalidate(); save(); listFiles(); await preview();
+        recordChange(); listFiles();
       }));
       row.append(undo); $('files').append(row);
     }
@@ -279,22 +285,12 @@
     else tableRows.push(name ? { name, source, file: path } : { ...rowsFor([path])[0], source });
     $('media-name').value = $('media-source').value = '';
     storeRows(); renderRows();
-    invalidate(); save(); listFiles(); await preview();
+    recordChange(); listFiles();
   }
 
   /* ---------- media.csv rows ---------- */
 
-  // Rows named after their files, for media that has none yet.
-  function rowsFor(paths) {
-    const taken = new Set(tableRows.map(entry => entry.name.toLowerCase()));
-    return paths.map(file => {
-      const base = file.split('/').pop();
-      let name = base.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim() || base;
-      if (taken.has(name.toLowerCase())) name = base;
-      taken.add(name.toLowerCase());
-      return { name, source: '', file };
-    });
-  }
+  const rowsFor = paths => CourseDraft.rowsFor(paths, tableRows);
 
   const noTable = 'No media yet. media.csv is created with the first attached file.';
   const tableText = () => draft.table ?? CourseMediaTable.serialize([]);
@@ -397,8 +393,7 @@
   $('template').addEventListener('click', () => run(() => open(true)));
   $('text').addEventListener('input', () => {
     if (!draft) return;
-    draft.text = $('text').value; invalidate(); save();
-    clearTimeout(timer); timer = setTimeout(() => run(preview), 150);
+    draft.text = $('text').value; recordChange();
   });
   $('tools').addEventListener('click', event => {
     const text = event.target.dataset.insert; if (!text || !draft) return;
@@ -413,17 +408,16 @@
   $('media-rows').addEventListener('input', event => {
     const field = event.target.dataset.field; if (!field || !draft) return;
     tableRows[event.target.closest('li').dataset.index][field] = event.target.value.trim();
-    storeRows(); tableStatus(); invalidate(); save();
-    clearTimeout(timer); timer = setTimeout(() => run(preview), 150);
+    storeRows(); tableStatus(); recordChange();
   });
   $('media-rows').addEventListener('click', event => {
     const action = event.target.dataset.action; if (!action || !draft) return;
     const index = Number(event.target.closest('li').dataset.index);
     if (action === 'insert') { insertText(`[[${tableRows[index].name}]]`); return; }
-    tableRows.splice(index, 1); storeRows(); renderRows(); invalidate(); save(); run(preview);
+    tableRows.splice(index, 1); storeRows(); renderRows(); recordChange();
   });
   $('add-row').addEventListener('click', () => {
-    tableRows.push({ name: '', source: '', file: 'media/' }); storeRows(); renderRows();
+    tableRows.push({ name: '', source: '', file: 'media/' }); storeRows(); renderRows(); recordChange();
     $('media-rows').lastElementChild.querySelector('input').focus();
   });
   $('download-table').addEventListener('click', () => download(new Blob([tableText()], { type: 'text/csv' }), tableName));

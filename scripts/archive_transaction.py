@@ -62,6 +62,30 @@ def projected_site(folder):
         raise PublicationError('projected visible site exceeds budget including release metadata')
 
 
+def publication_status(entry, previous, result):
+    if not entry['snapshot']:
+        return 'hidden' if entry['state'] == 'hidden' else 'skipped'
+    if entry['state'] != 'live':
+        return entry['state']
+    if result['status'] == 'imported':
+        return 'unchanged' if entry['snapshot'] == previous.get('snapshot') else 'updated'
+    return 'unchanged' if result['status'] == 'unchanged' else 'retained'
+
+
+def preparation_report(groups, previous, results, base, *, idle):
+    for result in results:
+        slug = result['slug']
+        entry = groups[slug]
+        result['publication_status'] = publication_status(entry, previous.groups.get(slug, {}), result)
+        selected = served_entry(entry) if entry['state'] != 'hidden' else None
+        result['selected_source'] = ({key: selected[key] for key in ('repository', 'branch', 'commit')}
+                                     if selected else None)
+    transport = base.metrics | {
+        key: sum(result.get('transport', {}).get(key, 0) for result in results)
+        for key in ('rest_requests', 'raw_requests', 'rest_bytes', 'raw_bytes')}
+    return {'groups': results, 'idle': idle, 'transport': transport}
+
+
 def prepare_archive(registry, previous, destination, *, client_factory=GitHubClient, allow_unchanged=False,
                     allow_idle=False):
     """Validate live updates, preserve every accepted snapshot, then check site budget."""
@@ -86,18 +110,7 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
                     ({'unchanged', 'rejected'} if group.state == 'live' else {'disabled'})
                     for group in registry))
         if idle_eligible:
-            for result in results:
-                entry = groups[result['slug']]
-                state = entry['state']
-                result['publication_status'] = (state if state != 'live' and entry['snapshot'] else
-                    'hidden' if state == 'hidden' else 'skipped' if state != 'live' or not entry['snapshot'] else
-                    'unchanged' if result['status'] == 'unchanged' else 'retained')
-                selected = served_entry(entry)
-                result['selected_source'] = ({key: selected[key] for key in ('repository', 'branch', 'commit')}
-                                             if selected and state != 'hidden' else None)
-            return {'groups': results, 'idle': True, 'transport': base.metrics | {
-                        key: sum(result.get('transport', {}).get(key, 0) for result in results)
-                        for key in ('rest_requests', 'raw_requests', 'rest_bytes', 'raw_bytes')}}
+            return preparation_report(groups, previous, results, base, idle=True)
         staged = root / 'snapshot'
         staged.mkdir()
         for slug, entry in groups.items():
@@ -113,8 +126,6 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
                     'exclude': entry['exclude'], 'excluded': result['excluded_blobs'], 'files': files}
                 entry['problem'] = None
                 shutil.copytree(imported / slug, staged / slug)
-                result['publication_status'] = ('unchanged' if entry['snapshot'] == previous.groups.get(slug, {}).get('snapshot')
-                                                else 'updated')
             elif entry['snapshot']:
                 folder = staged / slug
                 folder.mkdir()
@@ -122,22 +133,11 @@ def prepare_archive(registry, previous, destination, *, client_factory=GitHubCli
                     target = folder / name
                     target.parent.mkdir(parents=True, exist_ok=True)
                     target.write_bytes(previous.read_file(slug, name))
-                if result:
-                    result['publication_status'] = (state if state != 'live' else
-                                                   'unchanged' if result['status'] == 'unchanged' else 'retained')
-            elif result:
-                result['publication_status'] = 'hidden' if state == 'hidden' else 'skipped'
-            if result:
-                selected = served_entry(entry)
-                result['selected_source'] = ({key: selected[key] for key in ('repository', 'branch', 'commit')}
-                                             if selected and state != 'hidden' else None)
         (staged / MANIFEST).write_bytes(encode_archive(groups))
         ArchiveSnapshot(staged)
         projected_site(staged)
         staged.rename(destination)
-    return {'groups': results, 'idle': False, 'transport': base.metrics | {
-                key: sum(result.get('transport', {}).get(key, 0) for result in results)
-                for key in ('rest_requests', 'raw_requests', 'rest_bytes', 'raw_bytes')}}
+    return preparation_report(groups, previous, results, base, idle=False)
 
 
 def admit_candidate(candidate, registry, previous):
