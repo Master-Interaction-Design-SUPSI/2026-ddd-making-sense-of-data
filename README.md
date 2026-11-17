@@ -6,7 +6,7 @@ Each group edits its own public repository. This repository imports the register
 
 | Reader | Document |
 | --- | --- |
-| Student | This README, §1–9. The same guide is the README of every group repository. |
+| Student | This README, §1–8. The same guide is the README of every group repository. |
 | Maintainer | [Operating manual](MAINTAINERS.md), [acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md). |
 
 **WARNING**: Group repositories are public. Upload only material cleared for publication.
@@ -150,6 +150,8 @@ The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/
 - Playback stops off screen, on entry switch, while the main image is enlarged, and when the page is hidden.
 - With reduced motion turned on, videos stay still and previews do not animate.
 - Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. If sound is blocked, choose **Enable sound**, then hover again. The source link always works. Check your entry on the site.
+
+<!-- END GENERATED STUDENT GUIDE -->
 
 ## 9. Repository layout
 
