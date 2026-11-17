@@ -4,7 +4,6 @@
     const listen = (type, handler) => video.addEventListener(type, handler, { signal: listeners.signal });
     let disposed = false;
     let active = false;
-    let userPaused = false;
     let autoplayBlocked = !allowAutoplay;
     let pending = false;
     let generation = 0;
@@ -19,17 +18,17 @@
       update();
     }
 
-    async function start(automatic) {
+    async function start() {
       if (disposed || !active || pending) return;
       const request = ++generation;
       pending = true;
       status = "";
-      if (automatic) video.muted = true;
+      video.muted = true;
       update();
       try {
         await video.play();
         if (request !== generation) {
-          if (!active || userPaused) video.pause();
+          if (!active) video.pause();
           return;
         }
         pending = false;
@@ -37,7 +36,7 @@
       } catch (error) {
         if (request !== generation) return;
         pending = false;
-        if (automatic) autoplayBlocked = true;
+        autoplayBlocked = true;
         status = error?.name === "NotAllowedError" ? "Automatic playback is unavailable." : "Could not play this video.";
       }
       update();
@@ -47,18 +46,7 @@
       if (disposed || active === next) return;
       active = next;
       if (!active) pause();
-      else if (!userPaused && !autoplayBlocked && video.muted && !video.ended) start(true);
-    }
-
-    function toggle() {
-      if (disposed) return;
-      if (!video.paused || pending) {
-        userPaused = true;
-        pause();
-      } else {
-        userPaused = false;
-        start(false);
-      }
+      else if (!autoplayBlocked && video.muted && !video.ended) start();
     }
 
     listen("play", () => {
@@ -67,7 +55,7 @@
     });
     listen("pause", update);
     listen("volumechange", update);
-    listen("ended", () => { userPaused = true; update(); });
+    listen("ended", update);
     listen("error", () => {
       autoplayBlocked = true;
       status = "Could not load this video.";
@@ -75,8 +63,7 @@
     });
     update();
     return {
-      setActive, toggle,
-      toggleSound: () => { if (!disposed) { video.muted = !video.muted; update(); } },
+      setActive,
       dispose: () => { active = false; disposed = true; pause(); listeners.abort(); },
     };
   }

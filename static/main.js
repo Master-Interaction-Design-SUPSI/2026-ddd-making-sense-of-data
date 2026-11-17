@@ -90,7 +90,7 @@ function expandAnnotations(src) {
     }
     const open = bibliography || type === "note";
     let content = target;
-    if (resource) content = bibliography ? linkHtml(target) : resourceHtml(target);
+    if (resource) content = resourceHtml(target);
     else if (type === "quote") content = `<q>${target}</q>`;
     if (sourceUrl && resource && [...IMAGE_EXTS, ...AUDIO_EXTS, ...VIDEO_EXTS].includes(extensionOf(target))) {
       content = `<a href="${esc(sourceUrl.replace(/&amp;/g, "&"))}" target="_blank" rel="noopener noreferrer">${content}</a>`;
@@ -411,11 +411,6 @@ function prepareInlineImages(textEl) {
       }
     }
     target.classList.add("inline-image");
-    if (target.tagName === "BUTTON") {
-      target.setAttribute("aria-label", `Preview image: ${image.alt || "supporting image"}`);
-      target.setAttribute("aria-controls", "image-preview");
-      target.setAttribute("aria-expanded", "false");
-    }
   }
 }
 
@@ -621,7 +616,7 @@ function setupImagePreviews() {
   let previewScrollY = window.scrollY;
 
   function clear() {
-    if (active?.matches("button, .inline-playback")) active.setAttribute("aria-expanded", "false");
+    if (active?.matches(".inline-playback")) active.setAttribute("aria-expanded", "false");
     active = null;
     mode = null;
     preview.hidden = true;
@@ -721,7 +716,7 @@ function setupImagePreviews() {
     mode = reason;
     previewScrollX = window.scrollX;
     previewScrollY = window.scrollY;
-    if (target.matches("button, .inline-playback")) target.setAttribute("aria-expanded", "true");
+    if (target.matches(".inline-playback")) target.setAttribute("aria-expanded", "true");
     dismiss.hidden = reason !== "pinned";
   }
 
@@ -754,11 +749,7 @@ function setupImagePreviews() {
     if (event.target.closest(".enable-hover-sound")) return;
     const sourceLink = event.target.closest("a.inline-image, a.inline-playback, a.inline-audio");
     if (sourceLink) { clear(); return; }
-    const target = event.target.closest("button.inline-image, .inline-playback");
-    if (target) {
-      if (active === target && mode === "pinned") clear();
-      else show(target, "pinned");
-    } else if (!event.target.closest(".inline-image, .inline-playback, .inline-audio")) clear();
+    if (!event.target.closest(".inline-image, .inline-playback, .inline-audio")) clear();
   });
   dismiss.addEventListener("click", () => {
     const previous = active;
@@ -774,12 +765,6 @@ function setupImagePreviews() {
   window.addEventListener("blur", clear);
   window.addEventListener("resize", clear);
   document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
-  document.addEventListener("keydown", event => {
-    if ((event.key === "Enter" || event.key === " ") && event.target.matches(".inline-playback:not(a)")) {
-      event.preventDefault();
-      event.target.click();
-    }
-  });
   return () => {
     clear();
     blockedTarget = null;

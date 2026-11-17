@@ -1,6 +1,6 @@
 # Maintainer manual
 
-Scope: course site, registry, import, publication, editor, archive. Revision: 2026-10-19.
+Scope: course site, registry, import, publication, editor, archive. Revision: 2026-11-17.
 
 Use this manual for current operating instructions. [Acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md) track unfinished validation. Update operating instructions when behavior changes and acceptance checks when validation completes; keep dated evidence (deployments, test results) outside the repository.
 
@@ -11,9 +11,9 @@ Use this manual for current operating instructions. [Acceptance checks](docs/202
 
 Publication goes through the archive. On a fresh repository the first run creates `student-work` and the first release (§9.4). Recheck live state before an operation that depends on it.
 
-The registry (`groups.json`) contains twelve prepared repositories, `2026-ddd-group-01` through `2026-ddd-group-12`, with slugs `group-01` through `group-12`. They are `live`, so their sample entries appear on the website and in the editor. The course-team page `materialities-of-ai` is a local folder (§4.1). Registry intent is not proof of what Pages currently serves. The editor request UI is disabled in `.github/publishing.json`. Live Issues, Actions variables and rulesets must be checked independently.
+The registry (`groups.json`) contains twelve prepared repositories, `2026-ddd-group-01` through `2026-ddd-group-12`, with slugs `group-01` through `group-12`. They are `live`, so their sample entries appear on the website and in the editor. The course-team page `materialities-of-ai` is a local folder (§4.1). Registry intent is not proof of what Pages currently serves. Publication uses group commit notifications, scheduled refreshes and manual workflow runs. Check live Actions variables and rulesets independently.
 
-Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule remains in `pages.yml` until request-pilot acceptance. First-run, student-account, request-pilot and device checks are on the [acceptance checklist](docs/2026-10-16_ddd_acceptance-checks.md).
+Routine publication uses **Publish course website** on `main`; **Run workflow** takes no inputs. Use the pause switch for maintenance. The ten-minute schedule in `pages.yml` is the fallback for group commit notifications. First-run, student-account and device checks are on the [acceptance checklist](docs/2026-10-16_ddd_acceptance-checks.md).
 
 ## 2. Terms
 
@@ -30,7 +30,6 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | Accepted | Candidate committed to `student-work`. |
 | Attempted | Deployment record names the release. |
 | Verified | Served site matches the release. The only state meaning "published". |
-| Request | Issue labelled `publication-request`, asking for a refresh. |
 | Problem | A group's newest commit, rejected for its content, with the reason; shown on its entry. |
 
 ## 3. Architecture
@@ -58,13 +57,10 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | `scripts/import_groups.py`, `github_content.py` | Import; GitHub transport. |
 | `scripts/content_contract.py`, `check_content_links.js` | File selection; reference check. |
 | `scripts/release.py`, `deployment_records.py` | Release identity, served manifest and served verification; deployment records. |
-| `scripts/publish.py` | Controller: `admit prepare accept build record authorize verify finalize answer summary`. |
+| `scripts/publish.py` | Controller: `prepare accept build record authorize verify summary`. |
 | `scripts/archive_state.py`, `archive_transaction.py`, `archive_git.py`, `archive_release.py` | Archive manifest; candidate transaction; Git transport and writer; release identity. |
-| `scripts/publication_requests.py` | Request capture and answers. |
 | `.github/workflows/pages.yml` | Publication jobs. |
 | `.github/workflows/validate.yml` | PR gate. Offline. |
-| `.github/ISSUE_TEMPLATE/` | Request form; blank issues off. |
-| `.github/publishing.json` | Editor request policy. |
 | `templates/group/` | Canonical student guide and demonstration files. |
 | `scripts/sync_course_materials.py` | Check or regenerate root guide and local demonstration copies. |
 
@@ -153,7 +149,7 @@ URL: `<site>/editor/`. Build outputs:
 | File | Content |
 | --- | --- |
 | `editor/preview.html` | Production shell; only bootstrap and asset paths substituted. |
-| `editor/groups.json` | Public registry fields, `editable` (= `live`), contract version, request policy. |
+| `editor/groups.json` | Public registry fields, `editable` (= `live`), contract version. |
 | `editor/template/`, `template.json` | Template files with SHA-256. |
 
 Open: last published snapshot (default; hash-checked against served `publication.json`) or template (new group). Non-`live` groups are read-only.
@@ -173,7 +169,7 @@ Hand-off, generated per draft. Teach this order; intermediate updates may show m
 3. Copy the editor's `media.csv` into the root file (create it if absent); commit when changed.
 4. Paste text into `text.md`; commit.
 5. Delete removed files.
-6. Submit request (if enabled), then look at the entry on the site. The online commit identifies the published version; saving a GitHub commit or checking an editor checkbox does not confirm publication.
+6. Look at the entry on the site after publication. The online commit identifies the published version; saving a GitHub commit or checking an editor checkbox does not confirm publication.
 
 The final file set is checked against the limits. Names and files that do not resolve are notes, not errors.
 
@@ -217,7 +213,7 @@ Requirements: Python 3.9+, Node. No packages. Optional `GITHUB_TOKEN` raises API
 
 ## 9. Publication
 
-Workflow **Publish course website** (`.github/workflows/pages.yml`). Pushes to `main`, the schedule `7,17,27,37,47,57 * * * *`, and **Run workflow → main** refresh the site. Issue-opened events are admitted only when requests are enabled and eligible. Publication uses concurrency group `pages`, with `cancel-in-progress: false`.
+Workflow **Publish course website** (`.github/workflows/pages.yml`). Pushes to `main`, the schedule `7,17,27,37,47,57 * * * *`, and **Run workflow → main** refresh the site. Publication uses concurrency group `pages`, with `cancel-in-progress: false`.
 
 GitHub may delay or drop scheduled runs. If schedules stop after 60 days without repository activity, use **Actions → Publish course website → Enable workflow**, then **Run workflow → main**.
 
@@ -241,39 +237,32 @@ An unverified release is retried from the recorded code/archive pair before any 
 
 | Switch | Effect when set |
 | --- | --- |
-| Variable `DDD_REQUESTS_ENABLED=true` | Issue requests admitted; job `answer` runs. Stop switch for requests. |
-| Variable `DDD_PUBLICATION_PAUSED=true` | Job `pin` skips, so a run ends at once; controller mutations and answers also refuse. Changing it is an operator action. |
-| `.github/publishing.json` `requests_enabled` | Editor shows the request step. UI only. |
-
-**CAUTION**: Disabling the issue form does not block API-created issues. Use `DDD_REQUESTS_ENABLED`.
+| Variable `DDD_PUBLICATION_PAUSED=true` | Job `pin` skips, so a run ends at once; controller operations also refuse. Changing it is an operator action. |
 
 ### 9.2 Jobs
 
 | Job | Permissions | Function |
 | --- | --- | --- |
 | `pin` | contents read, pages read | Pin latest `main` at execution. |
-| `admit` | contents read, issues read, deployments write | Choose mode; capture request batch at cutoff; reserve cooldown. |
 | `prepare` | contents read, deployments read | Run tests; read archive; import; emit candidate or retry pair. |
 | `accept` | contents write, deployments read | Revalidate registry, parent and verified release; expected-parent fast-forward of `student-work`. |
-| `publish` | contents read, deployments write, pages write, id-token write | Build, record, authorize, deploy, verify, finalize. |
-| `answer` | contents read, issues write | One bot comment per request; close where final. |
+| `publish` | contents read, deployments write, pages write, id-token write | Build, record, authorize, deploy, verify; summarize results. |
 
 All checkouts at the pinned commit, `persist-credentials: false`. Imported content never runs.
 
-Artifacts: `{admission,prepared,accepted,result}-<run>-<attempt>`, `pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `batch.json`, `report.json`, optional `candidate.tar`. Extra members and links rejected. Reports ≤ 8 MiB; metadata ≤ 2 MiB. Each job outputs `state`, `<artifact>:<metadata sha256>`; the next job reads it as `INPUT_STATE`, downloads that artifact and admits it only with that digest. The attempt in the name admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
+Artifacts: `{prepared,accepted}-<run>-<attempt>`, `pages-<run>-<attempt>`; 7 days. The envelope binds kind, repository, main commit and tree, run, producing attempt, registry digest, file digests. Members: `metadata.json`, `report.json`, optional `candidate.tar`. Extra members and links rejected. Reports ≤ 8 MiB; metadata ≤ 2 MiB. Preparation and acceptance output `state`, `<artifact>:<metadata sha256>`; the next job reads it as `INPUT_STATE`, downloads that artifact and admits it only with that digest. The attempt in the name admits an earlier successful attempt of the same run only. Artifacts transport; Git refs authorize.
 
 ### 9.3 Modes
 
 | Mode | Condition | Action |
 | --- | --- | --- |
-| `refresh` | Eligible event; also the first run | Import live groups → accept → build → deploy → verify. |
+| `refresh` | Push, schedule or manual dispatch; also the first run | Import live groups → accept → build → deploy → verify. |
 | `unchanged` | Archive, `main` and site digest equal verified release | No write, no deployment. |
 | `pending` | Accepted archive ahead of release, same `main` | Build accepted pair; no import. |
 | `retry` | Latest attempt unverified, same code | Reconstruct pair from refs; redeploy. |
 | `repair` | Latest attempt already served | Record verification; no deployment. |
-| `deferred` | Requests off, issue ineligible, cooldown, or quota ≤ 200 | No work. Requests stay open. |
-| `invalid` | Malformed Group field | No import. Answer; close. |
-| `superseded` | `main` moved | Stop. No answer. |
+
+A change to `main` or the accepted archive supersedes an older run and stops it before publication.
 
 ### 9.4 Archive
 
@@ -305,27 +294,7 @@ Release identity (schema version 2): `main` commit, archive commit, tree, manife
 - `authorize` rechecks `main` and latest attempt before the Pages mutation.
 - A newer archive or release supersedes an older accepted run; a run never rolls the site back.
 - Verification: release, manifest, one changed-text probe, one changed-media probe. Sampling, not a full hash of served bytes.
-- API budgets: deployment transport 40 calls per client; issue transport 60. Ambiguous writes never retried automatically.
-
-### 9.6 Requests
-
-- Form `.github/ISSUE_TEMPLATE/publish.yml`; label `publication-request`; field **Group** (slug).
-- Trigger `issues: opened`. Unlabelled or ineligible issues run in concurrency `ignored-issue-<n>`; they cannot displace publication.
-- Capture at cutoff: ≤ 6 requests, ≤ 3 pages of 100. Body ≤ 8 KiB, hashed. Later, edited, closed, unlabelled and overflow requests wait for the next run.
-- Issue-triggered refresh ≥ 10 min apart. Reservation: deployment task `course-refresh`, environment `course-refresh-cooldown`, written before import. Push, schedule and dispatch exempt.
-- A request refreshes all live groups. Issue text never reaches shell, refs or paths.
-- One bot comment per issue, marker `<!-- ddd-publication-request:v1 -->`. Reruns update it and repair failed closes.
-
-| Outcome | Issue |
-| --- | --- |
-| Verified; group `updated` or `unchanged` | Published revision stated; closed. |
-| Invalid content | Correction stated; closed. |
-| Group `hidden`, `frozen` or disabled; invalid Group field | Policy stated; closed. |
-| Transient source failure; deferred | Open. |
-| Build, archive, deploy or verify failure | Failed stage stated; open. |
-| Superseded | No answer. |
-
-Schedule stays at ten minutes until the request pilot passes; then hourly, off the hour (e.g. `17 * * * *`).
+- API budget: deployment transport 40 calls per client. Ambiguous writes never retried automatically.
 
 ## 10. Groups and access
 
@@ -392,7 +361,7 @@ For a requested history purge, first set the pause switch. Inventory the affecte
 
 Offline preview builds contain local entries only and must never be deployed over an imported publication. Build `_site` again before browser checks.
 
-Typography uses ABC Areal Sans for prose, navigation, interface text, code, and source editing; bibliography/source annotations use Georgia. The four unchanged WOFF2 files (`ABCAreal-Regular`, `ABCAreal-RegularItalic`, `ABCAreal-Bold`, `ABCAreal-BoldItalic`) and the supplied licensing PDF belong in `static/fonts/areal/`, which is excluded from Git. The build copies them into the output. GitHub publication requires privately supplying these assets before building; this provisioning is not yet configured. Never commit the plaintext fonts to the public repository.
+Typography uses `Arial, Helvetica, sans-serif` for prose, navigation, interface text, code and source editing; bibliography/source annotations use Georgia. No webfonts or private provisioning are required. Any local font originals remain excluded from Git and from generated site output.
 
 ```sh
 python3 scripts/sync_course_materials.py

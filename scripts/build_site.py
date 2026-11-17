@@ -11,7 +11,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from content_contract import CONTRACT_VERSION, MAX_SITE_BYTES, select_content_files
-from group_registry import REPOSITORY, SITE_DIRECTORIES, load_registry
+from group_registry import SITE_DIRECTORIES, load_registry
 from import_groups import validate_content
 from release import MANIFEST, encode_manifest
 from archive_state import ArchiveSnapshot
@@ -31,20 +31,8 @@ def write_editor(candidate):
     groups = [{"slug": group.slug, "repository": group.repository, "branch": group.branch,
                "exclude": list(group.exclude), "state": group.state, "editable": group.state == 'live',
                "contract_version": CONTRACT_VERSION} for group in load_registry(ROOT / "groups.json")]
-    requests = {'enabled': False, 'repository': None}
-    policy = ROOT / '.github/publishing.json'
-    if policy.exists():
-        if policy.is_symlink() or policy.stat().st_size > 16384:
-            raise ValueError('invalid publishing UI policy')
-        settings = json.loads(policy.read_bytes())
-        if (not isinstance(settings, dict) or set(settings) != {'version', 'repository', 'requests_enabled'}
-                or type(settings['version']) is not int or settings['version'] != 1
-                or type(settings['requests_enabled']) is not bool or not isinstance(settings['repository'], str)
-                or not REPOSITORY.fullmatch(settings['repository']) or settings['repository'].endswith('.git')):
-            raise ValueError('invalid publishing UI policy')
-        requests = {'enabled': settings['requests_enabled'], 'repository': settings['repository']}
     (candidate / "editor" / "groups.json").write_text(
-        json.dumps({"groups": groups, 'publication_requests': requests}, sort_keys=True, indent=2) + "\n", encoding="utf-8")
+        json.dumps({"groups": groups}, sort_keys=True, indent=2) + "\n", encoding="utf-8")
     template = ROOT / "templates" / "group"
     sizes = {path.relative_to(template).as_posix(): path.stat().st_size
              for path in template.rglob("*") if path.is_file()}
@@ -106,7 +94,7 @@ def write_site(sources, snapshots=None, statuses=None):
         candidate = Path(temporary) / "candidate"
         candidate.mkdir()
         shutil.copy2(ROOT / "index.html", candidate / "index.html")
-        shutil.copytree(ROOT / "static", candidate / "static")
+        shutil.copytree(ROOT / "static", candidate / "static", ignore=shutil.ignore_patterns("fonts"))
         write_editor(candidate)
         listing = []
         for name in entries:

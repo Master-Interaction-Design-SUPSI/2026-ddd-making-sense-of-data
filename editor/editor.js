@@ -390,10 +390,6 @@
     } else if (tableChange) step('Replace the whole content of media.csv with the copied table and commit.', github('edit', tableName));
     if (changes.some(change => change.path === 'text.md')) step('Paste the reviewed text.md and commit it on the configured branch. For a new group, create the template files first.', github('edit', 'text.md'));
     for (const change of changes.filter(change => change.operation === 'delete')) step(`Delete ${change.path} through the file menu.`, github('blob', change.path));
-    if (groups.publication_requests?.enabled) {
-      step('After the commits above, submit this request. Read its result on GitHub; submission does not prove publication.',
-        CourseDraft.publicationRequest(groups.publication_requests.repository, config.slug), 'Request publication ↗');
-    }
     step('Check the course site after publication. A checked box records your action; it does not verify a commit.', new URL(`#${config.slug}`, siteRoot).href, 'Open published entry ↗');
   }
 

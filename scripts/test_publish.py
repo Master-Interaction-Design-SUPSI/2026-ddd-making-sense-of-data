@@ -12,7 +12,6 @@ import archive_transaction
 import publish as controller
 from release import PublicationError
 from test_fixtures import SVG, TEXT, URL, Course, entry_slugs
-from test_publication_requests import API, issue
 
 
 class SplitPublisherTests(unittest.TestCase):
@@ -35,16 +34,12 @@ class SplitPublisherTests(unittest.TestCase):
         self.records.archive_commit.side_effect = self.archive_head
         self.records.create.side_effect = self.create_record
         self.records.status.side_effect = self.status
-        self.records.last_refresh.return_value = None
         self.records.client = SimpleNamespace(api_remaining=None, metrics={'rest_requests': 0, 'rest_bytes': 0},
                                               raw_file=self.read_raw_archive_file)
-        self.api = API([issue()])
-        self.api.client = SimpleNamespace(metrics={'rest_requests': 0, 'rest_bytes': 0})
         self.url = URL
         self.patch('publish.ROOT', self.fixture.root)
         self.patch('publish.STATE', self.fixture.root / '.scratch/build-state.json')
         self.patch('publish.revision', side_effect=lambda ref: self.main if ref == 'HEAD' else self.tree)
-        self.patch('publish.utc_now', return_value='2026-10-14T12:00:00Z')
         self.patch('publish.worktree_clean', return_value=True)
         self.patch('release.time.sleep')
         self.patch('archive_git.init_remote', side_effect=self.init_remote)
@@ -106,16 +101,10 @@ class SplitPublisherTests(unittest.TestCase):
             self.assertEqual(identifier, self.latest['id'])
             self.verified = copy.deepcopy(self.latest)
 
-    def admission(self, event='schedule', issue_number=1):
-        folder = self.folder('admission')
-        digest = controller.admit(self.records, self.api, folder, event, issue_number=issue_number,
-                                  requests_enabled=True)
-        return folder, digest
 
-    def preparation(self):
-        admitted, checksum = self.admission()
+    def preparation(self, event="schedule"):
         folder = self.folder('prepared')
-        digest = controller.prepare(self.records, self.url, admitted, checksum, folder)
+        digest = controller.prepare(self.records, self.url, folder, event=event)
         return folder, digest
 
     def accepted(self, preparation, digest):
@@ -136,12 +125,25 @@ class SplitPublisherTests(unittest.TestCase):
             controller.authorize(self.records)
             self.fixture.deploy()
             controller.verify(self.records)
-        result = self.folder('result')
-        checksum = controller.finalize(source, checksum, result)
-        return result, checksum
 
     def next_run(self, run_id):
         os.environ['GITHUB_RUN_ID'] = str(run_id)
+
+    def test_issue_events_cannot_start_publication(self):
+        with self.assertRaisesRegex(PublicationError, 'untrusted publication event'):
+            self.preparation(event='issues')
+        self.assertIsNone(self.archive_head())
+        self.assertIsNone(self.latest)
+        self.assertEqual(list(self.fixture.live.iterdir()), [])
+
+    def test_supported_events_prepare_registered_content(self):
+        for event in ('push', 'schedule', 'workflow_dispatch'):
+            with self.subTest(event=event):
+                prepared, checksum = self.preparation(event=event)
+                metadata, report = controller.load(prepared, checksum, {'prepared'})
+                self.assertEqual(metadata['data']['mode'], 'refresh')
+                self.assertEqual({row['slug'] for row in report['groups']}, {'alpha', 'beta'})
+                self.assertTrue((prepared / 'candidate.tar').is_file())
 
     def test_first_run_with_empty_registry_creates_a_root_archive_and_verified_release(self):
         self.fixture.registry()
@@ -156,17 +158,13 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertEqual(self.verified, self.latest)
         self.assertEqual(entry_slugs(self.fixture.live), [])
 
-    def test_first_run_publishes_a_live_group_and_answers_its_request(self):
+    def test_first_run_publishes_a_live_group(self):
         self.fixture.registry('alpha')
-        result, checksum = self.publish()
+        self.publish()
         self.assertEqual(controller.state()['status'], 'verified')
         self.assertEqual(self.archive_parents(), [])
         self.assertEqual((self.fixture.live / 'alpha/text.md').read_bytes(), TEXT)
         self.assertEqual(entry_slugs(self.fixture.live), ['alpha'])
-        self.assertEqual(self.api.issues[1]['state'], 'open')
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'closed')
-        self.assertIn('is published', self.api.comments[1][0]['body'])
 
     def test_release_without_visible_groups_does_not_read_previous_group_inventory(self):
         self.fixture.registry()
@@ -218,15 +216,14 @@ class SplitPublisherTests(unittest.TestCase):
             self.accepted(prepared, digest)
         self.assertEqual(self.archive_head(), head)
 
-    def test_pause_blocks_archive_entry_and_issue_answer_before_remote_calls(self):
+    def test_pause_blocks_preparation_before_remote_calls(self):
         self.records.reset_mock()
         with patch.dict(os.environ, DDD_PUBLICATION_PAUSED='true'):
             with self.assertRaisesRegex(PublicationError, 'paused'):
                 controller.require_main(self.records)
             with self.assertRaisesRegex(PublicationError, 'paused'):
-                controller.answer(self.api, self.folder('unused'), 'f' * 64, self.records)
+                self.preparation()
         self.records.main_commit.assert_not_called()
-        self.assertFalse(self.api.comments)
 
     def test_stage_metrics_survive_fresh_clients_checkpoints_and_nested_authorization(self):
         def counted_main():
@@ -250,9 +247,7 @@ class SplitPublisherTests(unittest.TestCase):
         self.fixture.deploy()
         fresh_client()
         controller.verify(self.records)
-        result = self.folder('result')
-        checksum = controller.finalize(accepted, checksum, result)
-        _, _, report = controller.load(result, checksum, {'result'})
+        report = controller.state()['report']
         for stage, calls in {'prepare': 1, 'accept': 1, 'build': 1, 'record': 1,
                              'authorize': 1, 'verify': 2}.items():
             self.assertEqual(report['transport'][stage + '_api'],
@@ -280,12 +275,10 @@ class SplitPublisherTests(unittest.TestCase):
         shutil.rmtree(accepted)
         self.next_run(62)
         with patch.object(controller, 'prepare_archive', side_effect=AssertionError('must retry before importing')):
-            result, checksum = self.publish()
+            self.publish()
         self.assertEqual(self.fixture.bytes_at(self.fixture.output), expected)
         self.assertEqual(self.latest['payload'], original_release)
         self.assertEqual(controller.state()['status'], 'recovered')
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'open')
 
     def test_deployment_verified_late_repairs_status_without_importing_or_redeploying(self):
         prepared, digest = self.preparation()
@@ -296,53 +289,33 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertIsNone(self.verified)
         self.next_run(63)
         with patch.object(controller, 'prepare_archive', side_effect=AssertionError('verify pending first')):
-            result, checksum = self.publish()
+            self.publish()
         self.assertEqual(controller.state()['status'], 'recovered')
         self.assertEqual(self.latest, self.verified)
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'open')
 
-    def test_malformed_issue_never_starts_full_import_and_cooldown_is_reserved_before_import(self):
-        self.api.issues[1]['body'] = '### Group\nunknown'
-        admitted, checksum = self.admission(event='issues')
-        data, batch, report = controller.load(admitted, checksum, {'admission'})
-        self.assertEqual(data['data']['mode'], 'invalid')
-        self.records.reserve.assert_not_called()
-        controller.answer(self.api, admitted, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'closed')
-        self.api.issues[1] = issue()
-        self.records.last_refresh.return_value = '2026-10-14T11:59:59Z'
-        admitted, checksum = self.admission(event='issues')
-        self.assertEqual(controller.load(admitted, checksum, {'admission'})[0]['data']['mode'], 'deferred')
-        self.records.reserve.assert_not_called()
-        self.records.last_refresh.return_value = None
-        self.admission(event='issues')
-        self.records.reserve.assert_called_once()
 
     def test_changed_artifact_run_identity_and_code_are_rejected(self):
-        admitted, checksum = self.admission(event='workflow_dispatch')
-        (admitted / 'batch.json').write_text('{}')
-        with self.assertRaises(PublicationError): controller.load(admitted, checksum, {'admission'})
-        fresh, checksum = self.admission(event='workflow_dispatch')
+        prepared, checksum = self.preparation(event='workflow_dispatch')
+        (prepared / 'report.json').write_text('{}')
+        with self.assertRaises(PublicationError): controller.load(prepared, checksum, {'prepared'})
+        fresh, checksum = self.preparation(event='workflow_dispatch')
         os.environ['GITHUB_RUN_ATTEMPT'] = '2'
-        with self.assertRaises(PublicationError): controller.load(fresh, checksum, {'admission'})
+        with self.assertRaises(PublicationError): controller.load(fresh, checksum, {'prepared'})
         os.environ['GITHUB_RUN_ATTEMPT'] = '1'
         self.records.main_commit.return_value = 'f' * 40
         with self.assertRaisesRegex(PublicationError, 'superseded'):
-            controller.prepare(self.records, self.url, fresh, checksum, self.folder('superseded'))
+            controller.prepare(self.records, self.url, self.folder('superseded'), event='schedule')
 
-    def test_second_run_after_the_first_is_unchanged_and_answers_without_new_deployment(self):
+    def test_second_run_after_the_first_is_unchanged_without_new_deployment(self):
         self.publish()
         previous = copy.deepcopy(self.latest)
         head = self.archive_head()
         self.next_run(64)
-        result, checksum = self.publish()
+        self.publish()
         self.assertEqual(controller.state()['data']['mode'], 'unchanged')
         self.assertEqual(self.latest, previous)
         self.assertEqual(self.archive_head(), head)
         self.assertEqual(controller.state()['status'], 'verified')
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'closed')
 
     def test_release_probes_against_last_verified_archive_after_failed_new_code_attempt(self):
         self.publish()
@@ -362,21 +335,12 @@ class SplitPublisherTests(unittest.TestCase):
         shutil.rmtree(self.fixture.output)
         self.next_run(67)
         with patch.object(archive_transaction, 'projected_site', side_effect=AssertionError('idle must not build')):
-            result, checksum = self.publish()
-        _, _, report = controller.load(result, checksum, {'result'})
+            self.publish()
+        report = controller.state()['report']
         self.assertEqual(controller.state()['data']['mode'], 'unchanged')
         self.assertEqual(report['transport']['import']['archive_read_bytes'], 0)
         self.assertFalse(self.fixture.output.exists())
 
-    def test_answer_rerun_names_producing_attempt_and_repairs_failed_close_without_duplicates(self):
-        result, checksum = self.publish()
-        self.api.fail_close = True
-        with self.assertRaises(RuntimeError): controller.answer(self.api, result, checksum, self.records)
-        os.environ['GITHUB_RUN_ATTEMPT'] = '2'
-        os.environ['EXPECTED_PRODUCER_ATTEMPT'] = '1'
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'closed')
-        self.assertEqual(len(self.api.comments[1]), 1)
 
     def test_rerun_build_repairs_its_attempted_pair_but_never_rolls_back_a_newer_release(self):
         prepared, digest = self.preparation()
@@ -392,42 +356,11 @@ class SplitPublisherTests(unittest.TestCase):
         with self.assertRaisesRegex(PublicationError, 'superseded'):
             controller.build(self.records, self.url, accepted, checksum)
 
-    def test_main_change_before_deploy_or_answer_leaves_requests_open(self):
-        result, checksum = self.publish()
+    def test_main_change_before_deploy_blocks_authorization(self):
+        self.publish()
         self.records.main_commit.return_value = 'f' * 40
         with self.assertRaisesRegex(PublicationError, 'superseded'): controller.authorize(self.records)
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual(self.api.issues[1]['state'], 'open')
-        self.assertFalse(self.api.comments)
 
-    def test_requests_during_import_survive_burst_deferral_and_next_sweep(self):
-        admitted, digest = self.admission()
-        self.api.issues[2] = issue(2, created_at='2026-10-14T12:00:01Z', updated_at='2026-10-14T12:00:01Z')
-        self.api.issues[3] = issue(3, body='### Group\n\nbeta', created_at='2026-10-14T12:00:02Z', updated_at='2026-10-14T12:00:02Z')
-        prepared = self.folder('prepared')
-        digest = controller.prepare(self.records, self.url, admitted, digest, prepared)
-        accepted, checksum = self.accepted(prepared, digest)
-        controller.build(self.records, self.url, accepted, checksum)
-        controller.record(self.records)
-        self.fixture.deploy()
-        controller.verify(self.records)
-        result = self.folder('result')
-        checksum = controller.finalize(accepted, checksum, result)
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual([self.api.issues[n]['state'] for n in (1, 2, 3)], ['closed', 'open', 'open'])
-        self.records.last_refresh.return_value = '2026-10-14T12:00:00Z'
-        with patch.object(controller, 'utc_now', return_value='2026-10-14T12:00:03Z'):
-            deferred, digest = self.admission(event='issues', issue_number=2)
-            metadata, batch, _ = controller.load(deferred, digest, {'admission'})
-            self.assertEqual(metadata['data']['mode'], 'deferred')
-            self.assertEqual([request['number'] for request in batch['requests']], [2, 3])
-        self.fixture.update('alpha', b'Late committed content')
-        self.next_run(66)
-        with patch.object(controller, 'utc_now', return_value='2026-10-14T12:10:00Z'):
-            result, checksum = self.publish()
-        controller.answer(self.api, result, checksum, self.records)
-        self.assertEqual([self.api.issues[n]['state'] for n in (1, 2, 3)], ['closed', 'closed', 'closed'])
-        self.assertEqual((self.fixture.live / 'alpha/text.md').read_bytes(), b'Late committed content')
 
     def test_rejected_commit_shows_on_the_page_with_the_commit_still_online(self):
         self.publish()
@@ -469,11 +402,11 @@ class SplitPublisherTests(unittest.TestCase):
         self.assertIn('| alpha | failed | — | fffffff |', text)
 
     def test_input_state_names_the_artifact_digest_and_producing_attempt(self):
-        admitted, checksum = self.admission()
-        with patch.dict(os.environ, INPUT_STATE=f'admission-60-1:{checksum}', GITHUB_RUN_ATTEMPT='2'):
+        prepared, checksum = self.preparation()
+        with patch.dict(os.environ, INPUT_STATE=f'prepared-60-1:{checksum}', GITHUB_RUN_ATTEMPT='2'):
             self.assertEqual(controller.input_state(), checksum)
             self.assertEqual(os.environ['EXPECTED_PRODUCER_ATTEMPT'], '1')
-            controller.load(admitted, checksum, {'admission'})
+            controller.load(prepared, checksum, {'prepared'})
         os.environ.pop('EXPECTED_PRODUCER_ATTEMPT', None)
 
     def test_removed_registry_row_leaves_the_archive_and_the_site(self):

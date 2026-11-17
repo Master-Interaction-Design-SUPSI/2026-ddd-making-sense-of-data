@@ -176,5 +176,17 @@ class LocalEntryStampTests(unittest.TestCase):
         self.assertNotIn('online', self.entries()['materialities-of-ai'])
 
 
+class StaticAssetTests(unittest.TestCase):
+    def test_unused_local_fonts_are_excluded_from_published_output(self):
+        fixture = Course(self)
+        fonts = fixture.root / 'static/fonts/areal'
+        fonts.mkdir(parents=True)
+        (fonts / 'ABCAreal-Regular.woff2').write_bytes(b'private font')
+        (fixture.root / 'static/main.css').write_text('body { font-family: Arial; }')
+        build_site.write_site({})
+        self.assertFalse((fixture.output / 'static/fonts').exists())
+        self.assertEqual((fixture.output / 'static/main.css').read_text(), 'body { font-family: Arial; }')
+
+
 if __name__ == "__main__":
     unittest.main()

@@ -5,8 +5,6 @@ on:
     branches: [main]
   schedule:
     - cron: '7,17,27,37,47,57 * * * *'
-  issues:
-    types: [opened]
   workflow_dispatch:
 
 permissions:
@@ -15,23 +13,15 @@ permissions:
 env:
   DDD_PUBLICATION_PAUSED: ${{ vars.DDD_PUBLICATION_PAUSED }}
 
-# A publication run uses queue `pages`; an issue that is not an eligible publication request gets its own queue.
 concurrency:
-  group: >-
-    ${{ (github.event_name != 'issues'
-         || vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request'))
-        && 'pages' || format('ignored-issue-{0}', github.event.issue.number) }}
+  group: pages
   cancel-in-progress: false
 
 # Each job seals its result as an artifact and outputs `state` (`<artifact>:<metadata sha256>`).
 # The next job reads it as INPUT_STATE, downloads that artifact and admits it only with that digest.
 jobs:
   pin:
-    # Not paused, on main, and either not an issue or an eligible publication request.
-    if: >-
-      vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main'
-      && (github.event_name != 'issues'
-          || vars.DDD_REQUESTS_ENABLED == 'true' && contains(github.event.issue.labels.*.name, 'publication-request'))
+    if: vars.DDD_PUBLICATION_PAUSED != 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -51,42 +41,8 @@ jobs:
       - id: pages
         uses: actions/configure-pages@v5
 
-  admit:
-    needs: pin
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      issues: read
-      deployments: write
-    env:
-      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
-      REQUESTS_ENABLED: ${{ vars.DDD_REQUESTS_ENABLED == 'true' }}
-    outputs:
-      state: ${{ steps.admit.outputs.state }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.pin.outputs.main_commit }}
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - id: admit
-        name: Capture request cutoff and reserve eligible refresh
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish.py admit
-      - uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.admit.outputs.artifact }}
-          path: .scratch/job-output
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
-
   prepare:
-    needs: [pin, admit]
+    needs: pin
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
@@ -95,7 +51,6 @@ jobs:
     env:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      INPUT_STATE: ${{ needs.admit.outputs.state }}
     outputs:
       state: ${{ steps.prepare.outputs.state }}
       archive: ${{ steps.prepare.outputs.archive }}
@@ -114,12 +69,6 @@ jobs:
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify browser contracts and renderer lifecycle
         run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
-      - id: input
-        run: echo "artifact=${INPUT_STATE%%:*}" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
-        with:
-          name: ${{ steps.input.outputs.artifact }}
-          path: .scratch/job-input
       - id: prepare
         name: Prepare candidate or pending pair
         env:
@@ -196,8 +145,6 @@ jobs:
       MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
       PAGES_URL: ${{ needs.pin.outputs.pages_url }}
       INPUT_STATE: ${{ needs.accept.outputs.state || needs.prepare.outputs.state }}
-    outputs:
-      state: ${{ steps.finalize.outputs.state }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -248,52 +195,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 scripts/publish.py verify
-      - id: finalize
-        if: always()
-        name: Export bounded truthful result for the answer job
-        run: python3 scripts/publish.py finalize
-      - uses: actions/upload-artifact@v4
-        if: always() && steps.finalize.outputs.artifact != ''
-        with:
-          name: ${{ steps.finalize.outputs.artifact }}
-          path: .scratch/job-output
-          include-hidden-files: true
-          if-no-files-found: error
-          retention-days: 7
       - name: Summarize group results for maintainers
         if: always()
         run: python3 scripts/publish.py summary
-
-  answer:
-    needs: [pin, admit, prepare, accept, publish]
-    # Requests are on and admission ran: answer from the newest state any later job sealed.
-    if: ${{ !cancelled() && needs.admit.result == 'success' && vars.DDD_REQUESTS_ENABLED == 'true' }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions:
-      contents: read
-      issues: write
-    env:
-      MAIN_COMMIT: ${{ needs.pin.outputs.main_commit }}
-      PAGES_URL: ${{ needs.pin.outputs.pages_url }}
-      INPUT_STATE: >-
-        ${{ needs.publish.outputs.state || needs.accept.outputs.state
-            || needs.prepare.outputs.state || needs.admit.outputs.state }}
-    steps:
-      - uses: actions/checkout@v6
-        with:
-          ref: ${{ needs.pin.outputs.main_commit }}
-          persist-credentials: false
-      - uses: actions/setup-python@v6
-        with:
-          python-version: '3.12'
-      - id: input
-        run: echo "artifact=${INPUT_STATE%%:*}" >> "$GITHUB_OUTPUT"
-      - uses: actions/download-artifact@v4
-        with:
-          name: ${{ steps.input.outputs.artifact }}
-          path: .scratch/job-input
-      - name: Repair one bot-owned status comment and close only verified checks
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 scripts/publish.py answer

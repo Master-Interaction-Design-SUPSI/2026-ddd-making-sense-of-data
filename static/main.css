@@ -3,38 +3,6 @@
    Prose uses fixed 41.6px leading. Inline media stays at or
    below 24px so it cannot expand the reading lines. Press g for guides. */
 
-@font-face {
-  font-family: "ABC Areal";
-  src: url("fonts/areal/ABCAreal-Regular.woff2") format("woff2");
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "ABC Areal";
-  src: url("fonts/areal/ABCAreal-RegularItalic.woff2") format("woff2");
-  font-weight: 400;
-  font-style: italic;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "ABC Areal";
-  src: url("fonts/areal/ABCAreal-Bold.woff2") format("woff2");
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: "ABC Areal";
-  src: url("fonts/areal/ABCAreal-BoldItalic.woff2") format("woff2");
-  font-weight: 700;
-  font-style: italic;
-  font-display: swap;
-}
-
 :root {
   --paper: #ffffff;
   --ink: #101010;
@@ -61,7 +29,7 @@
   --inline-media-height: 24px;
   --annotation-default: var(--signal);
   --u: 22px; /* compact interface spacing */
-  --sans: "ABC Areal", Arial, Helvetica, sans-serif;
+  --sans: Arial, Helvetica, sans-serif;
 }
 
 * {
@@ -211,7 +179,7 @@ pre {
 
 /* One empty navigation row separates the course brief from the groups. */
 .site-side:has(.site-nav a[data-folder="materialities-of-ai"]) {
-  /* Match the first prose line's cap top across the two Areal font sizes. */
+  /* Match the first prose line's cap top across the two font sizes. */
   padding-block-start: calc(var(--space) + (var(--prose-leading) - var(--brief-row-height)) / 2 - (var(--prose-size) - var(--ui-size)) * 0.375);
 }
 

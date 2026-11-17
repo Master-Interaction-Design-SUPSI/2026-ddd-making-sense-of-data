@@ -40,7 +40,7 @@ test('visibility starts muted playback and leaving visibility pauses it', async 
   assert.equal(video.paused, true);
 });
 
-test('refused autoplay reports its status, avoids retry loops and permits controller playback', async () => {
+test('refused autoplay reports its status and avoids retry loops', async () => {
   const video = new Video();
   let state;
   video.playAction = () => Promise.reject(Object.assign(new Error('blocked'), { name: 'NotAllowedError' }));
@@ -53,27 +53,6 @@ test('refused autoplay reports its status, avoids retry loops and permits contro
   controller.setActive(false);
   controller.setActive(true);
   assert.equal(video.attempts.length, 1);
-  video.playAction = () => Promise.resolve();
-  controller.toggle();
-  await settle();
-  assert.equal(video.paused, false);
-  assert.equal(state.status, '');
-});
-
-test('user pause survives leaving and re-entering visibility', async () => {
-  const video = new Video();
-  const controller = createVideoController(video, () => {});
-  controller.setActive(true);
-  await settle();
-  controller.toggle();
-  controller.setActive(false);
-  controller.setActive(true);
-  await settle();
-  assert.equal(video.paused, true);
-  assert.equal(video.attempts.length, 1);
-  controller.toggle();
-  await settle();
-  assert.equal(video.paused, false);
 });
 
 test('leaving while play is pending prevents late unwanted playback', async () => {
@@ -88,61 +67,47 @@ test('leaving while play is pending prevents late unwanted playback', async () =
   assert.equal(video.paused, true);
 });
 
-test('user pause cancels a pending autoplay attempt', async () => {
-  const video = new Video();
-  const pending = deferred();
-  video.playAction = () => pending.promise;
-  const controller = createVideoController(video, () => {});
-  controller.setActive(true);
-  controller.toggle();
-  pending.resolve();
-  await settle();
-  assert.equal(video.paused, true);
-});
-
 test('an obsolete play completion does not pause a newer requested playback', async () => {
   const video = new Video();
   const first = deferred();
   video.playAction = () => first.promise;
   const controller = createVideoController(video, () => {});
   controller.setActive(true);
-  controller.toggle();
+  controller.setActive(false);
   video.playAction = () => Promise.resolve();
-  controller.toggle();
+  controller.setActive(true);
   await settle();
   first.resolve();
   await settle();
   assert.equal(video.paused, false);
 });
 
-test('sound is explicit and unmuted videos do not resume automatically', async () => {
+test('unmuted videos do not resume automatically', async () => {
   const video = new Video();
   const controller = createVideoController(video, () => {});
   controller.setActive(true);
   await settle();
-  controller.toggleSound();
+  video.muted = false;
   assert.equal(video.muted, false);
   controller.setActive(false);
   controller.setActive(true);
   await settle();
   assert.equal(video.paused, true);
-  controller.toggle();
-  await settle();
-  assert.equal(video.paused, false);
-  assert.equal(video.muted, false);
 });
 
-test('reduced motion disables automatic playback but preserves manual controls', async () => {
+test('reduced motion disables automatic playback', async () => {
   const video = new Video();
   const controller = createVideoController(video, () => {}, false);
   controller.setActive(true);
   assert.equal(video.attempts.length, 0);
-  controller.toggle();
+  controller.setActive(false);
+  controller.setActive(true);
   await settle();
-  assert.equal(video.paused, false);
+  assert.equal(video.attempts.length, 0);
+  assert.equal(video.paused, true);
 });
 
-test('ended and unavailable media remain paused with a usable retry control', async () => {
+test('ended and unavailable media remain paused with an error status', async () => {
   const video = new Video();
   let state;
   const controller = createVideoController(video, next => { state = next; });
@@ -171,6 +136,5 @@ test('disposing a controller cancels pending play and prevents remounting remove
   await settle();
   assert.equal(video.paused, true);
   controller.setActive(true);
-  controller.toggle();
   assert.equal(video.attempts.length, 1);
 });

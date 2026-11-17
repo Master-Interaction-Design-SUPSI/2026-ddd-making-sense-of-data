@@ -1,4 +1,4 @@
-"""Trusted split-job controller for request admission, durable acceptance and Pages."""
+"""Trusted split-job controller for durable archive acceptance and Pages."""
 
 import argparse
 import hashlib
@@ -10,7 +10,6 @@ import shutil
 import subprocess
 import tempfile
 from contextvars import ContextVar
-from datetime import datetime, timezone
 from functools import wraps
 from pathlib import Path
 
@@ -21,15 +20,14 @@ from archive_state import MANIFEST, ArchiveSnapshot, MAX_TRANSFER_BYTES, empty_a
 from archive_transaction import admit_candidate, pack_snapshot, prepare_archive
 from deployment_records import DeploymentRecords
 from group_registry import REPOSITORY, load_registry
-from publication_requests import RequestAPI, body_hash, capture_batch, parse_group, refresh_allowed, validate_batch, answer_batch, LABEL
 from release import (MAX_MANIFEST_BYTES, RELEASE, PublicationError, encode, output, require_publication_active,
                      served_release, site_digest, unique_keys, validate_release, worktree_clean)
 
 ROOT = Path(__file__).resolve().parent.parent
 STATE = ROOT / '.scratch/build-state.json'
-KINDS = {'admission', 'prepared', 'accepted', 'result'}
-MODES = {'refresh', 'unchanged', 'pending', 'retry', 'repair', 'deferred', 'invalid', 'superseded'}
-MEMBERS = {'batch.json', 'report.json', 'candidate.tar'}
+KINDS = {'prepared', 'accepted'}
+MODES = {'refresh', 'unchanged', 'pending', 'retry', 'repair'}
+MEMBERS = {'report.json', 'candidate.tar'}
 MAX_REPORT_BYTES = 8 * 1024 * 1024
 TRANSPORT_STAGE = ContextVar('publication_transport_stage', default=None)
 
@@ -175,7 +173,7 @@ def load(folder, expected_hash, kinds):
             or value['registry_sha256'] != sha_file(ROOT / 'groups.json', MAX_MANIFEST_BYTES)
             or not isinstance(value['data'], dict) or value['data'].get('mode') not in MODES
             or not isinstance(value['files'], dict)
-            or not {'batch.json', 'report.json'} <= value['files'].keys()
+            or 'report.json' not in value['files']
             or value['files'].keys() - MEMBERS):
         raise PublicationError('job artifact code/registry/run/schema identity differs')
     if {path.name for path in folder.iterdir()} != {'metadata.json', *value['files']}:
@@ -184,69 +182,10 @@ def load(folder, expected_hash, kinds):
         limit = MAX_TRANSFER_BYTES if name == 'candidate.tar' else MAX_REPORT_BYTES if name == 'report.json' else MAX_MANIFEST_BYTES
         if sha_file(folder / name, limit) != digest:
             raise PublicationError('job artifact content changed: ' + name)
-    batch = validate_batch(read_json(folder / 'batch.json'), context['repository'], registry())
     report = read_json(folder / 'report.json', MAX_REPORT_BYTES)
     if not isinstance(report, dict) or not isinstance(report.get('groups'), list):
         raise PublicationError('invalid trusted group report')
-    return value, batch, report
-
-
-def utc_now():
-    return datetime.now(timezone.utc).strftime('%Y-%m-%dT%H:%M:%SZ')
-
-
-class AdmissionRecords(DeploymentRecords):
-    """A refresh reservation is operational timing, never accepted/published content."""
-
-    def last_refresh(self):
-        rows = json.loads(self.client.get(self.base + '/deployments?task=course-refresh&environment=course-refresh-cooldown&per_page=1', MAX_MANIFEST_BYTES))
-        if not isinstance(rows, list) or len(rows) > 1:
-            raise PublicationError('invalid refresh reservation history')
-        if not rows:
-            return None
-        row = rows[0]
-        if row.get('task') != 'course-refresh' or row.get('environment') != 'course-refresh-cooldown':
-            raise PublicationError('unexpected refresh reservation')
-        return row['created_at']
-
-    def reserve(self, context, cutoff, event):
-        return self.post('/deployments', {'ref': context['main_commit'], 'task': 'course-refresh',
-            'environment': 'course-refresh-cooldown', 'auto_merge': False, 'required_contexts': [],
-            'production_environment': False, 'description': 'Refresh admitted; this is not a publication',
-            'payload': {'version': 1, **context, 'cutoff': cutoff, 'event': event}})
-
-
-def admit(records, api, destination, event, *, issue_number=None, requests_enabled=False):
-    context = require_main(records)
-    cutoff = utc_now()
-    groups = registry()
-    mode = 'refresh'
-    if event not in {'push', 'schedule', 'workflow_dispatch', 'issues'}:
-        raise PublicationError('untrusted publication event')
-    batch = {'version': 1, 'repository': context['repository'], 'cutoff': cutoff, 'requests': []}
-    if event == 'issues':
-        if not requests_enabled or type(issue_number) is not int or issue_number <= 0:
-            mode = 'deferred'
-        else:
-            issue = api.get(f'/repos/{context["repository"]}/issues/{issue_number}')
-            if (issue.get('number') != issue_number or issue.get('state') != 'open' or 'pull_request' in issue
-                    or LABEL not in [row.get('name') for row in issue.get('labels', []) if isinstance(row, dict)]):
-                mode = 'deferred'
-            elif parse_group(issue.get('body') or '', groups) is None:
-                mode = 'invalid'
-                batch['requests'] = [{'number': issue_number, 'slug': None,
-                                      'body_sha256': body_hash(issue.get('body') or '')}]
-    if mode == 'refresh' and requests_enabled:
-        batch = capture_batch(api, context['repository'], groups, cutoff)
-    if mode == 'refresh' and not refresh_allowed(event, cutoff, records.last_refresh(), enabled=requests_enabled,
-                                                api_remaining=records.client.api_remaining):
-        mode = 'deferred'
-    if mode == 'refresh':
-        require_main(records)
-        records.reserve(context, cutoff, event)
-    return seal(destination, 'admission', {'mode': mode, 'cutoff': cutoff},
-                {'batch.json': encode(batch), 'report.json': encode({'groups': [], 'transport': {
-                    'admission': dict(records.client.metrics), 'issues': dict(api.client.metrics)}})})
+    return value, report
 
 
 def _read_archive(destination, commit):
@@ -257,22 +196,22 @@ def _read_archive(destination, commit):
 
 
 @transport_stage('prepare')
-def prepare(records, url, admission, checksum, destination):
+def prepare(records, url, destination, *, event):
     context = require_main(records)
-    admitted, batch, report = load(admission, checksum, {'admission'})
+    if event not in {'push', 'schedule', 'workflow_dispatch'}:
+        raise PublicationError('untrusted publication event')
+    report = {'groups': [], 'transport': {}}
     destination = Path(destination)
     destination.mkdir(parents=True, exist_ok=True)
-    data = {'mode': admitted['data']['mode'], 'archive_commit': None, 'expected_parent': None,
+    data = {'mode': 'refresh', 'archive_commit': None, 'expected_parent': None,
             'previous_release': None, 'deployment_id': None, 'source_checked': False}
-    files = {'batch.json': encode(batch)}
+    files = {}
 
     def finish(**changes):
         data.update(changes)
         files['report.json'] = encode(report)
         return seal(destination, 'prepared', data, files)
 
-    if data['mode'] in {'deferred', 'invalid', 'superseded'}:
-        return finish()
     latest = records.latest()
     # Classifying this exact attempt needs one status request, not a history sweep.
     verified = latest if latest and records.is_verified(latest['id']) else None
@@ -318,10 +257,10 @@ def prepare(records, url, admission, checksum, destination):
 @transport_stage('accept')
 def accept(records, preparation, checksum, destination):
     context = require_main(records)
-    prepared, batch, report = load(preparation, checksum, {'prepared'})
+    prepared, report = load(preparation, checksum, {'prepared'})
     data = prepared['data']
     if data['mode'] != 'refresh' or 'candidate.tar' not in prepared['files']:
-        raise PublicationError('only an independently admitted candidate may be accepted')
+        raise PublicationError('only a prepared candidate may be accepted')
     with tempfile.TemporaryDirectory(prefix='ddd-writer-') as temporary:
         root = Path(temporary)
         unpack_snapshot(Path(preparation) / 'candidate.tar', root / 'candidate', prepared['files']['candidate.tar'])
@@ -336,7 +275,7 @@ def accept(records, preparation, checksum, destination):
         archive_git.publish_commit(git, commit, context['main_commit'], data['expected_parent'], authenticated=True)
     data['archive_commit'] = commit
     output('archive_commit', commit)
-    return seal(destination, 'accepted', data, {'batch.json': encode(batch), 'report.json': encode(report)})
+    return seal(destination, 'accepted', data, {'report.json': encode(report)})
 
 
 def _save(state):
@@ -350,16 +289,13 @@ def _save(state):
 @transport_stage('build', durable_state=True)
 def build(records, url, source, checksum):
     context = require_main(records)
-    payload, batch, report = load(source, checksum, {'prepared', 'accepted'})
+    payload, report = load(source, checksum, {'prepared', 'accepted'})
     data = payload['data']
     state = {'identity': context, 'data': data, 'status': 'building', 'url': url, 'release': None,
-             'deployment_id': data['deployment_id'], 'batch': batch, 'report': report}
+             'deployment_id': data['deployment_id'], 'report': report}
     _save(state)
     output('deploy', 'false')
     try:
-        if data['mode'] in {'invalid', 'deferred', 'superseded'}:
-            state['status'] = data['mode']
-            return
         if data['mode'] == 'refresh' and payload['kind'] != 'accepted':
             raise PublicationError('unarchived candidate content cannot be deployed')
         latest = None
@@ -468,34 +404,6 @@ def verify(records):
         _save(current)
 
 
-def finalize(source, checksum, destination):
-    payload, batch, report = load(source, checksum, {'prepared', 'accepted'})
-    current = state() if STATE.exists() else {'status': 'failed', 'report': report, 'batch': batch,
-                                           'data': payload['data'], 'release': None, 'error': 'Build stage did not complete'}
-    current['data']['stage'] = current['status']
-    current['data']['release'] = current['release']
-    if current.get('error'):
-        current['report']['error'] = current['error']
-    return seal(destination, 'result', current['data'],
-                {'batch.json': encode(current['batch']), 'report.json': encode(current['report'])})
-
-
-def answer(api, source, checksum, records=None):
-    require_publication_active()
-    context = identity()
-    if records is not None and records.main_commit() != context['main_commit']:
-        return
-    payload, batch, report = load(source, checksum, {'admission', 'prepared', 'accepted', 'result'})
-    mode = payload['data']['mode']
-    stage = payload['data'].get('stage', mode if mode in {'deferred', 'invalid', 'superseded'} else 'failed')
-    # A retry or repair publishes previously accepted content; it did not check new source requests.
-    if stage == 'recovered':
-        stage = 'deferred'
-    answer_batch(api, batch, context['repository'], registry(), report['groups'], stage,
-                 int(context['run_id']), int(context['run_attempt']), os.environ['PAGES_URL'])
-    print(encode({'issue_transport': api.client.metrics}).decode())
-
-
 def summary():
     """The maintainers' "Course publication" step summary: one row per group. Students read their entry."""
     try:
@@ -544,31 +452,21 @@ def input_state():
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('command', choices=('admit', 'prepare', 'accept', 'build', 'record', 'authorize', 'verify',
-                                            'finalize', 'answer', 'summary'))
+    parser.add_argument('command', choices=('prepare', 'accept', 'build', 'record', 'authorize', 'verify', 'summary'))
     args = parser.parse_args()
     context = identity()
     source = ROOT / '.scratch/job-input'
     checksum = input_state()
     destination = ROOT / '.scratch/job-output'
     url = os.environ.get('PAGES_URL', '')
-    if args.command == 'admit':
-        event = read_json(os.environ['GITHUB_EVENT_PATH'])
-        admit(AdmissionRecords(context['repository']), RequestAPI(context['repository']), destination,
-              os.environ['GITHUB_EVENT_NAME'], issue_number=event.get('issue', {}).get('number'),
-              requests_enabled=os.environ.get('REQUESTS_ENABLED') == 'true')
-    elif args.command == 'prepare':
-        prepare(DeploymentRecords(context['repository']), url, source, checksum, destination)
+    if args.command == 'prepare':
+        prepare(DeploymentRecords(context['repository']), url, destination, event=os.environ['GITHUB_EVENT_NAME'])
     elif args.command == 'accept':
         accept(DeploymentRecords(context['repository']), source, checksum, destination)
     elif args.command == 'build':
         build(DeploymentRecords(context['repository']), url, source, checksum)
-    elif args.command == 'finalize':
-        finalize(source, checksum, destination)
     elif args.command == 'summary':
         summary()
-    elif args.command == 'answer':
-        answer(RequestAPI(context['repository']), source, checksum, DeploymentRecords(context['repository']))
     else:
         {'record': record, 'authorize': authorize, 'verify': verify}[args.command](DeploymentRecords(context['repository']))
 

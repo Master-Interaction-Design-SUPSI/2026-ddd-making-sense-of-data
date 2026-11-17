@@ -1,24 +1,12 @@
 const assert = require('node:assert/strict');
 const { test } = require('node:test');
 const fs = require('node:fs');
-const { Draft, bytes, digest, select, publicationRequest } = require('../editor/model.js');
+const { Draft, bytes, digest, select } = require('../editor/model.js');
 const { validateRender } = require('../editor/protocol.js');
 const references = require('../static/references.js');
 const contract = require('../static/contract.json');
 const config = { exclude: ['media/excluded.mov'] };
 
-test('publication requests prefill only the registered group on the fixed course form', () => {
-  const url = new URL(publicationRequest('Course/site', 'city-water'));
-  assert.equal(url.origin, 'https://github.com');
-  assert.equal(url.pathname, '/Course/site/issues/new');
-  assert.equal(url.searchParams.get('template'), 'publish.yml');
-  assert.equal(url.searchParams.get('group'), 'city-water');
-  assert.equal(url.searchParams.get('labels'), 'publication-request');
-  for (const [repository, slug] of [['https://evil.test/course', 'city-water'], ['Course/site', '../city-water'],
-    ['Course/site', 'city-water&group=other'], ['Course/site.git', 'city-water']]) {
-    assert.throws(() => publicationRequest(repository, slug), /identity/);
-  }
-});
 
 test('UTF-8 and exact admission boundaries include unreferenced files', () => {
   assert.equal(bytes('è✶'), 5);

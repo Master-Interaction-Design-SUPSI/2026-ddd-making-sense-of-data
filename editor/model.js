@@ -5,18 +5,6 @@
   const digest = async blob => [...new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))]
     .map(value => value.toString(16).padStart(2, '0')).join('');
 
-  function publicationRequest(repository, slug) {
-    if (typeof repository !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9-]*\/[A-Za-z0-9_][A-Za-z0-9_.-]*$/.test(repository) || repository.endsWith('.git')
-        || typeof slug !== 'string' || slug.length > 63 || !/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(slug)) {
-      throw new Error('Invalid publication request identity');
-    }
-    const url = new URL(`https://github.com/${repository}/issues/new`);
-    url.searchParams.set('template', 'publish.yml');
-    url.searchParams.set('group', slug);
-    url.searchParams.set('labels', 'publication-request');
-    return url.href;
-  }
-
   // complete: the file set is a whole group, so every required file must be present.
   function select(files, contract, complete = true) {
     const selected = new Map();
@@ -128,7 +116,7 @@
     return media.serialize(rows);
   }
 
-  const api = { bytes, digest, select, publicationRequest, startingTable, Draft };
+  const api = { bytes, digest, select, startingTable, Draft };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CourseDraft = api;
 })(globalThis);
