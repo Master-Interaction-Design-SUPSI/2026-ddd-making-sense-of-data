@@ -30,11 +30,12 @@
   window.addEventListener('pagehide', event => { if (!event.persisted) previewClient.dispose(); });
   window.addEventListener('pageshow', event => { if (event.persisted) previewClient.retry(); });
   const tableName = contract.media_table;
-  const draftStore = new CourseDraftStorage.DraftStore();
   let channel = null;
   try { if (typeof BroadcastChannel === 'function') channel = new BroadcastChannel('ddd-editor-drafts'); } catch { /* Revision checks still prevent overwrites without tab notifications. */ }
   let persistence = null;
-  let saving = Promise.resolve();
+  const browserDrafts = new CoursePersistence.Persistence({
+    store: new CourseDraftStorage.DraftStore(), notify: message => channel?.postMessage(message),
+  });
   const savedControls = visible => {
     $('recovery-notice').hidden = !visible;
     $('fallback-restore').hidden = !visible || !persistence?.hasDurable || !persistence?.legacy;
@@ -62,29 +63,9 @@
     }
   }
 
-  async function openStorage(key) {
-    await saving;
-    let legacy = null;
-    try { legacy = localStorage.getItem(key); } catch { /* IndexedDB may still work when localStorage is denied. */ }
-    try {
-      const record = await draftStore.read(key);
-      return { key, backend: 'indexeddb', revision: record?.revision || 0,
-               pending: !!(record && !record.discarded || legacy), hasDurable: !!(record && !record.discarded), conflict: false, legacy, retireLegacy: false,
-               generation: 0, unsaved: false };
-    } catch {
-      return { key, backend: 'local', pending: !!legacy, hasDurable: false, conflict: false, legacy, retireLegacy: false,
-               generation: 0, unsaved: false };
-    }
-  }
-
   async function savedRecord(context) {
     if (importedRecovery && context === persistence) return importedRecovery;
-    if (context.backend === 'indexeddb') {
-      const record = await draftStore.read(context.key);
-      if (record && !record.discarded) return record;
-    }
-    const raw = localStorage.getItem(context.key);
-    return raw ? { ...JSON.parse(raw), legacyRaw: raw } : null;
+    return browserDrafts.read(context);
   }
   const missingAttachments = new Set();
   let mutationRevision = 0;
@@ -100,7 +81,6 @@
     preview(150);
   }
   const rawUrl = (revision, path) => `https://raw.githubusercontent.com/${config.repository}/${encodeURIComponent(revision)}/${path.split('/').map(encodeURIComponent).join('/')}`;
-  const github = (action, path = '') => `https://github.com/${config.repository}/${action}/${encodeURIComponent(config.branch)}/${path.split('/').map(encodeURIComponent).join('/')}`;
   const run = (fn, target = 'status') => { feedback(target).textContent = ''; return Promise.resolve().then(fn).catch(error => fail(error, target)); };
   for (const group of groups.groups.filter(group => group.editable)) {
     const option = document.createElement('option'); option.value = group.slug; option.textContent = group.slug; $('group').append(option);
@@ -108,26 +88,7 @@
   $('group').disabled = false;
   $('open').disabled = $('template').disabled = !$('group').options.length;
 
-  async function fetchBlob(url, limit) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30000);
-    try {
-      const response = await fetch(url, { cache: 'no-store', redirect: 'error', signal: controller.signal });
-      if (!response.ok) throw new Error(`Could not load ${url.pathname || url}`);
-      if (!response.body) throw new Error('This browser cannot stream file downloads');
-      const reader = response.body.getReader();
-      const chunks = []; let size = 0;
-      try {
-        while (true) {
-          const { done, value } = await reader.read(); if (done) break;
-          size += value.byteLength;
-          if (size > limit) throw new Error('Downloaded file exceeds its byte limit');
-          chunks.push(value);
-        }
-      } catch (error) { await reader.cancel(); throw error; }
-      return new Blob(chunks);
-    } finally { clearTimeout(timeout); }
-  }
+  const { fetchBlob } = CourseDownload;
 
   async function boundedBlob(url, record) {
     const blob = await fetchBlob(url, record.size);
@@ -138,7 +99,7 @@
   const sourceText = async blob => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await blob.arrayBuffer());
 
   async function open(template) {
-    await saving;
+    await browserDrafts.idle();
     if (persistence?.unsaved && !window.confirm('Some current edits have not been saved. Download your current text and attachments before switching. Continue and discard these unsaved edits?')) return;
     const revision = ++loadRevision;
     loading = true; updateControls();
@@ -172,7 +133,7 @@
     const tableBlob = records.has(tableName) ? await boundedBlob(records.get(tableName).url, records.get(tableName)) : null;
     if (revision !== loadRevision) return;
     const loadedText = await sourceText(text);
-    const context = await openStorage([siteRoot.href, selected.repository, selected.branch, selected.slug].join('|'));
+    const context = await browserDrafts.open([siteRoot.href, selected.repository, selected.branch, selected.slug].join('|'));
     if (revision !== loadRevision) return;
     const loadedTable = tableBlob ? await sourceText(tableBlob) : null;
     if (revision !== loadRevision) return;
@@ -212,51 +173,23 @@
     }
   }
 
-  function save() {
-    const context = persistence;
-    if (!editable()) return saving;
-    context.unsaved = true;
-    if (context.conflict || context.pending) {
-      $('save').textContent = 'A browser draft is waiting. Download, restore or discard it explicitly before saving here. Your current edits are not autosaved yet.';
-      return saving;
+  function persistenceState({ status: state, context, error }) {
+    if (context !== persistence) return;
+    if (state === 'saving') { $('save').textContent = 'Saving in this browser…'; return; }
+    if (state === 'saved') {
+      $('save').textContent = context.backend === 'indexeddb'
+        ? 'Text and attached media saved in this browser only.'
+        : 'Text saved in this browser only. Reattach media after reload.';
+      return;
     }
-    const generation = ++context.generation;
-    const payload = CourseDraftSession.snapshot(draft, baseId, missingAttachments);
-    context.unsaved = true;
-    $('save').textContent = 'Saving in this browser…';
-    saving = saving.then(async () => {
-      if (context.conflict || context.pending || generation !== context.generation) return;
-      if (context.backend === 'indexeddb') {
-        context.revision = await draftStore.save(context.key, payload, context.revision);
-        channel?.postMessage({ key: context.key, revision: context.revision });
-        try {
-          if (context.retireLegacy && context.legacy && localStorage.getItem(context.key) === context.legacy) {
-            localStorage.removeItem(context.key); context.legacy = null;
-          }
-        } catch { /* A committed IndexedDB draft survives failure to retire the legacy text copy. */ }
-      } else {
-        if (localStorage.getItem(context.key) !== context.legacy) throw new CourseDraftStorage.DraftConflict();
-        const fallback = { version: 1, baseId: payload.baseId, text: payload.text, table: payload.table,
-          paths: [...new Set([...payload.assets.map(asset => asset.path), ...payload.missingPaths])],
-          deletions: payload.deletions, saved: payload.saved };
-        const encoded = JSON.stringify(fallback);
-        localStorage.setItem(context.key, encoded);
-        context.legacy = encoded;
-      }
-      if (generation === context.generation) context.unsaved = false;
-      if (context === persistence && generation === context.generation) {
-        $('save').textContent = context.backend === 'indexeddb'
-          ? 'Text and attached media saved in this browser only.'
-          : 'Text saved in this browser only. Reattach media after reload.';
-      }
-    }).catch(error => {
-      if (error.name === 'DraftConflict') context.conflict = true;
-      if (context !== persistence) return;
-      if (context.conflict) { context.gate.requireRecovery(); savedControls(true); updateControls(); }
-      $('save').textContent = context.conflict ? error.message
-        : 'Could not save text and media in this browser. The previous saved draft is preserved. Download your text and attachments and keep originals before leaving.';
-    });
-    return saving;
+    if (state === 'conflict') { savedControls(true); updateControls(); }
+    $('save').textContent = state === 'conflict' ? error.message
+      : 'Could not save text and media in this browser. The previous saved draft is preserved. Download your text and attachments and keep originals before leaving.';
+  }
+
+  function save() {
+    if (!editable()) return browserDrafts.idle();
+    return browserDrafts.save(persistence, CourseDraftSession.snapshot(draft, baseId, missingAttachments), persistenceState);
   }
 
   function setDocumentField(id, value) {
@@ -401,81 +334,24 @@
   // A group needs media.csv only once it has a row, or when its repository already has one.
   function storeRows() { if (tableError) throw new Error('Repair media.csv before editing rows.'); draft.table = tableRows.length || draft.base.has(tableName) ? CourseMediaTable.serialize(tableRows) : null; }
 
-  // Name, source and insertion: what a writer needs for each media name.
-  function mediaMetadata(entry, index, path) {
-    const metadata = document.createElement('div'); metadata.dataset.index = index;
-    for (const [field, label, type] of [['name', 'Name', 'text'], ['source', 'Source link', 'url']]) {
-      const wrapper = document.createElement('label'); wrapper.textContent = label;
-      const input = document.createElement('input'); input.type = type; input.dataset.field = field; input.value = entry[field];
-      input.setAttribute('aria-label', `${label}: ${path}`); wrapper.append(input); metadata.append(wrapper);
-    }
-    const actions = document.createElement('div'); actions.className = 'row';
-    const insert = document.createElement('button'); insert.textContent = 'Insert in text'; insert.dataset.action = 'insert'; actions.append(insert);
-    metadata.append(actions);
-    return metadata;
-  }
-
-  // The table row's exact file path and its removal: needed only to repair a row.
-  function rowDetails(entry, index) {
-    const row = document.createElement('div'); row.dataset.index = index;
-    const label = document.createElement('label'); label.textContent = `File path for ${entry.name ? `[[${entry.name}]]` : 'this name'}`;
-    const input = document.createElement('input'); input.value = entry.file; input.dataset.field = 'file'; label.append(input);
-    const remove = document.createElement('button'); remove.textContent = 'Remove name'; remove.dataset.action = 'remove';
-    row.append(label, remove);
-    return row;
-  }
-
-  function more(...children) {
-    const details = document.createElement('details'), summary = document.createElement('summary');
-    summary.textContent = 'More'; details.append(summary, ...children);
-    return details;
-  }
-
-  const useText = count => count === 0 ? 'not in the text yet' : count === 1 ? 'used once in the text' : `used ${count} times in the text`;
+  const mediaView = CourseMediaView.create({ document, previews: mediaPreviews, run, actions: {
+    replace: beginReplacement,
+    download,
+    name(path) {
+      if (!allowEdit()) return;
+      tableRows.push(CourseDraft.rowsFor([path], tableRows)[0]);
+      storeRows(); recordChange(); renderRows(); updateControls();
+    },
+    remove(path) {
+      if (!allowEdit()) return;
+      draft.removeAsset(path); missingAttachments.delete(path);
+      loadRows(false); recordChange(); listFiles();
+    },
+  } });
 
   function renderRows() {
-    $('media-rows').replaceChildren();
-    const inventory = new Map([...draft.files()].filter(([path]) => !['text.md', 'visual.svg', tableName].includes(path)));
-    for (const entry of tableRows) if (entry.file !== 'visual.svg' && !inventory.has(entry.file)) inventory.set(entry.file, null);
-    const visual = draft.files().get('visual.svg');
-    $('visual-preview').replaceChildren(...(visual ? [mediaPreviews.element('visual.svg', visual)] : []));
-    $('visual-metadata').replaceChildren(...tableRows.flatMap((entry, index) => {
-      if (entry.file !== 'visual.svg') return [];
-      const block = document.createElement('div'); block.append(mediaMetadata(entry, index, 'visual.svg'), more(rowDetails(entry, index)));
-      return [block];
-    }));
-    const namedUses = CourseMediaTable.namedReferences(draft.text);
-    const directUses = CourseReferences.collect(draft.text);
-    for (const [path, file] of inventory) {
-      const item = document.createElement('li'); item.dataset.path = path;
-      const error = document.createElement('p'); error.className = 'error'; error.dataset.mediaError = ''; error.setAttribute('role', 'status');
-      const entries = tableRows.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.file === path);
-      const named = entries.reduce((sum, { entry }) => sum + namedUses.filter(ref => ref.name.toLowerCase() === entry.name.toLowerCase()).length, 0);
-      const direct = directUses.filter(target => { try { return CourseReferences.localPath(target, contract.reference_schemes) === path; } catch { return false; } }).length;
-      if (file) item.append(mediaPreviews.element(path, file));
-      const heading = document.createElement('p'); heading.className = 'media-file';
-      heading.textContent = `${path} · ${file ? useText(named + direct) : 'file missing'}`; item.append(heading);
-      for (const { entry, index } of entries) item.append(mediaMetadata(entry, index, path));
-      if (!entries.length && !tableError) {
-        const create = document.createElement('button'); create.textContent = 'Name this media';
-        create.addEventListener('click', () => run(() => {
-          if (!allowEdit()) return;
-          tableRows.push(CourseDraft.rowsFor([path], tableRows)[0]); storeRows(); recordChange(); renderRows(); updateControls();
-        }, error)); item.append(create);
-      }
-      const actions = document.createElement('div'); actions.className = 'row';
-      if (file) {
-        const replace = document.createElement('button'); replace.textContent = 'Replace file'; replace.addEventListener('click', () => beginReplacement(path)); actions.append(replace);
-        if (file.blob) { const button = document.createElement('button'); button.textContent = 'Download file'; button.addEventListener('click', () => download(file.blob, path.split('/').pop())); actions.append(button); }
-        const remove = document.createElement('button'); remove.textContent = 'Remove file';
-        remove.addEventListener('click', () => run(() => {
-          if (!allowEdit()) return;
-          draft.removeAsset(path); missingAttachments.delete(path); loadRows(false); recordChange(); listFiles();
-        }, error)); actions.append(remove);
-      }
-      item.append(more(actions, ...entries.map(({ entry, index }) => rowDetails(entry, index))), error); $('media-rows').append(item);
-    }
-    mediaPreviews.retain(new Set(['visual.svg', ...inventory.keys()]));
+    const inventory = CourseInventory.describe(draft.text, tableRows, draft.files(), contract.reference_schemes, tableName);
+    mediaView.render(inventory, tableError);
     tableStatus();
   }
 
@@ -487,95 +363,27 @@
 
   /* ---------- GitHub steps ---------- */
 
-  // One step: a reminder tick, an instruction, the actions it needs and a line for their results.
-  function step(text) {
-    const item = document.createElement('li');
-    const check = document.createElement('input'); check.type = 'checkbox';
-    const wrapper = document.createElement('label'); wrapper.append(check, ` ${text}`);
-    const actions = document.createElement('div'); actions.className = 'row';
-    const result = document.createElement('p'); result.setAttribute('role', 'status');
-    item.append(wrapper, actions, result); $('steps').append(item);
-    return { item, actions, result };
-  }
-  function externalLink(url, label) {
-    const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = label;
-    return link;
-  }
-  function stepButton(label, result, action) {
-    const button = document.createElement('button'); button.textContent = label;
-    button.addEventListener('click', () => run(action, result));
-    return button;
-  }
-  async function copy(text, result) {
-    await navigator.clipboard.writeText(text);
-    result.textContent = 'Copied. Paste it on GitHub.';
-  }
-  async function compareGitHub({ item, result }) {
+  async function compareGitHub() {
     const active = draft;
-    item.querySelector('details')?.remove();
-    result.textContent = 'Comparing…';
     const current = await sourceText(await fetchBlob(rawUrl(config.branch, 'text.md'), contract.limits.text_bytes));
-    if (active !== draft) return;
-    if (current === baseText) { result.textContent = 'Same text as the version you opened. Very recent changes may not show yet.'; return; }
-    result.textContent = 'The text on GitHub is different. Bring your teammates’ changes into your draft before you save.';
-    const details = document.createElement('details'), summary = document.createElement('summary'), source = document.createElement('pre');
-    summary.textContent = 'Text on GitHub'; source.textContent = current;
-    details.append(summary, source); item.append(details);
+    if (active !== draft) return null;
+    if (current === baseText) return { message: 'Same text as the version you opened. Very recent changes may not show yet.' };
+    return { message: 'The text on GitHub is different. Bring your teammates’ changes into your draft before you save.', source: current };
   }
+
+  const handoffView = CourseHandoffView.create({ document, container: $('steps'), run, effects: {
+    compare: compareGitHub, download, copy: text => navigator.clipboard.writeText(text),
+  } });
 
   async function check() {
     if (!allowEdit()) return;
     const active = draft, revision = mutationRevision;
-    if (missingAttachments.size) throw Object.assign(new Error('Reattach or explicitly remove these restored media files first: ' + [...missingAttachments].join(', ')), { field: 'media-heading' });
-    const result = active.validate();
-    const changes = await active.changes();
-    if (active !== draft || revision !== mutationRevision) return;
-    for (const [path, file] of result.files) {
-      if (!path.endsWith('.svg')) continue;
-      const blob = file.blob || await boundedBlob(file.url, file);
-      const source = new TextDecoder('utf-8', { fatal: true }).decode(await blob.arrayBuffer());
-      const svg = new DOMParser().parseFromString(source, 'image/svg+xml');
-      const root = svg.documentElement;
-      if (svg.querySelector('parsererror') || root.localName !== 'svg' || root.namespaceURI !== 'http://www.w3.org/2000/svg') throw new Error(`${path}: export a valid SVG image`);
-      if (path !== 'visual.svg') continue;
-      if (root.getAttribute('viewBox')?.trim().split(/[\s,]+/).map(Number).join(',') !== contract.visual_viewbox.join(',')) throw new Error('visual.svg: export a valid 1920 × 1080 SVG');
-      for (const [name, expected] of [['width', 1920], ['height', 1080]]) {
-        if (root.hasAttribute(name) && Number(root.getAttribute(name).trim().replace(/px$/, '')) !== expected) throw new Error(`visual.svg: ${name} must be ${expected} or omitted`);
-      }
-    }
+    const { result, changes } = await CourseReview.validate(active, missingAttachments, contract, boundedBlob);
     if (active !== draft || revision !== mutationRevision) return;
     $('validation').textContent = ['Checks passed. Follow these steps on GitHub, top to bottom. Ticks are only reminders for you; the site runs its own checks when it publishes.',
       result.orphans.length ? `Media not used in the text, still saved: ${result.orphans.join(', ')}.` : '', result.notes.join('. ')].filter(Boolean).join(' ');
-    $('steps').replaceChildren();
-    // Any order works: until every commit is in, the page shows what is not there yet as missing.
-    const review = step('Check that nobody changed the text on GitHub after the version you opened.');
-    review.actions.append(stepButton('Compare with GitHub', review.result, () => compareGitHub(review)), externalLink(github('blob', 'text.md'), 'Open text.md on GitHub ↗'));
-    for (const change of changes.filter(change => change.path !== 'text.md' && change.path !== tableName && change.operation !== 'delete')) {
-      const parent = change.path.includes('/') ? change.path.slice(0, change.path.lastIndexOf('/')) : '';
-      const name = change.path.split('/').pop(), blob = active.files().get(change.path)?.blob;
-      const where = parent ? `the ${parent} folder` : 'the main file list (where text.md is)';
-      const upload = step(`Download ${name}, then upload it into ${where} on GitHub${change.operation === 'add' ? '' : ' (it replaces the old file)'} and commit.`);
-      if (blob) upload.actions.append(stepButton(`Download ${name}`, upload.result, () => download(blob, name)));
-      upload.actions.append(externalLink(github('upload', parent), 'Open upload page ↗'));
-    }
-    const tableChange = changes.find(change => change.path === tableName);
-    if (tableChange) {
-      const table = step(tableChange.operation === 'add' ? 'Create media.csv on GitHub. If it opens empty, paste the copied table. Commit.' : 'Replace everything in media.csv with the copied table, and commit.');
-      const create = new URL(`https://github.com/${config.repository}/new/${encodeURIComponent(config.branch)}`);
-      create.searchParams.set('filename', tableName);
-      if (draft.table.length < 4000) create.searchParams.set('value', draft.table);
-      table.actions.append(stepButton('Copy media.csv', table.result, () => copy(tableText(), table.result)),
-        tableChange.operation === 'add' ? externalLink(create.href, 'Create media.csv on GitHub ↗') : externalLink(github('edit', tableName), 'Edit media.csv on GitHub ↗'));
-    }
-    if (changes.some(change => change.path === 'text.md')) {
-      const text = step('Replace everything in text.md with the copied text, and commit.');
-      text.actions.append(stepButton('Copy text.md', text.result, () => copy(draft.text, text.result)), externalLink(github('edit', 'text.md'), 'Edit text.md on GitHub ↗'));
-    }
-    for (const change of changes.filter(change => change.operation === 'delete')) {
-      const name = change.path.split('/').pop();
-      step(`Delete ${change.path}: open it, choose … → Delete file, and commit.`).actions.append(externalLink(github('blob', change.path), `Open ${name} on GitHub ↗`));
-    }
-    step('Open your entry on the course site. Updates take a while to appear.').actions.append(externalLink(new URL(`#${config.slug}`, siteRoot).href, 'Open published entry ↗'));
+    handoffView.render(CourseHandoff.plan({ changes, files: active.files(), text: active.text, table: active.table,
+      config, siteRoot, tableName }));
   }
 
   $('open').addEventListener('click', () => run(() => open(false)));
@@ -695,16 +503,12 @@
   $('download').addEventListener('click', () => download(new Blob([draft.text], { type: 'text/plain' }), 'text.md'));
   async function restoreSaved(useFallback = false) {
     const context = persistence, active = draft;
-    await saving;
-    const metadata = context.backend === 'indexeddb' ? await draftStore.read(context.key, false) : null;
-    const raw = useFallback ? localStorage.getItem(context.key) : null;
-    const saved = useFallback && raw ? { ...JSON.parse(raw), legacyRaw: raw } : await savedRecord(context);
+    await browserDrafts.idle();
+    const metadata = await browserDrafts.metadata(context);
+    const saved = useFallback ? await browserDrafts.read(context, true) : await savedRecord(context);
     const { draft: restored, missingPaths: missing } = await CourseDraftSession.restore(saved, active, baseId);
     if (context !== persistence || active !== draft) return;
-    context.revision = importedRecovery || saved.legacyRaw ? metadata?.revision || 0 : saved.revision || 0;
-    context.retireLegacy = !!saved.legacyRaw;
-    if (saved.legacyRaw) context.legacy = saved.legacyRaw;
-    context.conflict = context.pending = false; context.gate.resume();
+    browserDrafts.resume(context, saved, metadata, !!importedRecovery);
     importedRecovery = null; $('recovery-comparison').hidden = true;
     draft = restored; missingAttachments.clear();
     for (const path of missing) missingAttachments.add(path);
@@ -775,17 +579,10 @@
   $('discard').addEventListener('click', () => run(async () => {
     const context = persistence;
     if (!window.confirm('Use the loaded version and discard the saved browser draft? Download its recovery bundle first to keep its text, table and attachments.')) return;
-    await saving;
+    await browserDrafts.idle();
     if (context !== persistence) return;
-    if (context.backend === 'indexeddb') {
-      const latest = await draftStore.read(context.key);
-      context.revision = await draftStore.discard(context.key, latest?.revision || 0);
-    }
-    try { localStorage.removeItem(context.key); } catch (error) { if (context.backend === 'local') throw error; }
-    context.legacy = null;
-    context.conflict = context.pending = false; context.gate.useBase(true);
+    await browserDrafts.discard(context);
     importedRecovery = null; $('recovery-comparison').hidden = true;
-    channel?.postMessage({ key: context.key, revision: context.revision });
     if (context !== persistence) return;
     draft = new CourseDraft.Draft(draft.base, config, contract);
     draft.text = baseText; draft.table = baseTable;

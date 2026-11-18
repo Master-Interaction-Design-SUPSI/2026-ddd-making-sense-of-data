@@ -8,11 +8,6 @@
   --ink: #101010;
   --mid: #6b6b6b;
   --signal: #8800ff; /* readable on white, including small navigation labels */
-  --accent-magenta: #ff09d6;
-  --accent-cyan: #0eb5be;
-  --accent-purple: #8800ff;
-  --accent-green: #00e279;
-  --accent-yellow: #e5b800;
   --rule: #dedede;
   --space: calc(var(--u) * 1);
   --page-inset: var(--u);
@@ -304,6 +299,16 @@ pre {
   margin: 1em 0 0;
   width: 100%;
   aspect-ratio: 16 / 9;
+}
+
+.visual-open {
+  display: block;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: zoom-in;
 }
 
 .entry-visual img {
@@ -613,6 +618,10 @@ body:has(#image-preview:not([hidden]))::before {
   color: inherit;
 }
 
+.annotation-bibliography .annotation-content a::before {
+  content: none;
+}
+
 .annotation-quote .annotation-text::before {
   content: " ";
 }
@@ -624,9 +633,6 @@ body:has(#image-preview:not([hidden]))::before {
   height: calc(var(--u) * 5);
   margin-block: var(--u);
   max-width: 100%;
-}
-
-.annotation .annotation-content iframe {
   aspect-ratio: 16 / 9;
 }
 
@@ -644,15 +650,29 @@ body:has(#image-preview:not([hidden]))::before {
 #lightbox {
   position: fixed;
   inset: 0;
-  z-index: 99;
-  display: grid;
-  place-items: center;
-  background: rgb(255 255 255 / 80%);
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
   cursor: zoom-out;
 }
 
-#lightbox[hidden] {
-  display: none;
+#lightbox[open] {
+  display: grid;
+  place-items: center;
+}
+
+#lightbox::backdrop {
+  background: rgb(255 255 255 / 80%);
+}
+
+#lightbox form {
+  position: absolute;
 }
 
 #lightbox img {
@@ -874,10 +894,6 @@ body.show-grid::after {
 .inline-playback:focus-visible {
   outline: 1px solid currentColor;
   outline-offset: 2px;
-}
-
-.annotation-bibliography .annotation-content a::before {
-  content: none;
 }
 
 .enable-hover-sound {

@@ -47,8 +47,7 @@ img.media-preview, video.media-preview { aspect-ratio: 16 / 9; object-fit: conta
 .steps > li { margin-block: 1rem; }
 .steps .row { margin-block-start: .4rem; align-items: center; }
 .steps a { color: inherit; }
-.media-file { color: var(--mid); }
-.media-file { overflow-wrap: anywhere; }
+.media-file { color: var(--mid); overflow-wrap: anywhere; }
 details { margin-block: .75rem; }
 details summary { cursor: pointer; }
 details.section { margin: 0; }

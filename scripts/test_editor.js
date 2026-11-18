@@ -74,7 +74,7 @@ test('preview schema rejects unsafe paths, payloads, duplicate assets and byte e
 test('renderer import has no automatic fetching or start', () => {
   const vm = require('node:vm');
   let calls = 0;
-  const context = vm.createContext({ fetch() { calls++; }, URL, document: {}, CourseMarkup: require('../static/markup.js') });
+  const context = vm.createContext({ fetch() { calls++; }, URL, document: {}, CourseMarkup: require('../static/markup.js'), CourseEntry: require('../static/entry.js') });
   vm.runInContext(fs.readFileSync(require.resolve('../static/main.js'), 'utf8'), context);
   assert.equal(calls, 0);
   assert.equal(typeof context.CourseSite.start, 'function');

@@ -35,7 +35,7 @@ async function editorFixture({ record = null, table = null, confirm = true, sour
     'visual.svg': { size: 1, sha256: 'a'.repeat(64) } };
   if (table !== null) files['media.csv'] = { size: new Blob([table]).size, sha256: await model.digest(new Blob([table])) };
   const context = vm.createContext({
-    URL, Blob, TextEncoder, TextDecoder, AbortController, Event, setTimeout, clearTimeout,
+    URL, Blob, TextEncoder, TextDecoder, AbortController, AbortSignal, Event, setTimeout, clearTimeout,
     location: new URL('https://site.test/course/editor/'),
     window: { addEventListener() {}, removeEventListener() {}, confirm: () => confirm,
       setTimeout: (fn, ms) => { const timer = setTimeout(fn, ms); timer.unref(); return timer; }, clearTimeout }, localStorage: { getItem: () => null, removeItem() {} },
@@ -45,6 +45,8 @@ async function editorFixture({ record = null, table = null, confirm = true, sour
     CoursePreviewProtocol: require('../editor/protocol.js'),
     CourseDocument: require('../editor/document.js'), CoursePreviewClient: require('../editor/preview-client.js'),
     CourseMediaPreview: require('../editor/media-preview.js'),
+    CourseHandoff: require('../editor/handoff.js'), CourseHandoffView: require('../editor/handoff-view.js'),
+    CourseInventory: require('../editor/inventory.js'), CourseMediaView: require('../editor/media-view.js'),
     CourseDraftStorage: { DraftStore: class {
       async read() { return state.record; }
       async save(key, payload, revision) { if (state.saveError) throw state.saveError; state.record = { ...payload, revision: revision + 1 }; state.writes++; return revision + 1; }
@@ -66,6 +68,9 @@ async function editorFixture({ record = null, table = null, confirm = true, sour
     }
     assert.fail('Editor state: ' + element('status').textContent);
   };
+  vm.runInContext(fs.readFileSync(require.resolve('../editor/review.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(require.resolve('../editor/download.js'), 'utf8'), context);
+  vm.runInContext(fs.readFileSync(require.resolve('../editor/persistence.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(require.resolve('../editor/editor.js'), 'utf8'), context);
   await until(() => element('template').listeners.click);
   element('template').listeners.click();

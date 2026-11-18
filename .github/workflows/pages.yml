@@ -68,7 +68,7 @@ jobs:
       - name: Verify trusted publishing code
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Verify browser contracts and renderer lifecycle
-        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js scripts/test_editor_recovery.js scripts/test_editor_document.js scripts/test_editor_preview.js scripts/test_editor_workspace.js
+        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js scripts/test_editor_recovery.js scripts/test_editor_document.js scripts/test_editor_preview.js scripts/test_editor_workspace.js scripts/test_entry.js scripts/test_download.js scripts/test_lightbox.js scripts/test_media_preview.js scripts/test_persistence.js scripts/test_inventory.js scripts/test_handoff.js scripts/test_review.js
       - id: prepare
         name: Prepare candidate or pending pair
         env:

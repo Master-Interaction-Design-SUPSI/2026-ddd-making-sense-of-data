@@ -1,19 +1,10 @@
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
 const { test } = require('node:test');
-const vm = require('node:vm');
 const annotations = require('../static/annotations.js');
 const mediaTable = require('../static/media-table.js');
 const markup = require('../static/markup.js');
 
-const context = vm.createContext({
-  CourseMediaTable: mediaTable, CourseMarkup: markup, URL,
-  CSS: { supports: (_, value) => /^(crimson|green|red|#116964|rgb\(10, 20, 30\))$/.test(value) },
-  document: { baseURI: 'https://site.test/course/', getElementById: () => null },
-  fetch: () => new Promise(() => {}),
-});
-vm.runInContext(fs.readFileSync(path.join(__dirname, '../static/main.js'), 'utf8'), context);
+const entry = require('../static/entry.js');
 
 const renderMarkdown = (body, table) => markup.renderMarkdown(body, table,
   value => /^(crimson|green|red|#116964|rgb\(10, 20, 30\))$/.test(value));
@@ -31,24 +22,24 @@ test('unknown [[name]]s stay literal text, escaped, for the page to mark as miss
 
 test('a group entry says which commit is online, or which commit was not published and why', () => {
   const online = { commit: 'd5b5fd7', committed_at: '2026-10-16T12:20:00Z' };
-  assert.equal(context.statusLine({ online }), 'Online: commit d5b5fd7, 16 Oct 14:20');
-  assert.equal(context.statusLine({ online, problem: { commit: 'e1f2a3b', message: 'visual.svg: export a valid SVG.' } }),
+  assert.equal(entry.statusLine({ online }), 'Online: commit d5b5fd7, 16 Oct 14:20');
+  assert.equal(entry.statusLine({ online, problem: { commit: 'e1f2a3b', message: 'visual.svg: export a valid SVG.' } }),
     'Your commit e1f2a3b was not published: visual.svg: export a valid SVG. The page shows d5b5fd7.');
-  assert.equal(context.statusLine({ problem: { commit: 'e1f2a3b', message: 'text.md: invalid' } }),
+  assert.equal(entry.statusLine({ problem: { commit: 'e1f2a3b', message: 'text.md: invalid' } }),
     'Your commit e1f2a3b was not published: text.md: invalid.');
-  assert.equal(context.statusLine({}), null);
+  assert.equal(entry.statusLine({}), null);
 });
 
 test('metadata removes only the matching group prefix and retains actual titles and members', () => {
-  assert.equal(context.entryIdentifier('materialities-of-ai'), 'M-AI');
-  assert.equal(context.entryIdentifier('group-02'), 'G-02');
-  assert.equal(context.withoutGroupPrefix('Group 02: Sample project', 'group-02'), 'Sample project');
-  assert.equal(context.withoutGroupPrefix('Group 02 — Ada, Bruno', 'group-02'), 'Ada, Bruno');
-  assert.equal(context.withoutGroupPrefix('G-02 - Ada, Bruno', 'group-02'), 'Ada, Bruno');
-  assert.equal(context.withoutGroupPrefix('Group 20: Research', 'group-02'), 'Group 20: Research');
-  assert.equal(context.withoutGroupPrefix('Research on Group 02', 'group-02'), 'Research on Group 02');
-  assert.equal(context.commitTime(), '—');
-  assert.equal(context.commitTime({ committed_at: '2026-10-16T12:20:00Z' }), '16 Oct 14:20');
+  assert.equal(entry.entryIdentifier('materialities-of-ai'), 'M-AI');
+  assert.equal(entry.entryIdentifier('group-02'), 'G-02');
+  assert.equal(entry.withoutGroupPrefix('Group 02: Sample project', 'group-02'), 'Sample project');
+  assert.equal(entry.withoutGroupPrefix('Group 02 — Ada, Bruno', 'group-02'), 'Ada, Bruno');
+  assert.equal(entry.withoutGroupPrefix('G-02 - Ada, Bruno', 'group-02'), 'Ada, Bruno');
+  assert.equal(entry.withoutGroupPrefix('Group 20: Research', 'group-02'), 'Group 20: Research');
+  assert.equal(entry.withoutGroupPrefix('Research on Group 02', 'group-02'), 'Research on Group 02');
+  assert.equal(entry.commitTime(), '—');
+  assert.equal(entry.commitTime({ committed_at: '2026-10-16T12:20:00Z' }), '16 Oct 14:20');
 });
 
 test('semantic type, style and color are independent and order does not matter', () => {
@@ -134,10 +125,10 @@ test('contributor HTML stays escaped and unsafe links/media stay rejected', () =
   assert.doesNotMatch(html, /<script>|<img onerror/);
   assert.match(html, /&lt;script&gt;/);
   for (const target of ['javascript:alert(1)', 'data:text/html,bad', 'file:///tmp/secret', 'https:\\bad.test']) {
-    assert.equal(context.safeUrl(target, 'group', 'link'), null);
-    assert.equal(context.safeUrl(target, 'group', 'media'), null);
+    assert.equal(entry.safeUrl(target, 'group', 'link', null, 'https://site.test/course/'), null);
+    assert.equal(entry.safeUrl(target, 'group', 'media', null, 'https://site.test/course/'), null);
   }
-  assert.equal(context.safeUrl('media/sketch.svg', 'group', 'media'), 'group/media/sketch.svg');
+  assert.equal(entry.safeUrl('media/sketch.svg', 'group', 'media', null, 'https://site.test/course/'), 'group/media/sketch.svg');
 });
 
 test('source line breaks and blank lines produce the same continuous prose', () => {

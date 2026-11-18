@@ -50,9 +50,10 @@ Routine publication uses **Publish course website** on `main`; **Run workflow** 
 | --- | --- |
 | `groups.json` | Registry. |
 | `static/contract.json` | Content contract (version 2); read by Python and editor. |
-| `static/main.js`, `markup.js`, `bootstrap.js`, `playback.js` | Page rendering, Markdown transformation, production bootstrap, media lifecycle. |
+| `static/main.js`, `entry.js`, `markup.js`, `bootstrap.js` | Page orchestration, immutable entry metadata and resource preparation, Markdown transformation, production bootstrap. |
+| `static/media-preview.js`, `lightbox.js`, `playback.js` | Hover preview lifecycle, native modal visual, inline playback. |
 | `static/annotations.js`, `references.js` | Annotation parser; sole reference collector (browser, Node, Python). |
-| `editor/` | Editor. Static; no compilation. |
+| `editor/` | Static editor; no compilation. `persistence.js` owns storage effects; `inventory.js`/`media-view.js` separate media data and DOM; `review.js`, `handoff.js`/`handoff-view.js` separate validation, instructions and DOM; `download.js` bounds streamed downloads. |
 | `scripts/build_site.py` | Build `_site`. Offline by default. |
 | `scripts/import_groups.py`, `github_content.py` | Import; GitHub transport. |
 | `scripts/content_contract.py`, `check_content_links.js` | File selection; reference check. |
@@ -138,7 +139,7 @@ Invariants:
 | External embed | Manual. Loads on reveal; unloads on inactivity; provider link shown. |
 | Dismissal | Escape, outside activation, scroll, resize, navigation, focus loss, page hide. |
 | Prose | Newlines and blank lines between adjacent paragraphs become spaces. Headings, lists, quotes, code stay separate. Responsive 19.2–25.6 px type (`--prose-size: clamp(19.2px, 1.76vw, 25.6px)`); at viewport widths ≤ 700 px, 16–20.8 px (`clamp(16px, 3.6vw, 20.8px)`). Fixed 41.6 px leading (`--prose-leading`). Source: `static/main.css`. |
-| Main visual | Image element; lightbox. Escape closes lightbox before playback refresh. |
+| Main visual | Button opens a native modal dialog. Close control, Escape or backdrop/image activation closes it and returns focus to its trigger; playback refreshes on close. |
 
 The student guide teaches one form per idea. These forms remain supported but are no longer taught there: media by path (`[[label|media/x.svg]]`, `![alt](media/x.svg)`, `[![alt](media/x.svg)](https://…)`); the `source=` modifier, whose URL must encode `;`, `|`, `[` and `]`, overriding the `media.csv` source; emoji markers in the third field. An explicit `color` overrides a surrounding `{color|…}` span; `{color|✶ text}` renders in braces; Markdown `*italics*` works in labels. Path references still need a `media.csv` row.
 
@@ -377,7 +378,7 @@ Typography uses the system font stack `Arial, Helvetica, sans-serif` for prose, 
 ```sh
 python3 scripts/sync_course_materials.py
 python3 -m unittest discover -s scripts -p 'test_*.py'
-node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js scripts/test_editor_recovery.js scripts/test_editor_document.js scripts/test_editor_preview.js scripts/test_editor_workspace.js
+node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js scripts/test_editor_recovery.js scripts/test_editor_document.js scripts/test_editor_preview.js scripts/test_editor_workspace.js scripts/test_entry.js scripts/test_download.js scripts/test_lightbox.js scripts/test_media_preview.js scripts/test_persistence.js scripts/test_inventory.js scripts/test_handoff.js scripts/test_review.js
 python3 scripts/build_site.py
 actionlint .github/workflows/*.yml
 git diff --check

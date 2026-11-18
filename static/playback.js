@@ -144,7 +144,7 @@
     }
 
     function isActive(element) {
-      if (document.hidden || !document.getElementById("lightbox").hidden || element.closest("[hidden]")) return false;
+      if (document.hidden || document.getElementById("lightbox").open || element.closest("[hidden]")) return false;
       const rect = element.getBoundingClientRect();
       if (!rect.width || !rect.height) return false;
       const width = Math.max(0, Math.min(rect.right, innerWidth) - Math.max(rect.left, 0));
@@ -177,7 +177,7 @@
     window.addEventListener("pageshow", refresh);
     document.addEventListener("click", () => queueMicrotask(refresh));
     document.addEventListener("keydown", event => { if (event.key === "Escape") queueMicrotask(refresh); });
-    mounted = { mount, dispose };
+    mounted = { mount, dispose, refresh };
     return mounted;
   }
 

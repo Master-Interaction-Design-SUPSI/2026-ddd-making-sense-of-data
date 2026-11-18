@@ -42,16 +42,21 @@
       </main>
     </div>
 
-    <div id="lightbox" hidden>
-      <button type="button" class="lightbox-close" aria-label="Close">⟨Close⟩</button>
-      <img src="" alt="" />
-    </div>
+    <dialog id="lightbox" aria-label="Visualisation" closedby="any">
+      <form method="dialog">
+        <button type="submit" class="lightbox-close" aria-label="Close">⟨Close⟩</button>
+      </form>
+      <img alt="" />
+    </dialog>
 
     <script src="static/vendor/marked.min.js"></script>
     <script src="static/annotations.js"></script>
     <script src="static/media-table.js"></script>
     <script src="static/playback.js"></script>
     <script src="static/markup.js"></script>
+    <script src="static/entry.js"></script>
+    <script src="static/media-preview.js"></script>
+    <script src="static/lightbox.js"></script>
     <script src="static/main.js"></script>
     <script src="static/bootstrap.js"></script>
   </body>

@@ -167,7 +167,7 @@ Drafts are saved in this browser only. To keep a copy or continue in another bro
 
 <!-- END GENERATED STUDENT GUIDE -->
 
-## 9. Repository layout
+## 10. Repository layout
 
 | Path | Content |
 | --- | --- |
@@ -180,7 +180,7 @@ Drafts are saved in this browser only. To keep a copy or continue in another bro
 
 Edit shared instructions and demonstration files in `templates/group/`, then run `python3 scripts/sync_course_materials.py --write`. CI checks the generated copies; see the [operating manual](MAINTAINERS.md#102-provisioning) for the distribution workflow.
 
-## 10. Prepared group repositories
+## 11. Prepared group repositories
 
 Each repository contains the sample text, visual, media table, image, audio and video demonstrations, and student guide. The twelve groups are registered as `live`; their sample entries appear on the course website and can be opened in the editor. The course team assigns repository access to group members.
 

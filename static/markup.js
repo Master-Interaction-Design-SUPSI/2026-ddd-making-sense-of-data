@@ -39,6 +39,12 @@
 
   /* ---------- extended markup ---------- */
 
+  function annotationHeading(type, label, glyph) {
+    if (type === "bibliography") return `(${glyph} <span class="bibliography-label">${label}</span>`;
+    if (type === "note") return label;
+    return `${label}${glyph}`;
+  }
+
   function expandAnnotations(src, supportsColor) {
     return annotations.replace(src, (annotation) => {
       const { label, target, resource, type, style, color, marker, sourceUrl } = annotation;
@@ -57,7 +63,7 @@
       const mark = marker || ({ note: DEFAULT_MARKER, bibliography: "■" }[type] || DEFAULT_MARKER);
       const glyph = `<span class="annotation-marker" aria-hidden="true">${esc(mark)}</span>`;
       const appearance = color && !bibliography ? ` style="color:${esc(color)};--annotation-color:${esc(color)}"` : "";
-      const heading = bibliography ? `(${glyph} <span class="bibliography-label">${label}</span>` : type === "note" ? label : `${label}${glyph}`;
+      const heading = annotationHeading(type, label, glyph);
       if (bibliography) content = `. ${content}`;
       if (type === "note") content = ` &#123;${glyph} ${content}&#125;`;
       return (

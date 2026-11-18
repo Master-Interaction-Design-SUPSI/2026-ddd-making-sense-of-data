@@ -9,76 +9,7 @@
  * Captions and navigation use the title in text.md when one is provided.
  */
 
-const pad = (n) => String(n).padStart(2, "0");
-const { parseFrontmatter, renderMarkdown, escapeHtml: esc } = CourseMarkup;
-
-/* A URL with no scheme, no leading "/" and no leading "#" is taken to be
-   relative to the Entry's folder, so students can keep extra assets there. */
-const isLocal = url => !/^([a-z][a-z0-9+.-]*:|\/|#)/i.test(url);
-
-function resolveUrl(url, folder) {
-  return isLocal(url) ? `${folder}/${url}` : url;
-}
-
-let resourceResolver = null;
-
-function safeUrl(url, folder, kind) {
-  if (/[\u0000-\u001f\u007f\\]/.test(url)) return null;
-  if (isLocal(url) && resourceResolver) {
-    let path;
-    try { path = decodeURIComponent(url.split(/[?#]/)[0]).replace(/^\.\//, ""); }
-    catch { return null; }
-    if (path.split("/").some(part => ["", ".", ".."].includes(part)) || /[\u0000-\u001f\u007f\\]/.test(path)) return null;
-    const owned = resourceResolver(path, kind, folder);
-    if (owned === false) return null;
-    if (owned) return owned + (url.includes("#") ? url.slice(url.indexOf("#")) : "");
-  }
-  const resolved = resolveUrl(url, folder);
-  try {
-    const parsed = new URL(resolved, document.baseURI);
-    const allowed = kind === "link"
-      ? ["http:", "https:", "mailto:"]
-      : ["http:", "https:"];
-    return allowed.includes(parsed.protocol) ? resolved : null;
-  } catch {
-    return null;
-  }
-}
-
-/* One visible mark for a name or file that is not in the group (yet). */
-function missingMark(name) {
-  const mark = document.createElement("span");
-  mark.className = "annotation annotation-missing";
-  const text = document.createElement("span");
-  text.className = "annotation-content annotation-text";
-  text.textContent = `missing: ${name}`;
-  mark.append(text);
-  return mark;
-}
-
-/* An unknown [[name]] stays literal text through Markdown; mark it in text
-   nodes only, so attributes, code and the names' characters stay intact. */
-function markMissingNames(textEl) {
-  const walker = document.createTreeWalker(textEl, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) {
-    const node = walker.currentNode;
-    if (node.data.includes("[[") && !node.parentElement.closest("code, pre")) nodes.push(node);
-  }
-  for (const node of nodes) {
-    const parts = CourseMediaTable.splitNames(node.data);
-    if (parts.some(part => typeof part !== "string")) {
-      node.replaceWith(...parts.map(part => typeof part === "string" ? part : missingMark(part.name)));
-    }
-  }
-}
-
-/* The site knows each entry's files from entries.json; a local path outside
-   them is missing. The editor preview supplies its own resolver. */
-function siteResolver(entries) {
-  const files = new Map(entries.map(entry => [entry.folder, entry.files]));
-  return (path, kind, folder) => !files.get(folder) || files.get(folder).has(path) ? undefined : false;
-}
+const { statusLine, entryIdentifier, commitTime } = CourseEntry;
 
 /* ---------- loading ---------- */
 
@@ -88,158 +19,6 @@ async function loadEntry({ slug, files, online, problem }) {
   const [text, table] = await Promise.all([read("text.md"), read("media.csv")]);
   return { folder: slug, files: present, text, table, visual: present.has("visual.svg") ? `${slug}/visual.svg` : null,
            online, problem };
-}
-
-const COMMIT_TIME = new Intl.DateTimeFormat("en-GB", {
-  day: "numeric", month: "short", hour: "2-digit", minute: "2-digit", hourCycle: "h23", timeZone: "Europe/Zurich",
-});
-
-/* Which commit is online, or which group commit was not published and why.
-   Course-team pages identify the pinned course repository checkout. */
-function statusLine({ online, problem }) {
-  if (problem) {
-    const reason = problem.message.replace(/[.\s]+$/, "");
-    return `Your commit ${problem.commit} was not published: ${reason}.` + (online ? ` The page shows ${online.commit}.` : "");
-  }
-  if (!online) return null;
-  const time = Object.fromEntries(COMMIT_TIME.formatToParts(new Date(online.committed_at)).map(part => [part.type, part.value]));
-  return `Online: commit ${online.commit}, ${time.day} ${time.month} ${time.hour}:${time.minute}`;
-}
-
-function entryIdentifier(folder) {
-  if (folder === "materialities-of-ai") return "M-AI";
-  const group = /^group-(\d+)$/.exec(folder);
-  return group ? `G-${pad(Number(group[1]))}` : folder;
-}
-
-function withoutGroupPrefix(value, folder) {
-  const text = value.trim().replace(/\s+/g, " ");
-  const group = /^group-(\d+)$/.exec(folder);
-  const prefix = /^(?:group\s*|g\s*-\s*)(\d+)(?:\s*[:–—-]\s*|\s+|$)/i.exec(text);
-  return group && prefix && Number(group[1]) === Number(prefix[1])
-    ? text.slice(prefix[0].length).trim() : text;
-}
-
-function commitTime(online) {
-  if (!online?.committed_at || Number.isNaN(Date.parse(online.committed_at))) return "—";
-  return COMMIT_TIME.format(new Date(online.committed_at)).replace(",", "");
-}
-
-/* ---------- rendering ---------- */
-
-function renderEntry(entry) {
-  const { meta, body } = parseFrontmatter(entry.text || "");
-  entry.title = withoutGroupPrefix(meta.title || entry.folder, entry.folder) || "Untitled";
-  entry.authors = withoutGroupPrefix(meta.authors || "", entry.folder);
-
-  const section = document.createElement("section");
-  section.className = "entry";
-  section.id = entry.folder;
-
-  let html = `<header class="entry-caption">`;
-  html += `<p class="entry-id">${esc(entryIdentifier(entry.folder))}</p>`;
-  html += `<h2>${esc(entry.title)}</h2>`;
-  html += `<p class="entry-authors">${esc(entry.authors)}</p>`;
-  html += `<p class="entry-commit" title="${esc(statusLine(entry) || 'No published commit metadata')}">${esc(entry.online?.commit || '—')}</p>`;
-  html += `<time class="entry-time"${entry.online?.committed_at ? ` datetime="${esc(entry.online.committed_at)}"` : ''} title="Commit time · Europe/Zurich">${esc(commitTime(entry.online))}</time>`;
-  html += `</header>`;
-  let table = null;
-  try { table = entry.table ? CourseMediaTable.read(entry.table) : null; }
-  catch { /* The importer rejects invalid tables; its names then show as missing. */ }
-  html += `<div class="entry-text">`;
-  if (entry.text !== null) html += renderMarkdown(body, table);
-  html += `</div>`;
-  const visual = entry.visual && safeUrl(entry.visual === `${entry.folder}/visual.svg` ? "visual.svg" : entry.visual, entry.folder, "media");
-  if (visual) {
-    html +=
-      `<figure class="entry-visual">` +
-      `<img src="${esc(visual)}" width="1920" height="1080" alt="${esc(entry.title)} — visualisation">` +
-      `</figure>`;
-  }
-
-  const template = document.createElement("template");
-  template.innerHTML = html;
-  const status = statusLine(entry);
-  if (entry.problem && status) {
-    const line = document.createElement("p");
-    line.className = "entry-authors entry-status";
-    line.textContent = status;
-    template.content.querySelector(".entry-caption").append(line);
-  }
-
-  /* One resolution pass: every relative path in the rendered text —
-     annotation resources and markdown-native ones (e.g. ![…](photo.jpg)) —
-     resolves against the Entry's folder; a file that is not there shows as
-     missing. The hero visual above is already a full path. */
-  const textEl = template.content.querySelector(".entry-text");
-  markMissingNames(textEl);
-  const sources = CourseMediaTable.sources(table);
-  for (const el of textEl.querySelectorAll("[src]")) {
-    const src = el.getAttribute("src");
-    if (src && resourceResolver && isLocal(src) && !safeUrl(src, entry.folder, "media")) {
-      (el.closest(".annotation") || el).replaceWith(missingMark(src.replace(/^\.\//, "").split(/[?#]/)[0]));
-      continue;
-    }
-    // A Markdown image links to its media.csv source, like [[name]] media.
-    const source = src && sources.get(src.replace(/^\.\//, ""));
-    if (source && el.tagName === "IMG" && !el.closest("a[href]")) {
-      const link = document.createElement("a");
-      link.href = source;
-      el.replaceWith(link);
-      link.append(el);
-    }
-    const safe = src && safeUrl(src, entry.folder, "media");
-    if (safe) el.setAttribute("src", safe);
-    else el.removeAttribute("src");
-  }
-  for (const a of textEl.querySelectorAll("a[href]")) {
-    const href = a.getAttribute("href");
-    const safe = href && safeUrl(href, entry.folder, "link");
-    if (safe) a.setAttribute("href", safe);
-    else a.removeAttribute("href");
-    if (safe) {
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-    }
-  }
-  prepareInlineImages(textEl);
-  CoursePlayback.prepare(textEl);
-  section.append(template.content);
-
-  return section;
-}
-
-function prepareInlineImages(textEl) {
-  for (const image of textEl.querySelectorAll("img[src]")) {
-    const content = image.closest(".annotation-content");
-    let target;
-    if (content) {
-      const label = content.parentElement.querySelector(".annotation-toggle");
-      label.querySelector(".annotation-marker")?.remove();
-      image.alt = label.textContent.trim();
-      target = image.closest("a[href]") || document.createElement("a");
-      if (!target.hasAttribute("href")) target.href = image.src;
-      target.target = "_blank";
-      target.rel = "noopener noreferrer";
-      target.setAttribute("aria-label", `Open image source: ${image.alt}`);
-      target.replaceChildren(image);
-      label.replaceWith(target);
-      content.remove();
-    } else {
-      // Linked Markdown images keep their link and native activation.
-      target = image.closest("a[href]");
-      if (!target) {
-        target = document.createElement("a");
-        target.href = image.src;
-        target.target = "_blank";
-        target.rel = "noopener noreferrer";
-        target.setAttribute("aria-label", `Open image source: ${image.alt || "supporting image"}`);
-        image.replaceWith(target);
-        target.append(image);
-      }
-    }
-    target.classList.add("inline-image");
-  }
 }
 
 function buildNav(entries) {
@@ -355,41 +134,34 @@ function toggleCenterX(toggle) {
 }
 
 function setupInteractions() {
-  const clearPreview = setupMediaPreviews();
-  const lightbox = document.getElementById("lightbox");
-  const lightboxImg = lightbox.querySelector("img");
-
-  document.addEventListener("click", (event) => {
-    const toggle = event.target.closest(".annotation-toggle");
-    if (toggle) {
-      const content = toggle.parentElement.querySelector(".annotation-content");
-      const open = content.hidden;
-      content.hidden = !open;
-      toggle.setAttribute("aria-expanded", String(open));
-      toggle.parentElement.classList.toggle("open", open);
-      if (open) {
-        const media = content.querySelector("iframe");
-        /* keyboard activation reports clientX 0: centre on the toggle */
-        if (media) centerAnnotationMedia(media, event.clientX || toggleCenterX(toggle));
-      }
-      return;
-    }
-
-    const zoomable = event.target.closest(".entry-visual img");
-    if (zoomable) {
-      lightboxImg.src = zoomable.src;
-      lightbox.hidden = false;
-      document.body.classList.add("lightbox-open");
-      lightbox.querySelector(".lightbox-close")?.focus();
-      return;
-    }
-
-    if (!lightbox.hidden && event.target.closest("#lightbox")) {
-      closeLightbox();
-    }
+  const listeners = new AbortController();
+  const listen = (target, type, handler, options = {}) => target.addEventListener(type, handler, { ...options, signal: listeners.signal });
+  const preview = CourseMediaPreview.create();
+  const lightbox = CourseLightbox.create(document.getElementById("lightbox"), open => {
+    document.body.classList.toggle("lightbox-open", open);
+    if (open) preview.clear();
+    playback?.refresh();
   });
 
-  window.addEventListener("resize", () => {
+  function toggleAnnotation(toggle, event) {
+    const content = toggle.parentElement.querySelector(".annotation-content");
+    const open = content.hidden;
+    content.hidden = !open;
+    toggle.setAttribute("aria-expanded", String(open));
+    toggle.parentElement.classList.toggle("open", open);
+    if (!open) return;
+    const media = content.querySelector("iframe");
+    if (media) centerAnnotationMedia(media, event.clientX || toggleCenterX(toggle));
+  }
+
+  listen(document, "click", event => {
+    const toggle = event.target.closest(".annotation-toggle");
+    if (toggle) { toggleAnnotation(toggle, event); return; }
+    const visual = event.target.closest(".visual-open");
+    if (visual) lightbox.open(visual);
+  });
+
+  listen(window, "resize", () => {
     for (const media of document.querySelectorAll(
       ".annotation.open .annotation-content iframe"
     )) {
@@ -398,8 +170,7 @@ function setupInteractions() {
     }
   });
 
-  document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape" && !lightbox.hidden) closeLightbox();
+  listen(document, "keydown", (event) => {
     /* g exposes the cell grid the page is set on. */
     if (
       event.key === "g" &&
@@ -412,192 +183,7 @@ function setupInteractions() {
     }
   });
 
-  function closeLightbox() {
-    lightbox.hidden = true;
-    lightboxImg.src = "";
-    document.body.classList.remove("lightbox-open");
-  }
-  return () => { clearPreview(); closeLightbox(); };
-}
-
-function setupMediaPreviews() {
-  const preview = document.getElementById("image-preview");
-  const image = preview.querySelector("img");
-  const video = preview.querySelector("video");
-  const dismiss = document.getElementById("image-preview-close");
-  const audio = document.createElement("audio");
-  audio.preload = "none";
-  audio.hidden = true;
-  audio.dataset.hoverAudio = "";
-  preview.append(audio);
-  const enableSound = document.createElement("button");
-  enableSound.type = "button";
-  enableSound.className = "enable-hover-sound";
-  enableSound.textContent = "Enable sound";
-  enableSound.hidden = true;
-  document.body.append(enableSound);
-  let blockedTarget = null;
-  let playRevision = 0;
-  let active = null;
-  let mode = null;
-  let previewScrollX = window.scrollX;
-  let previewScrollY = window.scrollY;
-
-  function clear() {
-    if (active?.matches(".inline-playback")) active.setAttribute("aria-expanded", "false");
-    active = null;
-    mode = null;
-    preview.hidden = true;
-    dismiss.hidden = true;
-    image.removeAttribute("src");
-    playRevision++;
-    video.pause();
-    video.removeAttribute("src");
-    video.load();
-    audio.pause();
-    audio.removeAttribute("src");
-    audio.load();
-  }
-
-  function reveal(media) {
-    if (!active) return;
-    const source = active.querySelector("img, video");
-    const width = media.naturalWidth || media.videoWidth;
-    const height = media.naturalHeight || media.videoHeight;
-    if (!width || !height) return;
-    const anchor = source.getBoundingClientRect();
-    const scale = Math.min((innerWidth - 32) / width, (innerHeight - 80) / height);
-    const w = width * scale;
-    const h = height * scale;
-    const x = anchor.left + anchor.width / 2;
-    const y = anchor.top + anchor.height / 2;
-    const left = Math.max(16, Math.min(x - w / 2, innerWidth - w - 16));
-    const top = Math.max(48, Math.min(y - h / 2, innerHeight - h - 16));
-    Object.assign(preview.style, {
-      width: `${w}px`, height: `${h}px`, left: `${left}px`, top: `${top}px`,
-    });
-    preview.hidden = false;
-  }
-
-  async function playPreview() {
-    const target = active;
-    const media = target?.matches(".inline-audio") ? audio : video;
-    const revision = ++playRevision;
-    media.muted = false;
-    media.defaultMuted = false;
-    try {
-      await media.play();
-      if (revision !== playRevision) return;
-      if (active !== target) media.pause();
-      else {
-        enableSound.hidden = true;
-        blockedTarget = null;
-      }
-    } catch (error) {
-      if (revision !== playRevision || active !== target) return;
-      if (error.name === "NotAllowedError") {
-        blockedTarget = target;
-        enableSound.hidden = false;
-      } else {
-        const status = target.querySelector(".playback-status");
-        if (status) status.textContent = "Could not play this media.";
-      }
-    }
-  }
-
-  enableSound.addEventListener("click", () => {
-    const target = active?.matches(".inline-audio, .inline-playback") ? active : blockedTarget;
-    if (!target?.isConnected) { enableSound.hidden = true; return; }
-    // Retry the same shared media element inside this user gesture.
-    if (active === target) playPreview();
-    else show(target, "pinned");
-  });
-
-  function show(target, reason) {
-    const changed = target !== active;
-    if (changed) {
-      clear();
-      active = target;
-      if (target.matches(".inline-audio")) {
-        image.hidden = true;
-        video.hidden = true;
-        audio.src = target.dataset.audioSrc;
-        playPreview();
-      } else {
-        const source = target.querySelector("img, video");
-        image.hidden = source.tagName !== "IMG";
-        video.hidden = source.tagName !== "VIDEO";
-        if (source.tagName === "IMG") {
-          image.src = source.src;
-          if (image.complete && image.naturalWidth) reveal(image);
-        } else {
-          video.src = source.src;
-          video.currentTime = source.currentTime;
-          video.muted = false;
-          video.defaultMuted = false;
-          video.loop = true;
-          if (!matchMedia("(prefers-reduced-motion: reduce)").matches || reason === "pinned") playPreview();
-        }
-      }
-    }
-    if (!changed && reason === "pinned" && !video.hidden && video.paused) playPreview();
-    mode = reason;
-    previewScrollX = window.scrollX;
-    previewScrollY = window.scrollY;
-    if (target.matches(".inline-playback")) target.setAttribute("aria-expanded", "true");
-    dismiss.hidden = reason !== "pinned";
-  }
-
-  image.addEventListener("load", () => { if (active && !image.hidden) reveal(image); });
-  video.addEventListener("loadedmetadata", () => { if (active && !video.hidden) reveal(video); });
-  video.addEventListener("error", clear);
-  image.addEventListener("error", clear);
-  document.addEventListener("pointerover", event => {
-    const target = event.target.closest(".inline-image, .inline-playback, .inline-audio");
-    if (event.pointerType !== "mouse" || !target || target.contains(event.relatedTarget)) return;
-    if (target === active && mode === "pinned") return;
-    show(target, "pointer");
-  });
-  document.addEventListener("pointerout", event => {
-    if ((mode === "pointer" || !video.hidden || active?.matches(".inline-audio")) && active?.contains(event.target) && !active.contains(event.relatedTarget)) clear();
-  });
-  document.addEventListener("focusin", event => {
-    const target = event.target.closest(".inline-image, .inline-playback, .inline-audio");
-    if (target?.matches(":focus-visible")) show(target, "focus");
-  });
-  document.addEventListener("focusout", event => {
-    if (event.target === dismiss && !active?.contains(event.relatedTarget)) {
-      clear();
-      return;
-    }
-    if (active?.contains(event.target) && !active.contains(event.relatedTarget) &&
-        !(mode === "pinned" && event.relatedTarget === dismiss)) clear();
-  });
-  document.addEventListener("click", event => {
-    if (event.target.closest(".enable-hover-sound")) return;
-    const sourceLink = event.target.closest("a.inline-image, a.inline-playback, a.inline-audio");
-    if (sourceLink) { clear(); return; }
-    if (!event.target.closest(".inline-image, .inline-playback, .inline-audio")) clear();
-  });
-  dismiss.addEventListener("click", () => {
-    const previous = active;
-    clear();
-    previous?.focus({ preventScroll: true });
-    clear(); // Focus restoration must not reopen the dismissed preview.
-  });
-  document.addEventListener("keydown", event => { if (event.key === "Escape") clear(); });
-  window.addEventListener("hashchange", clear);
-  window.addEventListener("scroll", () => {
-    if (window.scrollX !== previewScrollX || window.scrollY !== previewScrollY) clear();
-  }, { passive: true });
-  window.addEventListener("blur", clear);
-  window.addEventListener("resize", clear);
-  document.addEventListener("visibilitychange", () => { if (document.hidden) clear(); });
-  return () => {
-    clear();
-    blockedTarget = null;
-    enableSound.hidden = true;
-  };
+  return () => { listeners.abort(); preview.dispose(); lightbox.dispose(); };
 }
 
 /* ---------- boot ---------- */
@@ -609,19 +195,18 @@ let startRevision = 0;
 
 function disposeRender() {
   clearInteractions?.();
+  clearInteractions = null;
   disposeSections();
   playback?.dispose();
 }
 
-function render(entries) {
-  if (!clearInteractions) {
-    clearInteractions = setupInteractions();
-  }
-  if (!playback) playback = CoursePlayback.setup();
+function render(entries, resolveResource = CourseEntry.siteResolver(entries)) {
   const position = { x: window.scrollX, y: window.scrollY };
   disposeRender();
-  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null || entry.problem);
-  document.getElementById("entries").replaceChildren(...shown.map(renderEntry));
+  clearInteractions = setupInteractions();
+  if (!playback) playback = CoursePlayback.setup();
+  const shown = entries.filter(entry => entry.text !== null || entry.visual !== null || entry.problem).map(CourseEntry.describe);
+  document.getElementById("entries").replaceChildren(...shown.map(entry => CourseEntry.render(entry, resolveResource)));
   buildNav(shown);
   disposeSections = watchSections(shown);
   playback.mount();
@@ -642,11 +227,10 @@ async function start(options = {}) {
   const revision = ++startRevision;
   const entries = await (options.loadEntries || loadEntries)();
   if (revision !== startRevision) return;
-  resourceResolver = options.resolveResource || siteResolver(entries);
-  render(entries);
+  render(entries, options.resolveResource || CourseEntry.siteResolver(entries));
 }
 
 globalThis.CourseSite = {
   start, render,
-  dispose() { startRevision++; disposeRender(); resourceResolver = null; },
+  dispose() { startRevision++; disposeRender(); },
 };
