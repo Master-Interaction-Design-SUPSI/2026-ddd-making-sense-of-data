@@ -22,6 +22,9 @@ class EditorBuildTests(unittest.TestCase):
             expected = expected.replace('<script src="../static/bootstrap.js"></script>',
                                         '<script src="protocol.js"></script>\n    <script src="preview.js"></script>')
             self.assertEqual(preview, expected)
+            for name in ['document.js', 'preview-client.js', 'protocol.js', 'preview.js', 'session.js', 'recovery.js', 'media-preview.js']:
+                self.assertEqual((destination / 'editor' / name).read_bytes(),
+                                 (build_site.ROOT / 'editor' / name).read_bytes())
             groups = json.loads((destination / 'editor/groups.json').read_text())['groups']
             self.assertEqual(groups, [
                 {'slug': 'city-water', 'repository': 'course/city-water', 'branch': 'main', 'exclude': ['media/12.mov'],

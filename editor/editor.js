@@ -1,13 +1,34 @@
 (async () => {
   const $ = id => document.getElementById(id);
   const status = message => { $('status').textContent = message; };
-  const fail = error => status(error.message);
+  const feedback = target => typeof target === 'string' ? $(target) : target;
+  const fail = (error, target = 'status') => { feedback(target).textContent = error.message; };
+  const showView = (view, focus = true) => {
+    $('workspace').dataset.view = view;
+    $('show-write').setAttribute('aria-pressed', view === 'write');
+    $('show-preview').setAttribute('aria-pressed', view === 'preview');
+    syncPreviewVisibility();
+    if (focus) $(view === 'write' ? 'writing-heading' : 'preview-heading').focus();
+  };
   const siteRoot = new URL('../', location.href);
   const contract = await fetch('../static/contract.json').then(response => response.json());
   const groups = await fetch('groups.json').then(response => response.json());
-  let draft, config, baseId, loadRevision = 0, renderRevision = 0, ready = false, timer;
-  let baseText = '';
-  let tableRows = [];
+  let draft, config, baseId, loadRevision = 0;
+  let baseText = '', baseTable = null;
+  let tableRows = [], tableError = false, replacementPath = null, loading = false;
+  let importedRecovery = null, insertionTarget = 'body';
+  const previewClient = new CoursePreviewClient.PreviewClient({ frame: $('preview'), host: window, origin: location.origin, contract,
+    onState: state => { $('preview-status').textContent = state.message; $('preview-status').dataset.state = state.status; } });
+  const mediaPreviews = CourseMediaPreview.create(document, URL);
+  const narrowScreen = window.matchMedia?.('(width < 800px)');
+  function syncPreviewVisibility() { previewClient.setVisible(!narrowScreen?.matches || $('workspace').dataset.view === 'preview'); }
+  narrowScreen?.addEventListener('change', syncPreviewVisibility);
+  syncPreviewVisibility();
+  $('show-write').addEventListener('click', () => showView('write'));
+  $('show-preview').addEventListener('click', () => showView('preview'));
+  $('retry-preview').addEventListener('click', () => previewClient.retry());
+  window.addEventListener('pagehide', event => { if (!event.persisted) previewClient.dispose(); });
+  window.addEventListener('pageshow', event => { if (event.persisted) previewClient.retry(); });
   const tableName = contract.media_table;
   const draftStore = new CourseDraftStorage.DraftStore();
   let channel = null;
@@ -15,9 +36,31 @@
   let persistence = null;
   let saving = Promise.resolve();
   const savedControls = visible => {
-    for (const id of ['restore', 'discard', 'saved-download']) $(id).hidden = !visible;
+    $('recovery-notice').hidden = !visible;
     $('fallback-restore').hidden = !visible || !persistence?.hasDurable || !persistence?.legacy;
   };
+
+  function editable() {
+    return !!draft && !loading && !persistence?.gate.readOnly && !persistence?.conflict && !persistence?.pending;
+  }
+  function allowEdit() {
+    if (editable()) return true;
+    status('Resolve the saved browser draft before editing.');
+    return false;
+  }
+  function updateControls() {
+    const allowed = editable();
+    for (const id of ['text', 'visual-file', 'replace-visual', 'attachment', 'path', 'media-name', 'media-source', 'repair-source', 'apply-repair', 'cancel-replace']) $(id).disabled = !allowed;
+    for (const id of ['attach', 'add-row']) $(id).disabled = !allowed || tableError;
+    $('path').disabled = !allowed || !!replacementPath;
+    $('download-visual').disabled = !draft?.files().get('visual.svg')?.blob;
+    for (const id of ['check', 'download', 'download-table', 'export-draft']) $(id).disabled = !draft || loading || id === 'check' && !allowed;
+    const projection = draft && CourseDocument.project(draft.text);
+    for (const id of ['title', 'authors', 'body']) $(id).disabled = !allowed || !projection?.safe;
+    for (const selector of ['media-rows', 'visual-metadata', 'files', 'tools', 'media-picker']) {
+      for (const control of $(selector).querySelectorAll('button, input, select')) control.disabled = !allowed;
+    }
+  }
 
   async function openStorage(key) {
     await saving;
@@ -35,6 +78,7 @@
   }
 
   async function savedRecord(context) {
+    if (importedRecovery && context === persistence) return importedRecovery;
     if (context.backend === 'indexeddb') {
       const record = await draftStore.read(context.key);
       if (record && !record.discarded) return record;
@@ -46,19 +90,18 @@
   let mutationRevision = 0;
   function invalidate() {
     mutationRevision++;
-    $('validation').textContent = 'Draft changed — check again before committing.';
+    $('validation').textContent = $('steps').children.length ? 'Draft changed — check again before committing.' : '';
     $('steps').replaceChildren();
+    $('error-summary').hidden = true;
   }
   function recordChange() {
     invalidate();
     save();
-    clearTimeout(timer);
-    timer = setTimeout(() => run(preview), 150);
+    preview(150);
   }
-  const sent = new Map();
   const rawUrl = (revision, path) => `https://raw.githubusercontent.com/${config.repository}/${encodeURIComponent(revision)}/${path.split('/').map(encodeURIComponent).join('/')}`;
   const github = (action, path = '') => `https://github.com/${config.repository}/${action}/${encodeURIComponent(config.branch)}/${path.split('/').map(encodeURIComponent).join('/')}`;
-  const run = fn => Promise.resolve().then(fn).catch(fail);
+  const run = (fn, target = 'status') => { feedback(target).textContent = ''; return Promise.resolve().then(fn).catch(error => fail(error, target)); };
   for (const group of groups.groups.filter(group => group.editable)) {
     const option = document.createElement('option'); option.value = group.slug; option.textContent = group.slug; $('group').append(option);
   }
@@ -92,16 +135,18 @@
     return blob;
   }
 
+  const sourceText = async blob => new TextDecoder('utf-8', { fatal: true, ignoreBOM: true }).decode(await blob.arrayBuffer());
+
   async function open(template) {
     await saving;
     if (persistence?.unsaved && !window.confirm('Some current edits have not been saved. Download your current text and attachments before switching. Continue and discard these unsaved edits?')) return;
     const revision = ++loadRevision;
+    loading = true; updateControls();
+    try {
     const selected = groups.groups.find(group => group.slug === $('group').value);
     if (!selected) return;
     status('Loading complete inventory…');
-    $('text').disabled = true;
-    for (const id of ['attach', 'check', 'download', 'stale', 'add-row', 'download-table', 'copy-table']) $(id).disabled = true;
-    $('files').replaceChildren(); $('media-rows').replaceChildren(); savedControls(false);
+
     let entry, identity, prefix;
     if (template) {
       entry = await fetch('template.json').then(response => response.json());
@@ -126,26 +171,33 @@
     const text = await boundedBlob(records.get('text.md').url, records.get('text.md'));
     const tableBlob = records.has(tableName) ? await boundedBlob(records.get(tableName).url, records.get(tableName)) : null;
     if (revision !== loadRevision) return;
-    const loadedText = await text.text();
+    const loadedText = await sourceText(text);
     const context = await openStorage([siteRoot.href, selected.repository, selected.branch, selected.slug].join('|'));
     if (revision !== loadRevision) return;
-    config = selected; baseId = identity; invalidate();
+    const loadedTable = tableBlob ? await sourceText(tableBlob) : null;
+    if (revision !== loadRevision) return;
+    config = selected; baseId = identity; invalidate(); $('validation').textContent = '';
+    $('editing').hidden = false;
     draft = new CourseDraft.Draft(records, config, contract);
     draft.text = baseText = loadedText;
     draft.base.get('text.md').blob = text;
-    if (tableBlob) { draft.base.get(tableName).blob = tableBlob; draft.table = await tableBlob.text(); }
+    if (tableBlob) { draft.base.get(tableName).blob = tableBlob; draft.table = loadedTable; }
     else draft.table = CourseDraft.startingTable(draft.files(), contract);
+    baseTable = draft.table;
     persistence = context;
-    $('text').value = draft.text; $('text').disabled = false;
-    $('base').textContent = template ? `${config.slug}: template — reconcile existing unpublished work before replacing it.` : `${config.slug}: last published version: ${entry.commit}. Newer GitHub edits may exist.`;
+    persistence.gate = new CourseDraftSession.RecoveryGate(persistence.pending);
+    importedRecovery = null; resetUpload();
+    $('recovery-comparison').hidden = true;
+    syncDocument();
+    $('base').textContent = template ? `${config.slug}: started from the template. Check GitHub first so you don't replace a teammate's work.` : `${config.slug}: last published version (${entry.commit.slice(0, 7)}). Teammates may have newer changes on GitHub.`;
     if (!template) {
       const commitLink = document.createElement('a'); commitLink.href = `https://github.com/${config.repository}/commit/${entry.commit}`;
-      commitLink.textContent = ' View source commit ↗'; commitLink.target = '_blank'; commitLink.rel = 'noopener'; $('base').append(commitLink);
+      commitLink.textContent = ' View on GitHub ↗'; commitLink.target = '_blank'; commitLink.rel = 'noopener'; $('base').append(commitLink);
     }
-    $('steps').replaceChildren(); $('freshness').textContent = ''; $('current-text').textContent = '';
+    $('steps').replaceChildren();
     $('saved-files').replaceChildren();
-    sent.clear(); missingAttachments.clear();
-    for (const id of ['attach', 'check', 'download', 'stale', 'add-row', 'download-table', 'copy-table']) $(id).disabled = false;
+    missingAttachments.clear();
+    for (const id of ['attach', 'check', 'download', 'add-row', 'download-table']) $(id).disabled = false;
     loadRows(!tableBlob);
     savedControls(persistence.pending);
     $('save').textContent = persistence.backend === 'indexeddb'
@@ -153,21 +205,23 @@
         ? 'Two saved drafts exist. Download both and any older attachments before choosing text-and-media restoration or the text-only backup.'
         : 'Text and attached media can be saved in this browser only.'
       : 'Media storage is unavailable. Text-only fallback requires media reattachment after reload. Keep your original files.';
-    status('Ready to edit. Changes remain in this browser.');
+    status(persistence.pending ? 'Resolve the saved browser draft before editing. The loaded version is read-only.' : 'Ready to edit. Changes remain in this browser.');
     listFiles(); await preview();
+    } finally {
+      if (revision === loadRevision) { loading = false; updateControls(); }
+    }
   }
 
   function save() {
     const context = persistence;
+    if (!editable()) return saving;
     context.unsaved = true;
     if (context.conflict || context.pending) {
       $('save').textContent = 'A browser draft is waiting. Download, restore or discard it explicitly before saving here. Your current edits are not autosaved yet.';
       return saving;
     }
     const generation = ++context.generation;
-    const payload = { version: 2, baseId, text: draft.text, table: draft.table,
-      assets: [...draft.updates].map(([path, file]) => ({ path, ...file })),
-      missingPaths: [...missingAttachments], deletions: [...draft.deletions], saved: Date.now() };
+    const payload = CourseDraftSession.snapshot(draft, baseId, missingAttachments);
     context.unsaved = true;
     $('save').textContent = 'Saving in this browser…';
     saving = saving.then(async () => {
@@ -198,99 +252,126 @@
     }).catch(error => {
       if (error.name === 'DraftConflict') context.conflict = true;
       if (context !== persistence) return;
-      if (context.conflict) savedControls(true);
+      if (context.conflict) { context.gate.requireRecovery(); savedControls(true); updateControls(); }
       $('save').textContent = context.conflict ? error.message
         : 'Could not save text and media in this browser. The previous saved draft is preserved. Download your text and attachments and keep originals before leaving.';
     });
     return saving;
   }
 
-  async function preview() {
-    if (!draft || !ready) return;
-    const active = draft, generation = loadRevision, revision = ++renderRevision;
+  function setDocumentField(id, value) {
+    const field = $(id);
+    const normalize = text => text.replace(/\r\n?/g, '\n');
+    const before = normalize(field.value), after = normalize(value);
+    if (before === after) return;
+    const shift = before.endsWith(after) ? before.length - after.length : 0;
+    const start = Math.max(0, Math.min(after.length, field.selectionStart - shift));
+    const end = Math.max(start, Math.min(after.length, field.selectionEnd - shift));
+    field.value = value;
+    if (Number.isInteger(start) && Number.isInteger(end)) field.setSelectionRange(start, end);
+  }
+
+  function syncDocument(typingField = null) {
+    const projection = CourseDocument.project(draft.text);
+    setDocumentField('text', draft.text);
+    for (const key of ['title', 'authors', 'body']) {
+      if (key !== typingField || key === 'body') setDocumentField(key, projection[key]);
+    }
+    $('document-status').textContent = projection.safe ? '' : projection.reason;
+    if (!projection.safe) { $('raw-document').open = true; insertionTarget = 'text'; }
+    updateControls();
+  }
+
+  function preview(delay = 0) {
+    if (!draft) return;
+    const active = draft, text = active.text, tableSource = active.table, slug = config.slug;
     const files = active.files();
-    const wanted = new Set(['visual.svg']);
-    let table = null;
-    try { table = active.table === null ? null : CourseMediaTable.read(active.table); } catch { /* The table status reports it. */ }
-    for (const target of CourseReferences.collect(active.text, table)) {
-      try { const path = CourseReferences.localPath(target, contract.reference_schemes); if (path) wanted.add(path); } catch { /* Validation reports malformed references. */ }
-    }
-    const assets = [];
-    for (const path of wanted) {
-      const file = files.get(path); if (!file) continue;
-      if (!file.blob) file.blob = await boundedBlob(file.url, file);
-      if (generation !== loadRevision || revision !== renderRevision) return;
-      if (sent.get(path) !== file.sha256) assets.push({ path, bytes: await file.blob.arrayBuffer(), hash: file.sha256 });
-    }
-    if (generation !== loadRevision || revision !== renderRevision) return;
-    const paths = [...files.keys()].filter(path => wanted.has(path));
-    const message = { version: 1, type: 'render', slug: config.slug, revision, text: active.text, table: active.table, paths, assets: assets.map(({ path, bytes }) => ({ path, bytes })) };
-    CoursePreviewProtocol.validateRender(message, contract);
-    $('preview').contentWindow.postMessage(message, location.origin);
-    for (const path of sent.keys()) if (!paths.includes(path)) sent.delete(path);
-    for (const asset of assets) sent.set(asset.path, asset.hash);
+    previewClient.request(async () => {
+      const wanted = new Set(['visual.svg']);
+      let table = null;
+      try { table = tableSource === null ? null : CourseMediaTable.read(tableSource); } catch { /* Table repair stays available. */ }
+      for (const target of CourseReferences.collect(text, table)) {
+        try { const path = CourseReferences.localPath(target, contract.reference_schemes); if (path) wanted.add(path); } catch { /* Review reports unsafe references. */ }
+      }
+      const assets = [];
+      for (const path of wanted) {
+        const file = files.get(path); if (!file) continue;
+        if (!file.blob) file.blob = await boundedBlob(file.url, file);
+        assets.push({ path, bytes: await file.blob.arrayBuffer() });
+      }
+      return { slug, text, table: tableSource, paths: [...files.keys()].filter(path => wanted.has(path)), assets };
+    }, delay);
+  }
+
+  function beginReplacement(path) {
+    if (!allowEdit()) return;
+    replacementPath = path; $('path').value = path;
+    const metadata = tableRows.find(entry => entry.file === path);
+    $('media-name').value = metadata?.name || ''; $('media-source').value = metadata?.source || '';
+    $('attachment').value = ''; $('attach').textContent = `Replace ${path}`; $('cancel-replace').hidden = false;
+    $('upload').open = true; $('upload-metadata').hidden = true; updateControls(); $('attachment').focus();
   }
 
   function listFiles() {
     $('files').replaceChildren();
-    for (const [path, file] of draft.files()) {
-      const row = document.createElement('li'); row.textContent = `${path} · ${file.size.toLocaleString()} bytes `;
-      if (path === 'text.md' || path === tableName) { $('files').append(row); continue; }
-      if (file.blob) {
-        const downloadFile = document.createElement('button'); downloadFile.textContent = 'Download attachment';
-        downloadFile.addEventListener('click', () => download(file.blob, path.split('/').pop())); row.append(downloadFile);
-      }
-      const remove = document.createElement('button'); remove.textContent = 'Remove from draft';
-      remove.addEventListener('click', () => run(async () => {
-        draft.remove(path); missingAttachments.delete(path);
-        tableRows = tableRows.filter(entry => entry.file !== path); storeRows(); renderRows();
-        recordChange(); listFiles();
-      }));
-      row.append(remove);
-      $('files').append(row);
-    }
+    const files = draft.files();
+    $('inventory').textContent = [...files].map(([path, file]) => `${path} · ${file.size.toLocaleString()} bytes`).join('\n');
+    $('visual-status').textContent = files.has('visual.svg') ? `visual.svg · ${files.get('visual.svg').size.toLocaleString()} bytes` : 'Main visual is missing. Choose a 1920 × 1080 SVG.';
+    renderRows();
     for (const path of missingAttachments) {
       if (draft.files().has(path)) continue;
       const row = document.createElement('li'); row.textContent = `${path} · reattachment required `;
       const discard = document.createElement('button'); discard.textContent = 'Discard missing attachment';
-      discard.addEventListener('click', () => { missingAttachments.delete(path); recordChange(); listFiles(); });
+      discard.addEventListener('click', () => { if (!allowEdit()) return; missingAttachments.delete(path); recordChange(); listFiles(); });
       row.append(discard); $('files').append(row);
     }
     for (const path of draft.deletions) {
       const row = document.createElement('li'); row.textContent = `${path} · explicit deletion planned `;
-      const undo = document.createElement('button'); undo.textContent = 'Restore file to draft';
+      const undo = document.createElement('button'); undo.textContent = draft.removed.has(path) ? 'Undo removal' : 'Restore original repository file';
       undo.addEventListener('click', () => run(async () => {
-        draft.deletions.delete(path);
-        if (!tableRows.some(entry => entry.file === path)) { tableRows.push(...rowsFor([path])); storeRows(); renderRows(); }
+        if (!allowEdit()) return;
+        if (draft.removed.has(path)) draft.undoRemove(path);
+        else {
+          if (!window.confirm('This older draft has no exact undo record. Restore the original repository file? Removed metadata cannot be recovered by this action.')) return;
+          draft.deletions.delete(path);
+        }
+        loadRows(false);
         recordChange(); listFiles();
       }));
       row.append(undo); $('files').append(row);
     }
+    updateControls();
   }
 
+  function resetUpload() {
+    replacementPath = null; $('upload-metadata').hidden = false;
+    for (const id of ['attachment', 'path', 'media-name', 'media-source']) $(id).value = '';
+    $('attach').textContent = 'Add media'; $('cancel-replace').hidden = true;
+    updateControls();
+  }
+  $('cancel-replace').addEventListener('click', () => { if (allowEdit()) resetUpload(); });
+
   async function attach() {
-    if (!draft) return;
+    if (!allowEdit()) return;
+    if (tableError) throw new Error('Repair media.csv before adding media.');
     const file = $('attachment').files[0]; if (!file) throw new Error('Choose a file first');
     const path = $('path').value.trim();
     const name = $('media-name').value.trim(), source = $('media-source').value.trim();
-    const clash = name && tableRows.find(entry => entry.name.toLowerCase() === name.toLowerCase() && entry.file !== path);
-    if (clash) throw new Error(`The name "${name}" is already used for ${clash.file}`);
+    const replacing = replacementPath;
     const active = draft;
     if (file.size > contract.limits.media_bytes) throw new Error('Attachment exceeds the media file limit');
     const hash = await CourseDraft.digest(file);
     if (active !== draft) return;
-    draft.attach(path, file, hash); missingAttachments.delete(path);
-    const existing = tableRows.find(entry => entry.file === path);
-    if (existing) Object.assign(existing, name ? { name } : {}, source ? { source } : {});
-    else tableRows.push(name ? { name, source, file: path } : { ...rowsFor([path])[0], source });
-    $('media-name').value = $('media-source').value = '';
-    storeRows(); renderRows();
+    if (!allowEdit()) return;
+    if (replacing) draft.replaceAsset(replacing, file, hash);
+    else draft.addAsset(path, file, hash, { ...(name ? { name } : {}), source });
+    missingAttachments.delete(path);
+    resetUpload();
+    loadRows(false);
     recordChange(); listFiles();
   }
 
   /* ---------- media.csv rows ---------- */
-
-  const rowsFor = paths => CourseDraft.rowsFor(paths, tableRows);
 
   const noTable = 'No media yet. media.csv is created with the first attached file.';
   const tableText = () => draft.table ?? CourseMediaTable.serialize([]);
@@ -305,10 +386,12 @@
   }
 
   function loadRows(started) {
+    tableError = false; $('table-repair').hidden = true;
     if (draft.table === null) { tableRows = []; renderRows(); $('table-status').textContent = noTable; return; }
     try { tableRows = CourseMediaTable.read(draft.table).rows.map(({ name, source, file }) => ({ name, source, file })); }
     catch (error) {
-      tableRows = [];
+      tableRows = []; tableError = true;
+      $('table-repair').hidden = false; $('repair-source').value = draft.table;
       $('table-status').textContent = error.message;
     }
     renderRows();
@@ -316,42 +399,134 @@
   }
 
   // A group needs media.csv only once it has a row, or when its repository already has one.
-  function storeRows() { draft.table = tableRows.length || draft.base.has(tableName) ? CourseMediaTable.serialize(tableRows) : null; }
+  function storeRows() { if (tableError) throw new Error('Repair media.csv before editing rows.'); draft.table = tableRows.length || draft.base.has(tableName) ? CourseMediaTable.serialize(tableRows) : null; }
+
+  // Name, source and insertion: what a writer needs for each media name.
+  function mediaMetadata(entry, index, path) {
+    const metadata = document.createElement('div'); metadata.dataset.index = index;
+    for (const [field, label, type] of [['name', 'Name', 'text'], ['source', 'Source link', 'url']]) {
+      const wrapper = document.createElement('label'); wrapper.textContent = label;
+      const input = document.createElement('input'); input.type = type; input.dataset.field = field; input.value = entry[field];
+      input.setAttribute('aria-label', `${label}: ${path}`); wrapper.append(input); metadata.append(wrapper);
+    }
+    const actions = document.createElement('div'); actions.className = 'row';
+    const insert = document.createElement('button'); insert.textContent = 'Insert in text'; insert.dataset.action = 'insert'; actions.append(insert);
+    metadata.append(actions);
+    return metadata;
+  }
+
+  // The table row's exact file path and its removal: needed only to repair a row.
+  function rowDetails(entry, index) {
+    const row = document.createElement('div'); row.dataset.index = index;
+    const label = document.createElement('label'); label.textContent = `File path for ${entry.name ? `[[${entry.name}]]` : 'this name'}`;
+    const input = document.createElement('input'); input.value = entry.file; input.dataset.field = 'file'; label.append(input);
+    const remove = document.createElement('button'); remove.textContent = 'Remove name'; remove.dataset.action = 'remove';
+    row.append(label, remove);
+    return row;
+  }
+
+  function more(...children) {
+    const details = document.createElement('details'), summary = document.createElement('summary');
+    summary.textContent = 'More'; details.append(summary, ...children);
+    return details;
+  }
+
+  const useText = count => count === 0 ? 'not in the text yet' : count === 1 ? 'used once in the text' : `used ${count} times in the text`;
 
   function renderRows() {
-    $('media-rows').replaceChildren(...tableRows.map((entry, index) => {
-      const item = document.createElement('li'); item.dataset.index = index;
-      for (const [field, label, type] of [['name', 'Name used in the text', 'text'], ['source', 'Link to the source', 'url'], ['file', 'File', 'text']]) {
-        const wrapper = document.createElement('label'); wrapper.textContent = label;
-        const input = document.createElement('input'); input.type = type; input.dataset.field = field; input.value = entry[field];
-        if (field === 'source') input.placeholder = 'https://…';
-        wrapper.append(input); item.append(wrapper);
+    $('media-rows').replaceChildren();
+    const inventory = new Map([...draft.files()].filter(([path]) => !['text.md', 'visual.svg', tableName].includes(path)));
+    for (const entry of tableRows) if (entry.file !== 'visual.svg' && !inventory.has(entry.file)) inventory.set(entry.file, null);
+    const visual = draft.files().get('visual.svg');
+    $('visual-preview').replaceChildren(...(visual ? [mediaPreviews.element('visual.svg', visual)] : []));
+    $('visual-metadata').replaceChildren(...tableRows.flatMap((entry, index) => {
+      if (entry.file !== 'visual.svg') return [];
+      const block = document.createElement('div'); block.append(mediaMetadata(entry, index, 'visual.svg'), more(rowDetails(entry, index)));
+      return [block];
+    }));
+    const namedUses = CourseMediaTable.namedReferences(draft.text);
+    const directUses = CourseReferences.collect(draft.text);
+    for (const [path, file] of inventory) {
+      const item = document.createElement('li'); item.dataset.path = path;
+      const error = document.createElement('p'); error.className = 'error'; error.dataset.mediaError = ''; error.setAttribute('role', 'status');
+      const entries = tableRows.map((entry, index) => ({ entry, index })).filter(({ entry }) => entry.file === path);
+      const named = entries.reduce((sum, { entry }) => sum + namedUses.filter(ref => ref.name.toLowerCase() === entry.name.toLowerCase()).length, 0);
+      const direct = directUses.filter(target => { try { return CourseReferences.localPath(target, contract.reference_schemes) === path; } catch { return false; } }).length;
+      if (file) item.append(mediaPreviews.element(path, file));
+      const heading = document.createElement('p'); heading.className = 'media-file';
+      heading.textContent = `${path} · ${file ? useText(named + direct) : 'file missing'}`; item.append(heading);
+      for (const { entry, index } of entries) item.append(mediaMetadata(entry, index, path));
+      if (!entries.length && !tableError) {
+        const create = document.createElement('button'); create.textContent = 'Name this media';
+        create.addEventListener('click', () => run(() => {
+          if (!allowEdit()) return;
+          tableRows.push(CourseDraft.rowsFor([path], tableRows)[0]); storeRows(); recordChange(); renderRows(); updateControls();
+        }, error)); item.append(create);
       }
       const actions = document.createElement('div'); actions.className = 'row';
-      for (const [action, label] of [['insert', 'Insert in text'], ['remove', 'Remove row']]) {
-        const button = document.createElement('button'); button.dataset.action = action; button.textContent = label; actions.append(button);
+      if (file) {
+        const replace = document.createElement('button'); replace.textContent = 'Replace file'; replace.addEventListener('click', () => beginReplacement(path)); actions.append(replace);
+        if (file.blob) { const button = document.createElement('button'); button.textContent = 'Download file'; button.addEventListener('click', () => download(file.blob, path.split('/').pop())); actions.append(button); }
+        const remove = document.createElement('button'); remove.textContent = 'Remove file';
+        remove.addEventListener('click', () => run(() => {
+          if (!allowEdit()) return;
+          draft.removeAsset(path); missingAttachments.delete(path); loadRows(false); recordChange(); listFiles();
+        }, error)); actions.append(remove);
       }
-      item.append(actions);
-      return item;
-    }));
+      item.append(more(actions, ...entries.map(({ entry, index }) => rowDetails(entry, index))), error); $('media-rows').append(item);
+    }
+    mediaPreviews.retain(new Set(['visual.svg', ...inventory.keys()]));
     tableStatus();
   }
 
   function insertText(text) {
-    $('text').setRangeText(text, $('text').selectionStart, $('text').selectionEnd, 'end'); $('text').dispatchEvent(new Event('input')); $('text').focus();
+    const target = $(insertionTarget);
+    target.setRangeText(text, target.selectionStart, target.selectionEnd, 'end');
+    target.dispatchEvent(new Event('input')); showView('write', false); target.focus();
   }
 
-  function step(text, url, label) {
+  /* ---------- GitHub steps ---------- */
+
+  // One step: a reminder tick, an instruction, the actions it needs and a line for their results.
+  function step(text) {
     const item = document.createElement('li');
     const check = document.createElement('input'); check.type = 'checkbox';
-    const wrapper = document.createElement('label'); wrapper.append(check, ` ${text} `);
-    if (url) { const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = label || 'Open GitHub ↗'; wrapper.append(link); }
-    item.append(wrapper); $('steps').append(item);
+    const wrapper = document.createElement('label'); wrapper.append(check, ` ${text}`);
+    const actions = document.createElement('div'); actions.className = 'row';
+    const result = document.createElement('p'); result.setAttribute('role', 'status');
+    item.append(wrapper, actions, result); $('steps').append(item);
+    return { item, actions, result };
+  }
+  function externalLink(url, label) {
+    const link = document.createElement('a'); link.href = url; link.target = '_blank'; link.rel = 'noopener'; link.textContent = label;
+    return link;
+  }
+  function stepButton(label, result, action) {
+    const button = document.createElement('button'); button.textContent = label;
+    button.addEventListener('click', () => run(action, result));
+    return button;
+  }
+  async function copy(text, result) {
+    await navigator.clipboard.writeText(text);
+    result.textContent = 'Copied. Paste it on GitHub.';
+  }
+  async function compareGitHub({ item, result }) {
+    const active = draft;
+    item.querySelector('details')?.remove();
+    result.textContent = 'Comparing…';
+    const current = await sourceText(await fetchBlob(rawUrl(config.branch, 'text.md'), contract.limits.text_bytes));
+    if (active !== draft) return;
+    if (current === baseText) { result.textContent = 'Same text as the version you opened. Very recent changes may not show yet.'; return; }
+    result.textContent = 'The text on GitHub is different. Bring your teammates’ changes into your draft before you save.';
+    const details = document.createElement('details'), summary = document.createElement('summary'), source = document.createElement('pre');
+    summary.textContent = 'Text on GitHub'; source.textContent = current;
+    details.append(summary, source); item.append(details);
   }
 
   async function check() {
+    if (!allowEdit()) return;
     const active = draft, revision = mutationRevision;
-    if (missingAttachments.size) throw new Error('Reattach or explicitly remove these restored media files first: ' + [...missingAttachments].join(', '));
+    if (missingAttachments.size) throw Object.assign(new Error('Reattach or explicitly remove these restored media files first: ' + [...missingAttachments].join(', ')), { field: 'media-heading' });
     const result = active.validate();
     const changes = await active.changes();
     if (active !== draft || revision !== mutationRevision) return;
@@ -369,151 +544,261 @@
       }
     }
     if (active !== draft || revision !== mutationRevision) return;
-    $('validation').textContent = `Known local checks passed: ${result.files.size} files, ${result.total.toLocaleString()} bytes. Importer still validates repository and SVG security. ${result.orphans.length ? 'Unreferenced media still counts: ' + result.orphans.join(', ') + '. ' : ''}${result.notes.join('. ')}`;
+    $('validation').textContent = ['Checks passed. Follow these steps on GitHub, top to bottom. Ticks are only reminders for you; the site runs its own checks when it publishes.',
+      result.orphans.length ? `Media not used in the text, still saved: ${result.orphans.join(', ')}.` : '', result.notes.join('. ')].filter(Boolean).join(' ');
     $('steps').replaceChildren();
     // Any order works: until every commit is in, the page shows what is not there yet as missing.
-    step('Review current repository text and changed-media paths before overwriting.', github('blob', 'text.md'));
+    const review = step('Check that nobody changed the text on GitHub after the version you opened.');
+    review.actions.append(stepButton('Compare with GitHub', review.result, () => compareGitHub(review)), externalLink(github('blob', 'text.md'), 'Open text.md on GitHub ↗'));
     for (const change of changes.filter(change => change.path !== 'text.md' && change.path !== tableName && change.operation !== 'delete')) {
       const parent = change.path.includes('/') ? change.path.slice(0, change.path.lastIndexOf('/')) : '';
-      step(`${change.operation === 'add' ? 'Upload' : 'Replace'} ${change.path} and commit. Upload into ${parent || 'repository root'}; keep this exact path.`, github('upload', parent));
+      const name = change.path.split('/').pop(), blob = active.files().get(change.path)?.blob;
+      const where = parent ? `the ${parent} folder` : 'the main file list (where text.md is)';
+      const upload = step(`Download ${name}, then upload it into ${where} on GitHub${change.operation === 'add' ? '' : ' (it replaces the old file)'} and commit.`);
+      if (blob) upload.actions.append(stepButton(`Download ${name}`, upload.result, () => download(blob, name)));
+      upload.actions.append(externalLink(github('upload', parent), 'Open upload page ↗'));
     }
     const tableChange = changes.find(change => change.path === tableName);
-    if (tableChange?.operation === 'add') {
+    if (tableChange) {
+      const table = step(tableChange.operation === 'add' ? 'Create media.csv on GitHub. If it opens empty, paste the copied table. Commit.' : 'Replace everything in media.csv with the copied table, and commit.');
       const create = new URL(`https://github.com/${config.repository}/new/${encodeURIComponent(config.branch)}`);
       create.searchParams.set('filename', tableName);
       if (draft.table.length < 4000) create.searchParams.set('value', draft.table);
-      step('Create media.csv in the repository root. If the page is empty, paste the copied table, then commit.', create.href, 'Create media.csv ↗');
-    } else if (tableChange) step('Replace the whole content of media.csv with the copied table and commit.', github('edit', tableName));
-    if (changes.some(change => change.path === 'text.md')) step('Paste the reviewed text.md and commit it on the configured branch. For a new group, create the template files first.', github('edit', 'text.md'));
-    for (const change of changes.filter(change => change.operation === 'delete')) step(`Delete ${change.path} through the file menu.`, github('blob', change.path));
-    step('Check the course site after publication. A checked box records your action; it does not verify a commit.', new URL(`#${config.slug}`, siteRoot).href, 'Open published entry ↗');
+      table.actions.append(stepButton('Copy media.csv', table.result, () => copy(tableText(), table.result)),
+        tableChange.operation === 'add' ? externalLink(create.href, 'Create media.csv on GitHub ↗') : externalLink(github('edit', tableName), 'Edit media.csv on GitHub ↗'));
+    }
+    if (changes.some(change => change.path === 'text.md')) {
+      const text = step('Replace everything in text.md with the copied text, and commit.');
+      text.actions.append(stepButton('Copy text.md', text.result, () => copy(draft.text, text.result)), externalLink(github('edit', 'text.md'), 'Edit text.md on GitHub ↗'));
+    }
+    for (const change of changes.filter(change => change.operation === 'delete')) {
+      const name = change.path.split('/').pop();
+      step(`Delete ${change.path}: open it, choose … → Delete file, and commit.`).actions.append(externalLink(github('blob', change.path), `Open ${name} on GitHub ↗`));
+    }
+    step('Open your entry on the course site. Updates take a while to appear.').actions.append(externalLink(new URL(`#${config.slug}`, siteRoot).href, 'Open published entry ↗'));
   }
 
   $('open').addEventListener('click', () => run(() => open(false)));
   $('template').addEventListener('click', () => run(() => open(true)));
   $('text').addEventListener('input', () => {
-    if (!draft) return;
-    draft.text = $('text').value; recordChange();
+    if (!allowEdit()) return;
+    draft.text = $('text').value; syncDocument(); recordChange(); listFiles();
   });
+  for (const key of ['title', 'authors', 'body']) $(key).addEventListener('input', () => run(() => {
+    if (!allowEdit()) return;
+    draft.text = CourseDocument.update(draft.text, { [key]: $(key).value });
+    syncDocument(key); recordChange(); listFiles();
+  }, 'text-error'));
+  for (const id of ['body', 'text']) $(id).addEventListener('focus', () => { insertionTarget = id; });
+  $('insert-media').addEventListener('click', () => {
+    if (!allowEdit()) return;
+    const available = tableRows.filter(entry => entry.name && entry.file !== 'visual.svg' && draft.files().has(entry.file));
+    $('media-choice').replaceChildren(...available.map(entry => { const option = document.createElement('option'); option.value = entry.name; option.textContent = entry.name; return option; }));
+    $('insert-error').textContent = available.length ? '' : 'Add media and give it a name before inserting it.';
+    $('media-picker').hidden = false;
+    if (available.length) $('media-choice').focus();
+  });
+  $('insert-choice').addEventListener('click', () => {
+    if (!allowEdit()) return;
+    const name = $('media-choice').value;
+    if (!tableRows.some(entry => entry.name === name && entry.file !== 'visual.svg' && draft.files().has(entry.file))) return;
+    insertText(`[[${name}]]`); $('media-picker').hidden = true;
+  });
+  $('cancel-insert').addEventListener('click', () => { $('media-picker').hidden = true; $(insertionTarget).focus(); });
+  $('download-visual').addEventListener('click', () => { const file = draft?.files().get('visual.svg'); if (file?.blob) download(file.blob, 'visual.svg'); });
+  $('replace-visual').addEventListener('click', () => run(async () => {
+    if (!allowEdit()) return;
+    const file = $('visual-file').files[0];
+    if (!file) throw new Error('Choose a 1920 × 1080 SVG first.');
+    if (!file.name.toLowerCase().endsWith('.svg')) throw new Error('Choose an SVG for the main visual.');
+    const active = draft, hash = await CourseDraft.digest(file);
+    if (active !== draft || !allowEdit()) return;
+    draft.attach('visual.svg', file, hash); missingAttachments.delete('visual.svg');
+    $('visual-file').value = ''; recordChange(); listFiles();
+  }, 'visual-error'));
   $('tools').addEventListener('click', event => {
-    const text = event.target.dataset.insert; if (!text || !draft) return;
+    const text = event.target.dataset.insert; if (!text || !allowEdit()) return;
     insertText(text);
   });
-  $('attachment').addEventListener('change', () => {
+  $('attachment').addEventListener('change', () => run(() => {
+    if (!allowEdit()) return;
     const file = $('attachment').files[0]; if (!file) return;
-    // Repository filenames are lowercase letters, digits, dots, hyphens and underscores.
-    if (!$('path').value) $('path').value = 'media/' + file.name.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^[^a-z0-9]+/, '');
-    if (!$('media-name').value) $('media-name').value = file.name.replace(/\.[^.]+$/, '').replace(/[-_]+/g, ' ').trim();
-  });
-  $('media-rows').addEventListener('input', event => {
-    const field = event.target.dataset.field; if (!field || !draft) return;
-    tableRows[event.target.closest('li').dataset.index][field] = event.target.value.trim();
-    storeRows(); tableStatus(); recordChange();
-  });
-  $('media-rows').addEventListener('click', event => {
-    const action = event.target.dataset.action; if (!action || !draft) return;
-    const index = Number(event.target.closest('li').dataset.index);
-    if (action === 'insert') { insertText(`[[${tableRows[index].name}]]`); return; }
-    tableRows.splice(index, 1); storeRows(); renderRows(); recordChange();
-  });
+    if (replacementPath) { $('path').value = replacementPath; return; }
+    $('path').value = draft.suggestPath(file.name);
+    $('media-name').value = CourseDraft.rowsFor([$('path').value], tableRows)[0].name;
+  }, 'attachment-error'));
+  function editRow(event) {
+    const field = event.target.dataset.field; if (!field || !allowEdit() || tableError) return;
+    const entry = tableRows[event.target.closest('[data-index]').dataset.index];
+    if (field === 'name') {
+      if (!entry.name) {
+        const name = event.target.value.trim();
+        const trial = tableRows.filter(row => row === entry || row.name.trim()).map(row => ({
+          name: row === entry ? name : row.name, source: '', file: 'media/placeholder.png' }));
+        CourseMediaTable.read(CourseMediaTable.serialize(trial));
+        entry.name = name; storeRows(); tableStatus();
+      } else {
+        draft.renameAsset(entry.name, event.target.value);
+        syncDocument(); loadRows(false);
+      }
+    } else {
+      entry[field] = event.target.value.trim(); storeRows(); tableStatus();
+    }
+    recordChange();
+  }
+  const rowFeedback = (event, container) => container === 'visual-metadata' ? 'visual-error' : event.target.closest('li')?.querySelector?.('[data-media-error]') || 'table-error';
+  for (const container of ['media-rows', 'visual-metadata']) {
+    $(container).addEventListener('input', event => { if (event.target.dataset.field === 'source') run(() => editRow(event), rowFeedback(event, container)); });
+    $(container).addEventListener('change', event => {
+      if (['name', 'file'].includes(event.target.dataset.field)) run(() => { editRow(event); if (event.target.dataset.field === 'file') listFiles(); }, rowFeedback(event, container));
+    });
+    $(container).addEventListener('click', event => run(() => {
+      const action = event.target.dataset.action; if (!action || !allowEdit() || tableError) return;
+      const index = Number(event.target.closest('[data-index]').dataset.index);
+      if (action === 'insert') { insertText(`[[${tableRows[index].name}]]`); return; }
+      const name = tableRows[index].name;
+      if (CourseMediaTable.namedReferences(draft.text).some(ref => ref.name.toLowerCase() === name.toLowerCase())) throw new Error(`Remove [[${name}]] references from the text before removing this name.`);
+      tableRows.splice(index, 1); storeRows(); renderRows(); recordChange(); updateControls();
+    }, rowFeedback(event, container)));
+  }
   $('add-row').addEventListener('click', () => {
+    if (!allowEdit() || tableError) return;
     tableRows.push({ name: '', source: '', file: 'media/' }); storeRows(); renderRows(); recordChange();
-    $('media-rows').lastElementChild.querySelector('input').focus();
+    updateControls(); $('media-rows').lastElementChild.querySelector('input').focus();
   });
+  $('apply-repair').addEventListener('click', () => run(() => {
+    if (!allowEdit()) return;
+    const source = $('repair-source').value;
+    if (CourseDraft.bytes(source) > contract.limits.table_bytes) throw new Error('media.csv exceeds its byte limit');
+    CourseMediaTable.read(source);
+    draft.table = source; loadRows(false); recordChange(); listFiles();
+  }, 'table-error'));
   $('download-table').addEventListener('click', () => download(new Blob([tableText()], { type: 'text/csv' }), tableName));
-  $('copy-table').addEventListener('click', () => run(async () => { await navigator.clipboard.writeText(tableText()); $('table-status').textContent = 'media.csv copied. Paste it into media.csv on GitHub.'; }));
-  $('attach').addEventListener('click', () => run(attach));
-  $('check').addEventListener('click', () => run(check));
+  $('attach').addEventListener('click', () => run(attach, 'attachment-error'));
+  $('check').addEventListener('click', () => {
+    $('error-summary').hidden = true;
+    for (const id of ['text-error', 'visual-error', 'table-error']) $(id).textContent = '';
+    Promise.resolve().then(check).catch(error => {
+      const field = error.field || (/media.csv|media table|CSV/i.test(error.message) ? 'repair-source' : /visual.svg/.test(error.message) ? 'visual-file' : !CourseDocument.project(draft.text).safe ? 'text' : 'body');
+      const target = field === 'visual-file' ? 'visual-error' : field === 'repair-source' || field === 'media-heading' ? 'table-error' : 'text-error';
+      fail(error, target);
+      const item = document.createElement('li'), link = document.createElement('a');
+      link.href = `#${field}`; link.textContent = error.message;
+      link.addEventListener('click', event => { event.preventDefault(); showView('write', false); if (field === 'repair-source') $('table-repair').hidden = false; if (field === 'text') $('raw-document').open = true; $(field).focus(); });
+      item.append(link); $('review-errors').replaceChildren(item); $('error-summary').hidden = false; $('error-summary').focus();
+    });
+  });
   function download(blob, name) {
     const url = URL.createObjectURL(blob); const link = document.createElement('a');
     link.href = url; link.download = name; link.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
   $('download').addEventListener('click', () => download(new Blob([draft.text], { type: 'text/plain' }), 'text.md'));
-  $('stale').addEventListener('click', () => run(async () => {
-    const active = draft;
-    $('freshness').textContent = 'Comparing the raw GitHub response…';
-    const blob = await fetchBlob(rawUrl(config.branch, 'text.md'), contract.limits.text_bytes);
-    const current = await blob.text(); if (active !== draft) return;
-    $('current-text').textContent = current;
-    $('freshness').textContent = current === baseText ? 'Fetched text matches the base. CDN caching means this does not prove freshness or protect against concurrent edits.' : 'GitHub text differs from the base. Reconcile both versions before committing.';
-  }));
   async function restoreSaved(useFallback = false) {
     const context = persistence, active = draft;
     await saving;
     const metadata = context.backend === 'indexeddb' ? await draftStore.read(context.key, false) : null;
     const raw = useFallback ? localStorage.getItem(context.key) : null;
     const saved = useFallback && raw ? { ...JSON.parse(raw), legacyRaw: raw } : await savedRecord(context);
-    if (!saved || ![1, 2].includes(saved.version) || typeof saved.text !== 'string') throw new Error('Unsupported browser draft');
-    if (saved.baseId !== baseId) throw new Error('The saved draft has a different base. Download or reconcile it before replacing the newer version.');
-    const restored = new CourseDraft.Draft(active.base, config, contract);
-    restored.text = saved.text;
-    // A saved null means the draft had no media.csv; drafts saved before the table existed lack the key.
-    restored.table = typeof saved.table === 'string' || saved.table === null ? saved.table : active.table;
-    const missing = new Set(saved.version === 1 ? saved.paths || [] : saved.missingPaths || []);
-    if (saved.version === 2) {
-      if (!Array.isArray(saved.assets) || saved.assets.length > contract.limits.files) throw new Error('Invalid saved attachment inventory');
-      for (const asset of saved.assets) {
-        if (!asset.blob) { missing.add(asset.path); continue; }
-        const hash = await CourseDraft.digest(asset.blob);
-        if (hash !== asset.sha256 || asset.size !== asset.blob.size) throw new Error(`Saved attachment failed its integrity check: ${asset.path}`);
-        restored.attach(asset.path, asset.blob, hash);
-      }
-    }
-    for (const path of saved.deletions || []) if (restored.base.has(path)) restored.remove(path);
+    const { draft: restored, missingPaths: missing } = await CourseDraftSession.restore(saved, active, baseId);
     if (context !== persistence || active !== draft) return;
-    context.revision = saved.legacyRaw ? metadata?.revision || 0 : saved.revision || 0;
+    context.revision = importedRecovery || saved.legacyRaw ? metadata?.revision || 0 : saved.revision || 0;
     context.retireLegacy = !!saved.legacyRaw;
     if (saved.legacyRaw) context.legacy = saved.legacyRaw;
-    context.conflict = context.pending = false;
+    context.conflict = context.pending = false; context.gate.resume();
+    importedRecovery = null; $('recovery-comparison').hidden = true;
     draft = restored; missingAttachments.clear();
     for (const path of missing) missingAttachments.add(path);
-    savedControls(false);
-    $('text').value = draft.text; loadRows(false); invalidate(); listFiles();
+    savedControls(false); status('Ready to edit. Changes remain in this browser.');
+    syncDocument(); loadRows(false); invalidate(); listFiles(); updateControls();
     await save();
     if (context !== persistence) return;
     if (missingAttachments.size) $('save').textContent = 'Draft restored. Reattach or discard missing media: ' + [...missingAttachments].join(', ');
     await preview();
   }
-  $('restore').addEventListener('click', () => run(() => restoreSaved()));
-  $('fallback-restore').addEventListener('click', () => run(() => restoreSaved(true)));
+  $('restore').addEventListener('click', () => run(() => restoreSaved(), 'recovery-error'));
+  $('fallback-restore').addEventListener('click', () => run(() => restoreSaved(true), 'recovery-error'));
+  async function downloadRecovery(record, label) {
+    const encoded = await CourseDraftRecovery.encode(record, config, contract);
+    const day = new Date().toISOString().slice(0, 10);
+    download(new Blob([encoded], { type: 'application/json' }), `${day}_ddd-${config.slug}_${label}_recovery.json`);
+  }
   $('saved-download').addEventListener('click', () => run(async () => {
     const saved = await savedRecord(persistence);
-    if (typeof saved?.text !== 'string') throw new Error('Saved text is unavailable');
-    download(new Blob([saved.text], { type: 'text/plain' }), 'text.md');
+    if (!saved) throw new Error('Saved browser draft is unavailable');
+    await downloadRecovery(saved, 'browser-draft');
     $('saved-files').replaceChildren();
-    if (persistence.legacy && persistence.hasDurable) {
-      const backup = JSON.parse(persistence.legacy);
-      const row = document.createElement('li'); row.textContent = 'Text-only backup; reattach paths: ' + (backup.paths || []).join(', ') + ' ';
-      const button = document.createElement('button'); button.textContent = 'Download text-only backup';
-      button.addEventListener('click', () => download(new Blob([backup.text], { type: 'text/plain' }), 'text.md'));
+    function individual(label, blob, name, path = name) {
+      const row = document.createElement('li'); row.textContent = `${path} `;
+      const button = document.createElement('button'); button.textContent = label;
+      button.addEventListener('click', () => download(blob, name));
       row.append(button); $('saved-files').append(row);
     }
+    individual('Download saved text', new Blob([saved.text], { type: 'text/plain' }), 'text.md');
+    if (typeof saved.table === 'string') individual('Download saved media.csv', new Blob([saved.table], { type: 'text/csv' }), tableName);
     for (const asset of saved.assets || []) {
-      if (!asset.blob) continue;
-      const row = document.createElement('li'); row.textContent = `${asset.path} `;
-      const button = document.createElement('button'); button.textContent = 'Download saved attachment';
-      button.addEventListener('click', () => download(asset.blob, asset.path.split('/').pop()));
+      if (asset.blob) individual('Download saved attachment', asset.blob, asset.path.split('/').pop(), asset.path);
+    }
+    if (persistence.legacy && persistence.hasDurable) {
+      const row = document.createElement('li'); row.textContent = 'An older text-only backup is also available. ';
+      const button = document.createElement('button'); button.textContent = 'Download older recovery bundle';
+      button.addEventListener('click', () => run(() => downloadRecovery(JSON.parse(persistence.legacy), 'older-draft')));
       row.append(button); $('saved-files').append(row);
     }
-  }));
+  }, 'recovery-error'));
+  $('export-draft').addEventListener('click', () => run(() => downloadRecovery(CourseDraftSession.snapshot(draft, baseId, missingAttachments), 'current-draft'), 'backup-error'));
+  $('compare-saved').addEventListener('click', () => run(async () => {
+    const context = persistence;
+    const saved = await savedRecord(context);
+    if (!saved || context !== persistence) return;
+    context.gate.compare(); updateControls();
+    $('recovery-comparison').hidden = false; $('recovery-comparison').open = true;
+    $('saved-text').textContent = saved.text;
+    $('loaded-text').textContent = baseText;
+    $('comparison-base').textContent = `Saved base: ${saved.baseId}. Loaded base: ${baseId}. Comparison is read-only.`;
+    showView('write', false); $('recovery-comparison').focus();
+  }, 'recovery-error'));
+  $('recovery-import').addEventListener('change', () => run(async () => {
+    const file = $('recovery-import').files[0]; if (!file) return;
+    if (!draft) throw new Error('Open the matching group before importing a recovery bundle.');
+    if (persistence.pending || persistence.conflict) throw new Error('Download and resolve the existing browser draft before importing another.');
+    if (file.size > CourseDraftRecovery.maximumBytes(contract)) throw new Error('Recovery bundle exceeds its byte limit');
+    const context = persistence;
+    const record = await CourseDraftRecovery.decode(await file.text(), contract);
+    if (context !== persistence) return;
+    if (['slug', 'repository', 'branch'].some(key => record.group[key] !== config[key])) throw new Error('Open the matching group before importing this bundle.');
+    if (!window.confirm('Import this recovery bundle? Download your current draft first if you need to keep both. Imported work stays read-only until you resume or compare it.')) return;
+    context.generation++;
+    importedRecovery = record; context.pending = true; context.unsaved = true; context.gate.requireRecovery();
+    savedControls(true); updateControls();
+    $('save').textContent = 'Recovery bundle loaded in memory. Resume it to save in this browser, or download it before leaving.';
+  }, 'backup-error'));
   $('discard').addEventListener('click', () => run(async () => {
     const context = persistence;
+    if (!window.confirm('Use the loaded version and discard the saved browser draft? Download its recovery bundle first to keep its text, table and attachments.')) return;
     await saving;
+    if (context !== persistence) return;
     if (context.backend === 'indexeddb') {
       const latest = await draftStore.read(context.key);
       context.revision = await draftStore.discard(context.key, latest?.revision || 0);
     }
     try { localStorage.removeItem(context.key); } catch (error) { if (context.backend === 'local') throw error; }
     context.legacy = null;
-    context.conflict = context.pending = false;
+    context.conflict = context.pending = false; context.gate.useBase(true);
+    importedRecovery = null; $('recovery-comparison').hidden = true;
     channel?.postMessage({ key: context.key, revision: context.revision });
     if (context !== persistence) return;
-    savedControls(false); $('saved-files').replaceChildren(); await save();
-  }));
-  $('width').addEventListener('change', () => { $('preview').style.width = $('width').value + 'px'; });
+    draft = new CourseDraft.Draft(draft.base, config, contract);
+    draft.text = baseText; draft.table = baseTable;
+    missingAttachments.clear(); replacementPath = null;
+    syncDocument();
+    resetUpload();
+    loadRows(false); invalidate(); listFiles();
+    savedControls(false); status('Ready to edit. Changes remain in this browser.'); $('saved-files').replaceChildren(); updateControls(); await save(); await preview();
+  }, 'recovery-error'));
+  $('width').addEventListener('change', () => { $('preview').style.width = $('width').value === 'fit' ? '100%' : $('width').value + 'px'; });
   function externalSave(key) {
     if (!persistence || key !== persistence.key) return;
-    persistence.conflict = true; savedControls(true);
+    persistence.conflict = true; persistence.gate.requireRecovery(); savedControls(true); updateControls();
     $('save').textContent = 'Another tab changed this draft. Restore or discard it explicitly before saving here. Download your current work first.';
   }
   window.addEventListener('storage', event => externalSave(event.key));
@@ -522,12 +807,5 @@
     if (!persistence?.unsaved) return;
     event.preventDefault(); event.returnValue = '';
   });
-  window.addEventListener('message', event => {
-    if (event.source !== $('preview').contentWindow || event.origin !== location.origin || !CoursePreviewProtocol.envelope(event.data)) return;
-    if (event.data.type === 'ready') { ready = true; sent.clear(); run(preview); }
-    else if (event.data.type === 'error' && event.data.revision === renderRevision) { sent.clear(); status('Preview: ' + event.data.message); }
-  });
-  $('preview').addEventListener('load', () => $('preview').contentWindow.postMessage({ version: 1, type: 'hello' }, location.origin));
-  $('preview').contentWindow.postMessage({ version: 1, type: 'hello' }, location.origin);
-  status('Choose your group and open a published version or template.');
+  status('Choose your group, then open its last published version. Use the template only if your group has nothing published yet.');
 })().catch(error => { document.getElementById('status').textContent = error.message; });

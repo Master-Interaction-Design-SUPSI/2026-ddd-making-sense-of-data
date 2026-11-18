@@ -10,70 +10,88 @@
 </head>
 <body>
   <header class="site-bar">
-    <p>Data Driven Design</p>
-    <h1 class="bar-current">Entry editor</h1>
-    <a class="bar-link" href="../">Course site ↗</a>
+    <p>Data Driven Design</p><h1 class="bar-current">Entry editor</h1><a class="bar-link" href="../">Course site ↗</a>
   </header>
   <main class="editor">
-    <div class="steps" role="region" aria-label="Editing controls">
-      <section class="step step-group" aria-labelledby="step-group">
-        <h2 id="step-group"><span class="step-index">01</span> Open</h2>
-        <label for="group">Group</label>
-        <div class="row"><select id="group" disabled></select><button id="open" class="primary" disabled>Open last published version</button><button id="template" disabled>Start from template</button></div>
-        <p id="base"></p>
-        <p id="status" role="status">Loading editor…</p>
+    <section class="group-bar" aria-label="Group and browser draft status">
+      <div class="row"><label for="group">Group</label><select id="group" disabled></select><button id="open" class="primary" disabled>Open last published version</button><button id="template" disabled>Start from template</button></div>
+      <p id="base"></p><p id="status" role="status">Loading editor…</p>
+      <p id="save" role="status">You write and preview here. Drafts stay in this browser until you save them on GitHub.</p>
+      <section id="recovery-notice" class="notice" aria-labelledby="recovery-heading" hidden>
+        <h2 id="recovery-heading">A saved draft is waiting</h2>
+        <p>Resume it, or use the version you just opened. Download it first if you are unsure. Editing is paused until you choose.</p>
+        <div class="row"><button id="restore">Resume browser draft</button><button id="discard">Use loaded version</button><button id="saved-download">Download saved draft</button><button id="compare-saved">Compare saved and loaded text</button><button id="fallback-restore" hidden>Restore text-only backup instead</button></div>
+        <details id="recovery-comparison" hidden tabindex="-1"><summary>Read-only draft comparison</summary><p id="comparison-base"></p><h3>Saved draft</h3><pre id="saved-text"></pre><h3>Loaded version</h3><pre id="loaded-text"></pre></details>
+        <p id="recovery-error" class="error" role="status"></p><ul id="saved-files" class="files" aria-label="Saved attachments for reconciliation"></ul>
       </section>
-      <section class="step step-text" aria-labelledby="step-text">
-        <h2 id="step-text"><span class="step-index">02</span> Write</h2>
-        <label for="text">Entry Markdown</label>
-        <textarea id="text" spellcheck="true" disabled></textarea>
-        <div id="tools" class="toolbar"><button data-insert="[[name]]">Insert media</button><button data-insert="[[note|Your note]]">Insert note</button><button data-insert="[source](https://example.org)">Insert link</button></div>
-        <p id="save" role="status">Drafts are saved in this browser only.</p>
-        <div class="row">
-          <button id="saved-download" hidden>Download saved browser text</button>
-          <button id="restore" hidden>Restore browser draft</button>
-          <button id="fallback-restore" hidden>Restore text-only backup instead</button><button id="discard" hidden>Discard browser draft</button>
-        </div>
-        <ul id="saved-files" class="files" aria-label="Saved attachments for reconciliation"></ul>
-      </section>
-      <section class="step step-media" aria-labelledby="step-media">
-        <h2 id="step-media"><span class="step-index">03</span> Attach</h2>
-        <label for="attachment">Choose a file</label><input type="file" id="attachment">
-        <label for="path">Attachment destination, including folders</label>
-        <input id="path" placeholder="media/new-image.png">
-        <label for="media-name">Name used in the text</label>
-        <input id="media-name" placeholder="lithium mine">
-        <label for="media-source">Link to the source</label>
-        <input id="media-source" type="url" placeholder="https://…">
-        <div class="row"><button id="attach" class="primary" disabled>Attach file</button></div>
-        <p class="note">Use a new filename for replacements so the published text keeps working while you commit.</p>
-        <h3>media.csv</h3>
-        <p class="note">Every media file the text uses needs a row: the name you write as [[name]] in the text, the link to its source, and the file.</p>
-        <p id="table-status" role="status"></p>
-        <ol id="media-rows" class="media-rows" aria-label="Rows of media.csv"></ol>
-        <div class="row"><button id="add-row" disabled>Add row</button><button id="copy-table" disabled>Copy media.csv</button><button id="download-table" disabled>Download media.csv</button></div>
-        <h3>Files</h3>
-        <ul id="files" class="files"></ul>
-      </section>
-      <section class="step step-github" aria-labelledby="step-github">
-        <h2 id="step-github"><span class="step-index">04</span> Commit</h2>
-        <div class="row"><button id="check" class="primary" disabled>Check and prepare GitHub steps</button></div>
-        <p id="validation" role="status"></p>
-        <ol id="steps"></ol>
-        <div class="row"><button id="download" disabled>Download text.md</button><button id="stale" disabled>Compare current GitHub text</button></div>
-        <p id="freshness"></p>
-        <details><summary>Current GitHub text for reconciliation</summary><pre id="current-text"></pre></details>
-        <p class="note">Follow the GitHub steps above. If the website refreshes before all files are saved, it may temporarily show missing media. Publication takes time for checks and processing; GitHub can delay it. After saving every change, open your group on the course site and check which commit is online.</p>
-      </section>
-    </div>
-    <section class="step step-preview" aria-labelledby="step-preview">
-      <h2 id="step-preview">Preview</h2>
-      <div class="preview-controls">
-        <label for="width">Preview width</label><select id="width"><option value="1280">1280 px</option><option value="390">390 px</option></select>
-        <p class="note">Preview uses the course renderer. Local checks do not guarantee publication.</p>
-      </div>
-      <div class="preview-scroll"><iframe src="preview.html" title="Entry preview" id="preview"></iframe></div>
     </section>
+    <div id="editing" hidden>
+      <nav class="workspace-nav" aria-label="Workspace views">
+        <button id="show-write" aria-pressed="true">Write</button><button id="show-preview" aria-pressed="false">Preview</button>
+      </nav>
+      <div id="workspace" class="workspace" data-view="write">
+        <div id="write-pane" class="write-pane">
+          <section class="section" aria-labelledby="writing-heading">
+            <h2 id="writing-heading" tabindex="-1">1. Text</h2>
+            <p id="document-status" role="status"></p>
+            <label for="title">Title</label><input id="title" disabled>
+            <label for="authors">Authors</label><input id="authors" disabled>
+            <label for="body">Text</label><textarea id="body" spellcheck="true" disabled aria-describedby="text-error"></textarea>
+            <div id="tools" class="toolbar"><button id="insert-media" disabled>Insert media</button><button data-insert="[[note|Your note]]" disabled>Insert note</button><button data-insert="[source](https://example.org)" disabled>Insert link</button></div>
+            <div id="media-picker" hidden><label for="media-choice">Media to insert</label><div class="row"><select id="media-choice"></select><button id="insert-choice">Insert selected media</button><button id="cancel-insert">Cancel</button></div><p id="insert-error" role="status"></p></div>
+            <p id="text-error" class="error" role="status"></p>
+            <details id="raw-document"><summary>Edit full text.md</summary><label for="text">Complete Markdown source, including frontmatter</label><textarea id="text" spellcheck="true" disabled></textarea></details>
+          </section>
+          <section class="section" aria-labelledby="visual-heading">
+            <h2 id="visual-heading">2. Main visual</h2>
+            <p class="note">Export a 1920 × 1080 SVG. This visual appears above the entry.</p>
+            <div id="visual-preview"></div><p id="visual-status"></p><label for="visual-file">New visual (SVG)</label><input type="file" id="visual-file" accept=".svg,image/svg+xml" aria-describedby="visual-error" disabled>
+            <div class="row"><button id="replace-visual" disabled>Replace main visual</button><button id="download-visual" disabled>Download visual.svg</button></div><p id="visual-error" class="error" role="status"></p><div id="visual-metadata"></div>
+          </section>
+          <section class="section" aria-labelledby="media-heading">
+            <h2 id="media-heading" tabindex="-1">3. Media</h2>
+            <p class="note">Images, audio and video for the text. Give each one a name, then write [[name]] in the text where it should appear.</p>
+            <p id="table-status" role="status"></p>
+            <div id="table-repair" hidden><label for="repair-source">Original media.csv — repair its source here</label><textarea id="repair-source" spellcheck="false"></textarea><button id="apply-repair">Apply repaired table</button></div>
+            <p id="table-error" class="error" role="status"></p>
+            <ol id="media-rows" class="media-rows" aria-label="Media inventory"></ol>
+            <details id="upload"><summary>Add media</summary>
+              <label for="attachment">Choose a file</label><input type="file" id="attachment" disabled>
+              <div id="upload-metadata"><label for="media-name">Name</label><input id="media-name" disabled>
+              <label for="media-source">Source link (empty for your own material)</label><input id="media-source" type="url" placeholder="https://…" disabled></div>
+              <details><summary>File destination</summary><label for="path">Exact path, including folders</label><input id="path" placeholder="media/new-image.png" disabled></details>
+              <div class="row"><button id="attach" disabled>Add media</button><button id="cancel-replace" hidden>Cancel replacement</button></div>
+              <p id="attachment-error" class="error" role="status"></p>
+            </details>
+            <ul id="files" class="files" aria-label="Removed or missing attachments"></ul>
+            <details><summary>Table and file details</summary>
+              <div class="row"><button id="add-row" disabled>Add missing media row</button><button id="download-table" disabled>Download media.csv</button></div>
+              <pre id="inventory"></pre>
+            </details>
+          </section>
+          <section class="section" aria-labelledby="review-heading">
+            <h2 id="review-heading">4. Save on GitHub</h2>
+            <p class="note">This draft is saved only in this browser. Check it, then follow the steps to commit each file on GitHub. The course site updates some time after your last commit.</p>
+            <button id="check" class="primary" disabled>Check and prepare GitHub steps</button>
+            <div id="error-summary" hidden tabindex="-1"><p>Review needs attention:</p><ul id="review-errors"></ul></div>
+            <p id="validation" role="status"></p><ol id="steps" class="steps"></ol>
+          </section>
+          <details class="section">
+            <summary>Backup</summary>
+            <p class="note">Download this draft with its media as one file, to keep it safe or continue in another browser.</p>
+            <div class="row"><button id="export-draft" disabled>Download current draft</button><button id="download" disabled>Download text.md</button></div>
+            <label for="recovery-import">Import a downloaded draft</label><input type="file" id="recovery-import" accept=".json,application/json">
+            <p id="backup-error" class="error" role="status"></p>
+          </details>
+        </div>
+        <section id="preview-pane" class="preview-pane" aria-labelledby="preview-heading">
+          <h2 id="preview-heading" tabindex="-1">Preview</h2>
+          <div class="preview-controls"><label for="width">Width</label><select id="width"><option value="fit">Fit pane</option><option value="1280">Desktop, 1280 px</option><option value="390">Phone, 390 px</option></select><button id="retry-preview">Retry</button></div>
+          <p id="preview-status" role="status">Connecting to preview…</p>
+          <div class="preview-scroll"><iframe src="preview.html" title="Entry preview" id="preview"></iframe></div>
+        </section>
+      </div>
+    </div>
   </main>
   <script src="../static/vendor/marked.min.js"></script>
   <script src="../static/annotations.js"></script>
@@ -81,7 +99,12 @@
   <script src="../static/references.js"></script>
   <script src="protocol.js"></script>
   <script src="model.js"></script>
+  <script src="document.js"></script>
+  <script src="preview-client.js"></script>
   <script src="draft-store.js"></script>
+  <script src="session.js"></script>
+  <script src="recovery.js"></script>
+  <script src="media-preview.js"></script>
   <script src="editor.js"></script>
 </body>
 </html>

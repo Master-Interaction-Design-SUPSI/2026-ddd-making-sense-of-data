@@ -1,7 +1,13 @@
 ((root) => {
   const version = 1;
   function envelope(message) {
-    return message && message.version === version && ['hello', 'ready', 'render', 'ack', 'error'].includes(message.type);
+    return !!message && !Array.isArray(message) && message.version === version && ['hello', 'ready', 'render', 'ack', 'error', 'visibility'].includes(message.type);
+  }
+  function validReply(message) {
+    if (!envelope(message)) return false;
+    if (message.type === 'ready') return true;
+    if (!['ack', 'error'].includes(message.type) || !Number.isSafeInteger(message.revision) || message.revision < 1) return false;
+    return message.type === 'ack' || typeof message.message === 'string' && message.message.length <= 1000;
   }
   function validateRender(message, contract) {
     if (!envelope(message) || message.type !== 'render' || !Number.isSafeInteger(message.revision) || message.revision < 1 ||
@@ -29,7 +35,7 @@
     }
     if (total > contract.limits.group_bytes) throw new Error('Preview assets exceed group limit');
   }
-  const api = { version, envelope, validateRender };
+  const api = { version, envelope, validReply, validateRender };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else root.CoursePreviewProtocol = api;
 })(globalThis);

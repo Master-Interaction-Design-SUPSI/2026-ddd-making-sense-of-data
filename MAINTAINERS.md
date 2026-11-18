@@ -1,6 +1,6 @@
 # Maintainer manual
 
-Scope: course site, registry, import, publication, editor, archive. Revision: 2026-11-17.
+Scope: course site, registry, import, publication, editor, archive. Revision: 2026-11-18.
 
 Use this manual for current operating instructions. [Acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md) track unfinished validation. Update operating instructions when behavior changes and acceptance checks when validation completes; keep dated evidence (deployments, test results) outside the repository.
 
@@ -144,6 +144,8 @@ The student guide teaches one form per idea. These forms remain supported but ar
 
 ## 7. Editor
 
+The editor is hosted entirely on GitHub Pages. Students save through GitHub’s website using their normal GitHub login there; the generated handoff below is the active save workflow. No editor sign-in, GitHub App, personal token or external login service is required.
+
 URL: `<site>/editor/`. Build outputs:
 
 | File | Content |
@@ -154,18 +156,27 @@ URL: `<site>/editor/`. Build outputs:
 
 Open: last published snapshot (default; hash-checked against served `publication.json`) or template (new group). Non-`live` groups are read-only.
 
+Workspace: title, authors and body project the existing `text.md`; unknown frontmatter, BOM and uniform line endings are preserved. Duplicate or multiline metadata, mixed line endings and incomplete frontmatter use **Edit full text.md** instead. Raw source remains available for every draft. Until a group is opened, only the group step is shown; the workspace then reads as numbered steps (text, main visual, media, save on GitHub). A pending browser draft shows its decision box under the group bar; downloading and importing drafts sit under **Backup**. **Write / Preview** appears only on narrow screens and selects a view there; desktop shows both panes. Switching retains the same controls and iframe.
+
+Media: each normal asset has one inventory card showing a preview (image, video or audio player), its path, total use count, names, sources and **Insert in text**; Replace, Download, Remove and the row's exact path sit under **More**. **Insert media** chooses an existing named asset. The separate **Main visual** step shows the current `visual.svg`, replaces exactly that file and retains the table unchanged; export remains 1920 × 1080 SVG. Explicitly authored visual name/source rows remain editable beside it, without creating one automatically. **Table and file details** retains the CSV download and exceptional/missing row editing. A review failure links to its field; browser-save, preview, GitHub handoff and publication states stay separate.
+
 Drafts:
 
 - IndexedDB schema 2. Revision compare-and-swap; digest-addressed shared blobs; discard tombstones.
 - Quota failure keeps the previous complete draft. Saves serialized; switching awaits save; restored assets hash-checked.
-- Concurrent tab: conflict; explicit restore or discard.
+- Concurrent tab or pending browser draft: editing and handoff checks are blocked until explicit resume or confirmed use of the loaded version. Comparison is read-only and does not autosave.
 - Storage denied: localStorage text-only fallback; missing media listed. Old backups kept until explicit migration.
 - Label: "Saved in this browser only."
+- Retained upload bytes (including removal undo) are bounded by the content contract before another upload is accepted, so every accepted draft remains exportable. Download recovery before starting a fresh draft if this limit is reached.
+- Draft payload version 3; IndexedDB schema stays 2. Versions 1/2 remain readable. Deleted replacement bytes and exact table undo metadata remain in the saved payload.
+- Download the current or saved recovery bundle before clearing storage or moving origins. JSON format `ddd-editor-recovery`, version 1, carries group/base identity, text, table source (including invalid/null or historically absent values), changed assets with exact paths/base64 bytes/SHA-256, deletions and missing paths. Base inventory identifies unchanged repository files; legacy drafts may lack it. Individual saved text, table and attachment downloads remain available alongside the bundle. Import checks hashes, paths and byte limits, then requires an explicit recovery decision. Another base cannot silently replace the loaded one. An imported bundle is held in memory until resumed; keep the original download.
+- Adding suggests a unique path; replacement is an explicit action beside an existing file and retains its metadata. **Cancel replacement** returns to ordinary addition mode. Removal refuses used assets and offers exact undo. Older deletion records without undo metadata offer only an explicitly labelled original-repository-file restore.
+- Renaming a media name updates parsed, case-insensitive `[[name]]` uses while preserving Markdown code/literal examples and frontmatter. Malformed imported CSV remains intact and blocks media mutations until **Apply repaired table** validates its edited source.
 
-Hand-off, generated per draft. Teach this order; intermediate updates may show missing media until all the commits are in:
+Hand-off, generated per draft. Each step carries the action it needs beside its GitHub link: compare current text, download a changed file under its exact name, copy `media.csv` or copy `text.md`. **Download text.md** sits under **Backup**. Teach this order; intermediate updates may show missing media until all the commits are in:
 
 1. Review current `text.md` on GitHub. Stale-text comparison warns; equality is not proof of freshness.
-2. Upload new media; commit. Replace referenced media under a new name.
+2. Upload new or explicitly replaced media at the reviewed paths; commit. Intermediate snapshots can show missing media until the related table/text changes are committed.
 3. Copy the editor's `media.csv` into the root file (create it if absent); commit when changed.
 4. Paste text into `text.md`; commit.
 5. Delete removed files.
@@ -173,7 +184,7 @@ Hand-off, generated per draft. Teach this order; intermediate updates may show m
 
 The final file set is checked against the limits. Names and files that do not resolve are notes, not errors.
 
-Preview: same-origin iframe; layout isolation, not a sandbox. Protocol version 1, types `hello ready render ack error`; window, origin, schema, slug, path, size and revision checked. Only editor-owned object URLs bypass scheme checks; `blob:` and `data:` in text are rejected.
+Preview: same-origin iframe; layout isolation, not a sandbox. Protocol version 1, types `hello ready render ack error visibility`; window, origin, schema, slug, path, size and revision checked. The parent client tracks requested and acknowledged revisions separately, reports stale/unavailable state and retries with a fresh revision and the full required asset set. The default width fits the pane; 1280px/390px checks scroll inside it. Hidden narrow-screen previews suspend renderer/playback; returning renders the current draft while retaining preview position. Only editor-owned object URLs bypass scheme checks; `blob:` and `data:` in text are rejected.
 
 Editor success = local checks passed. It does not prove commit or publication. Importer-only checks: visibility, tree completeness, Git object types, blob integrity, SVG security.
 
@@ -361,18 +372,18 @@ For a requested history purge, first set the pause switch. Inventory the affecte
 
 Offline preview builds contain local entries only and must never be deployed over an imported publication. Build `_site` again before browser checks.
 
-Typography uses `Arial, Helvetica, sans-serif` for prose, navigation, interface text, code and source editing; bibliography/source annotations use Georgia. No webfonts or private provisioning are required. Any local font originals remain excluded from Git and from generated site output.
+Typography uses the system font stack `Arial, Helvetica, sans-serif` for prose, navigation, interface text, code, and source editing; bibliography/source annotations use Georgia. No webfonts or private font provisioning are required. The unused licensed Areal originals remain local under `static/fonts/areal/`, excluded from Git; never commit them to the public repository.
 
 ```sh
 python3 scripts/sync_course_materials.py
 python3 -m unittest discover -s scripts -p 'test_*.py'
-node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
+node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js scripts/test_editor_recovery.js scripts/test_editor_document.js scripts/test_editor_preview.js scripts/test_editor_workspace.js
 python3 scripts/build_site.py
 actionlint .github/workflows/*.yml
 git diff --check
 ```
 
-- Browser: `scripts/check_editor_browser.js`, `check_editor_fallback.js`, `check_editor_fidelity.js`, in Chrome and WebKit. Rebuild `_site` first, serve it, open `editor/`, then run the three in this order in one browser session (`playwright-cli run-code --filename=…`); the fallback check reuses the draft the first one saves. Each supplies its own test group, so they work with an empty registry.
+- Interactive checks are manual. Current `AGENTS.md` prohibits automated browser tests; do not run `check_editor_browser.js`, `check_editor_fallback.js`, `check_editor_fidelity.js` or Playwright automation. Build into a temporary output directory when preserving a useful imported `_site`.
 - CI: `validate.yml` runs unit, Node and offline build on PRs. Publication reruns tests before import.
 
 For outstanding hosted, browser and student-account validation, use [acceptance checks](docs/2026-10-16_ddd_acceptance-checks.md). Rerun checks for the revision being reviewed.

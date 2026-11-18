@@ -3,6 +3,7 @@
   const assets = new Map();
   let revision = 0;
   let slug = null;
+  let visible = true;
   const send = message => parent.postMessage({ version: 1, ...message }, location.origin);
   const mime = path => ({ svg: 'image/svg+xml', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg',
     webp: 'image/webp', gif: 'image/gif', avif: 'image/avif', mp4: 'video/mp4', webm: 'video/webm', mov: 'video/quicktime',
@@ -17,10 +18,16 @@
     if (event.source !== parent || event.origin !== location.origin) return;
     const message = event.data;
     if (CoursePreviewProtocol.envelope(message) && message.type === 'hello') { send({ type: 'ready' }); return; }
+    if (CoursePreviewProtocol.envelope(message) && message.type === 'visibility' && typeof message.visible === 'boolean') {
+      visible = message.visible;
+      if (!visible) CourseSite.dispose();
+      return;
+    }
     if (!CoursePreviewProtocol.envelope(message) || message.type !== 'render') return;
     try {
       CoursePreviewProtocol.validateRender(message, contract);
       if (message.revision <= revision) return;
+      const position = slug === message.slug ? { x: window.scrollX, y: window.scrollY } : { x: 0, y: 0 };
       revision = message.revision;
       CourseSite.dispose();
       document.getElementById('entries').replaceChildren();
@@ -42,9 +49,13 @@
         loadEntries: async () => [{ folder: slug, text: message.text, table: message.table, visual: message.paths.includes('visual.svg') ? 'visual.svg' : null }],
         resolveResource: (path, kind) => kind === 'link' && path.endsWith('.svg') ? false : assets.get(path)?.url || false,
       });
-      if (message.revision === revision) send({ type: 'ack', revision });
+      if (message.revision === revision) {
+        if (!visible) CourseSite.dispose();
+        window.scrollTo(position.x, position.y);
+        send({ type: 'ack', revision });
+      }
     } catch (error) {
-      send({ type: 'error', revision: message?.revision, message: error.message });
+      send({ type: 'error', revision: message?.revision, message: error.message.slice(0, 1000) });
     }
   });
   window.addEventListener('pagehide', clear);

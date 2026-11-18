@@ -24,6 +24,6 @@ jobs:
       - name: Check entry validation
         run: python3 -m unittest discover -s scripts -p 'test_*.py'
       - name: Check annotation and playback behavior
-        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js
+        run: node --test scripts/test_annotations.js scripts/test_playback.js scripts/test_editor.js scripts/test_editor_recovery.js scripts/test_editor_document.js scripts/test_editor_preview.js scripts/test_editor_workspace.js
       - name: Validate and build entries
         run: python3 scripts/build_site.py

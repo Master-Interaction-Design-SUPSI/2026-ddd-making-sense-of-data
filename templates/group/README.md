@@ -141,3 +141,17 @@ The course [media and sources worksheet](https://docs.google.com/spreadsheets/d/
 - Playback stops off screen, on entry switch, while the main image is enlarged, and when the page is hidden.
 - With reduced motion turned on, videos stay still and previews do not animate.
 - Browsers may refuse automatic playback or sound, and playback depends on the file's encoding. If sound is blocked, choose **Enable sound**, then hover again. The source link always works. Check your entry on the site.
+
+## 9. Editor (preview)
+
+Use the [course editor](https://master-interaction-design-supsi.github.io/2026-ddd-making-sense-of-data/editor/) only after the course team announces it. It lets you write and preview your entry, then shows you the steps to save it on GitHub.
+
+1. Select your group in **Group**, then choose **Open last published version**. Use **Start from template** only if your group has nothing published yet.
+2. If the editor finds a draft saved earlier in this browser, choose **Resume browser draft** or **Use loaded version** before editing.
+3. Work through the numbered steps. The preview beside them updates as you type.
+   1. **Text**: title, authors and text. Formatting is in §7.
+   2. **Main visual**: shows your current visual. To change it, choose a 1920 × 1080 SVG, then **Replace main visual**.
+   3. **Media**: each file is a card with a preview. To add one, open **Add media**, choose a file, give it a name and a source link, then click **Add media**. **Insert in text** writes `[[name]]` where your cursor is.
+   4. **Save on GitHub**: choose **Check and prepare GitHub steps** and fix any error. Then follow the listed steps on GitHub, top to bottom. Each step has the button you need, such as **Copy text.md** or **Download** for a media file, and a link to the right page on GitHub.
+
+Drafts are saved in this browser only. To keep a copy or continue in another browser, open **Backup** and choose **Download current draft**. Ticking a step in the editor is only a reminder: nothing is saved on GitHub or published until you commit each change there. After the last commit, check your entry on the site (§6).

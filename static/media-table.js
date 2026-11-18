@@ -5,6 +5,7 @@
    [[name]] in text.md expands to the existing annotation form
    [[name|file|source=url]], so everything downstream sees one syntax. */
 ((root) => {
+  const marked = typeof module !== 'undefined' && module.exports ? require('./vendor/marked.min.js') : root.marked;
   const HEADER = ["name", "source", "file"];
   const SOURCE = /^https?:\/\/[^\s<>"'\\]+$/i;
   const NAMED = /\[\[([^\][|]+)\]\]/g;
@@ -128,7 +129,67 @@
       .map(fields => fields.map(quote).join(",")).join("\n") + "\n";
   }
 
-  const api = { read, expand, splitNames, unresolved, sources, warnings, serialize };
+  // Keep source positions, including CRLF, while following Markdown's literal boundaries.
+  function namedReferences(source) {
+    const prefix = source.match(/^\uFEFF?(?:---[ \t]*\r?\n[\s\S]*?\r?\n---[ \t]*(?:\r?\n|$))?/)[0].length;
+    const positions = [];
+    let normalized = '';
+    for (let i = prefix; i < source.length; i++) {
+      positions.push(i);
+      normalized += source[i] === '\r' ? '\n' : source[i];
+      if (source[i] === '\r' && source[i + 1] === '\n') i++;
+    }
+    const found = [];
+    function project(raw, parent, offsets, cursor, block) {
+      let exact = parent.indexOf(raw, cursor);
+      while (block && exact > 0 && parent[exact - 1] !== '\n') exact = parent.indexOf(raw, exact + 1);
+      if (exact !== -1) return { offsets: offsets.slice(exact, exact + raw.length), end: exact + raw.length };
+      if (block) return null;
+      const mapped = [];
+      for (const char of raw) {
+        const at = parent.indexOf(char, cursor);
+        if (at === -1) return null;
+        mapped.push(offsets[at]); cursor = at + 1;
+      }
+      return { offsets: mapped, end: cursor };
+    }
+    function visit(tokens, parent, offsets, block = false) {
+      let cursor = 0;
+      for (const token of tokens) {
+        if (!token.raw) continue;
+        const raw = token.type === 'text' && token.tokens ? token.text : token.raw;
+        const mapped = project(raw, parent, offsets, cursor, block);
+        if (!mapped) continue;
+        cursor = mapped.end;
+        if (['code', 'codespan', 'escape', 'html', 'link', 'image'].includes(token.type)) continue;
+        if (token.items) visit(token.items, raw, mapped.offsets, true);
+        else if (['blockquote', 'list_item'].includes(token.type)) {
+          const content = project(token.text, raw, mapped.offsets, 0, false);
+          if (content) visit(token.tokens, token.text, content.offsets, true);
+        } else if (token.tokens) visit(token.tokens, raw, mapped.offsets);
+        else if (token.type === 'table') {
+          visit([...token.header, ...token.rows.flat()].flatMap(cell => cell.tokens), raw, mapped.offsets);
+        } else if (token.type === 'text') {
+          for (const match of token.raw.matchAll(NAMED)) {
+            const index = mapped.offsets[match.index];
+            if (source.slice(index, index + match[0].length) === match[0]) found.push({ name: match[1].trim(), index, length: match[0].length });
+          }
+        }
+      }
+    }
+    visit(marked.lexer(normalized), normalized, positions, true);
+    return found;
+  }
+
+  function renameReferences(text, previous, next) {
+    for (const reference of namedReferences(text).reverse()) {
+      if (reference.name.toLowerCase() !== previous.toLowerCase()) continue;
+      text = text.slice(0, reference.index) + `[[${next}]]` + text.slice(reference.index + reference.length);
+    }
+    return text;
+  }
+
+  const api = { read, expand, splitNames, unresolved, sources, warnings, serialize, namedReferences, renameReferences };
   if (typeof module !== "undefined" && module.exports) module.exports = api;
   else root.CourseMediaTable = api;
 })(globalThis);
