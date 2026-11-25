@@ -302,8 +302,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "0c666bafbef49900185da2020cba9e98b181b317",
-        "message": "media/GPU.png: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
+        "commit": "b223cbf886e304e2b157d18f8e2d9ccf7ad389aa",
+        "message": "media/Electric car.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
       "snapshot": {
@@ -409,8 +409,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "042e1ec79dad58e94091653eb80d3e5d0509dbad",
-        "message": "/tmp/ddd-prepare-bmjm6s7g/.archive-prepare-fo8lmrxk/imports/.candidate-59hz84pm/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+        "commit": "1fad753154dfe8328122a08eaa309527ffd5ac7c",
+        "message": "/tmp/ddd-prepare-1gp02hbg/.archive-prepare-zimvlhl7/imports/.candidate-vc1gdrpc/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
