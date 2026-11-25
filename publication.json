@@ -356,22 +356,24 @@
     "group-08": {
       "branch": "main",
       "exclude": [],
-      "problem": {
-        "commit": "91304022426bfc2aad998df68fd5405aed1b5a10",
-        "message": "media/DataCentersCriticalMinerals.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
-      },
+      "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
       "snapshot": {
-        "commit": "f4205455bc61f84a8735bbe7e2dd60c15ab3612d",
-        "committed_at": "2026-11-25T09:07:33Z",
+        "commit": "07e1db8a389be4895b8ef7ff9cfc9f639cab9f9a",
+        "committed_at": "2026-11-25T10:14:03Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
         "files": {
           "media.csv": {
-            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
-            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
-            "size": 339
+            "blob_sha": "5012e3967d4457db564f9df62fc2ffd026e71730",
+            "sha256": "cd84b053c02af53e7f15879d91b09d5392c157b98921305b37bad4dfd0abc515",
+            "size": 651
+          },
+          "media/data_centers_critical_minerals.jpg": {
+            "blob_sha": "1a1a34d57da7023d81928979acde25628c23bca7",
+            "sha256": "e82b1e0e74de9980c4e2914fe770c3227ad09aeceedd0ba2f350c8b6906c65ed",
+            "size": 1452301
           },
           "media/example-detail.svg": {
             "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
@@ -393,10 +395,15 @@
             "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
             "size": 20393
           },
+          "media/un-inqc.jpg": {
+            "blob_sha": "71df1049211eca5a3a2dc1267ad377499beb826f",
+            "sha256": "b23dbbd42a90d71ccf08b30d6063f8d1fd8d98efc564663f09b2389e941c2b3b",
+            "size": 279997
+          },
           "text.md": {
-            "blob_sha": "0efde5e3e877a1b4daa25515d28d61b0a52e52e0",
-            "sha256": "385174e3816408916b66c18c214d5ca65c684f79a966854e32e98547b295ae3c",
-            "size": 4315
+            "blob_sha": "c57d3a39228a50cf231f2b7c55562aaf94fcda7d",
+            "sha256": "d5f60c276d45c6d3943062b688b7936768ccb54961558b35d89a1e955dc605ec",
+            "size": 4320
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -404,7 +411,7 @@
             "size": 832
           }
         },
-        "tree": "bc312ad104029f044e0309e848d55b5cd4d07c79"
+        "tree": "ea46916bf72c18b4357bbd5254dd74673632951e"
       },
       "state": "live"
     },
