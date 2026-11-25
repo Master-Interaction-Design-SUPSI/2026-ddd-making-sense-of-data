@@ -163,7 +163,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "1f4bd5796972b2d43ae6b388600a0a1e6c18a363",
+        "commit": "587d08fdeb01832d7fddce91d8caef799f98317c",
         "message": "visual.svg: use a static SVG without embedded code, links or animation"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-04",
@@ -302,7 +302,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "5b156c3669f22a198e54f2001c75b6cd995d3f93",
+        "commit": "1cc500baf4b882687c488625202e68f2baa9e0cd",
         "message": "media/Jennifer-Victoria_Group7.svg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
