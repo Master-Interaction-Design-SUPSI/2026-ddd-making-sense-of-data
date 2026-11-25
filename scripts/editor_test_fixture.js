@@ -71,10 +71,9 @@ async function editorFixture({ record = null, table = null, confirm = true, sour
   vm.runInContext(fs.readFileSync(require.resolve('../editor/review.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(require.resolve('../editor/download.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(require.resolve('../editor/persistence.js'), 'utf8'), context);
-  vm.runInContext(fs.readFileSync(require.resolve('../editor/editor.js'), 'utf8'), context);
-  await until(() => element('template').listeners.click);
-  element('template').listeners.click();
-  await until(() => element('status').textContent?.startsWith('Ready to edit') || element('status').textContent?.startsWith('Resolve'));
+  await vm.runInContext(fs.readFileSync(require.resolve('../editor/editor.js'), 'utf8'), context);
+  await element('template').listeners.click();
+  assert.match(element('status').textContent, /^(Ready to edit|Resolve)/);
   return { element, state, until, Element };
 }
 module.exports = { editorFixture };
