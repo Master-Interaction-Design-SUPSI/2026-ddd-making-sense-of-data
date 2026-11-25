@@ -302,8 +302,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "16b4511edd09abeb90b3fdf4cfd1f682351c245d",
-        "message": "km-formula.svg: use a static SVG without embedded code, links or animation"
+        "commit": "dafb201c943e4c332646ea4582bbad88053228d7",
+        "message": "Jennifer-Victoria_Group67.svg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
       "snapshot": {
@@ -357,8 +357,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "2d3f547d5c711b9412dfae504affb0e323b67749",
-        "message": "media/UN-InqC.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
+        "commit": "91304022426bfc2aad998df68fd5405aed1b5a10",
+        "message": "media/DataCentersCriticalMinerals.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
       "snapshot": {
