@@ -302,8 +302,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "ed43919c39bf74ab28fb7eb17ce554b45c19d7a9",
-        "message": "group content requires text.md and visual.svg"
+        "commit": "f5964bf472afbdc93795b6a06f40c0512f890a56",
+        "message": "km-formula.svg: use a static SVG without embedded code, links or animation"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
       "snapshot": {
@@ -419,8 +419,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "24732e69f2100de10188fe1881ce7f02b965e900",
-        "message": "/tmp/ddd-prepare-oyat6h7x/.archive-prepare-qdt7vz8s/imports/.candidate-seycwke6/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+        "commit": "94090581b61c4a231f98bdc03b4a7f8aef65c3b9",
+        "message": "/tmp/ddd-prepare-dqf2qn6x/.archive-prepare-30uah5y3/imports/.candidate-y9q0txvk/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
