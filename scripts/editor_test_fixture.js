@@ -62,11 +62,11 @@ async function editorFixture({ record = null, table = null, confirm = true, sour
     },
   });
   const until = async predicate => {
-    for (let attempt = 0; attempt < 200; attempt++) {
-      if (predicate()) return;
-      await new Promise(resolve => setImmediate(resolve));
+    const deadline = performance.now() + 5000;
+    while (!predicate()) {
+      if (performance.now() >= deadline) assert.fail('Editor state: ' + element('status').textContent);
+      await new Promise(resolve => setTimeout(resolve, 5));
     }
-    assert.fail('Editor state: ' + element('status').textContent);
   };
   vm.runInContext(fs.readFileSync(require.resolve('../editor/review.js'), 'utf8'), context);
   vm.runInContext(fs.readFileSync(require.resolve('../editor/download.js'), 'utf8'), context);
