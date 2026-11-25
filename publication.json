@@ -302,7 +302,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "30962bf019300bc40d37730f8d164aa342b6bd85",
+        "commit": "ca3362fbba44bdb89148a008394d04adfa2b11b8",
         "message": "media/Electric car.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
