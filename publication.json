@@ -302,7 +302,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "67fa8acea7519ee1a9e0722d6b62cbad9cf3b8ad",
+        "commit": "0c666bafbef49900185da2020cba9e98b181b317",
         "message": "media/GPU.png: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
@@ -409,8 +409,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "38a3dd7331210cc1ba13069aa331c6b0abeb5a78",
-        "message": "/tmp/ddd-prepare-61yxt1kr/.archive-prepare-6e6rwmdt/imports/.candidate-syv9gd8i/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+        "commit": "042e1ec79dad58e94091653eb80d3e5d0509dbad",
+        "message": "/tmp/ddd-prepare-bmjm6s7g/.archive-prepare-fo8lmrxk/imports/.candidate-59hz84pm/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
