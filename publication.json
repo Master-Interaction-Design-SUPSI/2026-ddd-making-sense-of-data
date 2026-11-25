@@ -3,7 +3,10 @@
     "group-01": {
       "branch": "main",
       "exclude": [],
-      "problem": null,
+      "problem": {
+        "commit": "deb2ec1c2f2ea58586943949cf966b0ad3e32c7d",
+        "message": "/tmp/ddd-prepare-muqpqy57/.archive-prepare-lowa7z9b/imports/.candidate-tkkxht_z/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+      },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-01",
       "snapshot": {
         "commit": "498018530b93f2816162b8a473917fa1662ca9b9",
@@ -159,7 +162,10 @@
     "group-04": {
       "branch": "main",
       "exclude": [],
-      "problem": null,
+      "problem": {
+        "commit": "1f4bd5796972b2d43ae6b388600a0a1e6c18a363",
+        "message": "visual.svg: use a static SVG without embedded code, links or animation"
+      },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-04",
       "snapshot": {
         "commit": "ffc36b600600590b4fdcdc64ca00cc6feb632a85",
@@ -266,56 +272,39 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-06",
       "snapshot": {
-        "commit": "c539207ae5111e03d207a8227dd51010fa69cb81",
-        "committed_at": "2026-10-20T14:15:17Z",
+        "commit": "090ba331d9a71d45fea236c4cabcb9148ef6a450",
+        "committed_at": "2026-11-25T09:04:25Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
         "files": {
           "media.csv": {
-            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
-            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
-            "size": 339
-          },
-          "media/example-detail.svg": {
-            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
-            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
-            "size": 415
-          },
-          "media/example-motion.mp4": {
-            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
-            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
-            "size": 471087
-          },
-          "media/example-tall.svg": {
-            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
-            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
-            "size": 294
-          },
-          "media/example-tone.mp3": {
-            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
-            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
-            "size": 20393
+            "blob_sha": "d900e6be7b3d2a1808609d6866f5206f08050dea",
+            "sha256": "66322f7f72edf0aa93daf04f13f8b12c425c48836f595846764122596d316c30",
+            "size": 17
           },
           "text.md": {
-            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
-            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
-            "size": 2060
+            "blob_sha": "c3429dc4685bde5a45887df7e160c1e1ef39c7e5",
+            "sha256": "cfc4a7973011ff7e59a8d5f594e067df4f8138164de09825ca68e7a9d567aea8",
+            "size": 1897
           },
           "visual.svg": {
-            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
-            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
-            "size": 832
+            "blob_sha": "e26471e60756511715669ad62058c3ba47a74b66",
+            "sha256": "1d20d7c296f46421f3587453e5a87d14b7ea3988376c532c2283494c27bd050e",
+            "size": 1420088
           }
         },
-        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
+        "tree": "c55335626bb243823a16523208d3835c8429358d"
       },
       "state": "live"
     },
     "group-07": {
       "branch": "main",
       "exclude": [],
-      "problem": null,
+      "problem": {
+        "commit": "5b156c3669f22a198e54f2001c75b6cd995d3f93",
+        "message": "media/Jennifer-Victoria_Group7.svg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
+      },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
       "snapshot": {
         "commit": "176330d82033409746947dc69504c1f65f1179bc",
@@ -370,8 +359,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
       "snapshot": {
-        "commit": "f4df1f29f90d8dc40360d06ea80b013311a9650b",
-        "committed_at": "2026-10-20T14:14:37Z",
+        "commit": "f4205455bc61f84a8735bbe7e2dd60c15ab3612d",
+        "committed_at": "2026-11-25T09:07:33Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -402,9 +391,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
-            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
-            "size": 2060
+            "blob_sha": "0efde5e3e877a1b4daa25515d28d61b0a52e52e0",
+            "sha256": "385174e3816408916b66c18c214d5ca65c684f79a966854e32e98547b295ae3c",
+            "size": 4315
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -412,14 +401,17 @@
             "size": 832
           }
         },
-        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
+        "tree": "bc312ad104029f044e0309e848d55b5cd4d07c79"
       },
       "state": "live"
     },
     "group-09": {
       "branch": "main",
       "exclude": [],
-      "problem": null,
+      "problem": {
+        "commit": "a9d8288a1e3c3d68f71a1016ec7b6c6c25009ff7",
+        "message": "/tmp/ddd-prepare-muqpqy57/.archive-prepare-lowa7z9b/imports/.candidate-e5v728ju/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+      },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
         "commit": "4cbd0223f7145d8b86172ace7bae093a6b74535f",
@@ -474,49 +466,59 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-10",
       "snapshot": {
-        "commit": "f395ce5f4be8632fdd8ca64af6240cc2afd28e97",
-        "committed_at": "2026-10-20T14:13:46Z",
+        "commit": "254f50136dc288bc2d7706be57e6bf81100c58d6",
+        "committed_at": "2026-11-25T09:02:37Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
         "files": {
           "media.csv": {
-            "blob_sha": "eb417ebf459e8289934b79670158422157140c4d",
-            "sha256": "6080e4346ce48900a456782e4a26f3546ca4f959ca605ebded49a7428ee70e76",
-            "size": 339
+            "blob_sha": "cdb4c0200005b0157d4648afb54dd4b230fc6bbf",
+            "sha256": "b9e270bd21f111fa97dc0de465e45f3ed0e3f29a526c0aa780ecce6fa20f438e",
+            "size": 574
           },
-          "media/example-detail.svg": {
-            "blob_sha": "dc6370281a85c27415fb1a6dd601019caa32868d",
-            "sha256": "2de05b15a1989bf1534113c14ba1220ffe841eb2efb51e2f58fbe12e475505db",
-            "size": 415
+          "media/b200-rack.jpg": {
+            "blob_sha": "fb994edef2ecfb58756f2c45f7aa4cdbabd26366",
+            "sha256": "01367069f91d90b55216013e495dc3c370a8946ab39109933b6f4d291849a59a",
+            "size": 1008886
           },
-          "media/example-motion.mp4": {
-            "blob_sha": "337fc656ffc7054da6d26d67c4c2f9651f58e92a",
-            "sha256": "af65d6c8dfb74fc7be4c7e102e33991e6391b46904a87587cd97981faeb997fd",
-            "size": 471087
+          "media/chart-detail-images.png": {
+            "blob_sha": "bbbd7f1645409652c573ea23d66b417f9e2d93ee",
+            "sha256": "da58257cd51f65e34f21284162d54869aed19b2413fd9fa37529c0a584adafa5",
+            "size": 520837
           },
-          "media/example-tall.svg": {
-            "blob_sha": "1e81fbfa42b82a456192d63423db106d9fbad7a8",
-            "sha256": "d339274c8302d13e91639218ec957cd772bb3f2354d384a0a4452d7536715fc6",
-            "size": 294
+          "media/chart-detail-videos.png": {
+            "blob_sha": "aafde2f2384c12ab07b4b7479385221fcd5142e5",
+            "sha256": "69fc5cdf9ad575e502a81d7c87d729fff072da6ec990c3467cd1475c241a0219",
+            "size": 366883
           },
-          "media/example-tone.mp3": {
-            "blob_sha": "750d53b10beb81e788491b7171581f8be1714a1f",
-            "sha256": "09ec9c2683928b87b1f60eaf165a292db59096e669a4dac35cbcdb107b4f1fb3",
-            "size": 20393
+          "media/data-centre-rack.jpg": {
+            "blob_sha": "7a3c9b615af262ba2d33c3db16edca63abc954a2",
+            "sha256": "72794ab2e5f99b601bc27514d72bd57a3c2e3eeaf2bb285b591f805b0986efdc",
+            "size": 815024
+          },
+          "media/h100-gpu.png": {
+            "blob_sha": "c10444d6ed342ab058fd79fc434eeb908a789bc1",
+            "sha256": "c654c5f837639ef1754129a7f82328c27587a0f4b0ebc88df1c9ce5fcf5286ab",
+            "size": 321613
+          },
+          "media/server-sound.m4a": {
+            "blob_sha": "e0a42a6f4a240809222bc5152f64cc1a9e047139",
+            "sha256": "5f0d6c6fb3fc12ada718570e27604ff58393a8bc90538dc1dee267c38f760024",
+            "size": 522647
           },
           "text.md": {
-            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
-            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
-            "size": 2060
+            "blob_sha": "fb3855cc7ef147c7a51aaed8b2468380fc79da01",
+            "sha256": "714bd1c8c5037d4318025795b26ae79e119f8f37d0ecb1ec12fdf3e1c532b5ac",
+            "size": 2479
           },
           "visual.svg": {
-            "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
-            "sha256": "60a71aac034ea7f396aae8c251d07d27994ca47624e2de1f335cbcde7cc79a39",
-            "size": 832
+            "blob_sha": "f6113f1c5ad5205bcd4b300e0de970ca30210656",
+            "sha256": "a82ee7a2d5d947a96cf65b3dda834bf363f6df048bcda4ece23151ba283931c7",
+            "size": 767287
           }
         },
-        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
+        "tree": "9ae674c42960a6063c8c05bbec7f40e7cd76bb15"
       },
       "state": "live"
     },
@@ -526,8 +528,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-11",
       "snapshot": {
-        "commit": "c9b4029829ee817817770612b231dd99672f2b48",
-        "committed_at": "2026-10-20T14:13:21Z",
+        "commit": "9dee7f10a77649c488f78e8dd288a8f2c7e2edfd",
+        "committed_at": "2026-11-25T08:48:50Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -558,9 +560,9 @@
             "size": 20393
           },
           "text.md": {
-            "blob_sha": "4ee8182e96eee3a32a7c7168a8e06de355fa2acd",
-            "sha256": "af33f23438ba4e769b4745cd15e8c50ebcbe9ddf1d6eda3ba66b61522c6e26b8",
-            "size": 2060
+            "blob_sha": "bc805efb678dbcbbf07c1fa310897c256e641c3e",
+            "sha256": "5aa356391387a5d629f4245d70e55a2bb63a66c8fb67c6f9e494a2ea02111a01",
+            "size": 2066
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -568,14 +570,17 @@
             "size": 832
           }
         },
-        "tree": "1b60df68b39051bc26e926df1030310d5f86a1e6"
+        "tree": "0b3f621a1574ce3a9129dbafefda31d5e958f66d"
       },
       "state": "live"
     },
     "group-12": {
       "branch": "main",
       "exclude": [],
-      "problem": null,
+      "problem": {
+        "commit": "fbc4d1bb70946d6b341f60828c711bf4f128e373",
+        "message": "/tmp/ddd-prepare-muqpqy57/.archive-prepare-lowa7z9b/imports/.candidate-05wi77gd/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+      },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-12",
       "snapshot": {
         "commit": "1ac100ae67d75c12ba49b9d1e824afb699a66062",

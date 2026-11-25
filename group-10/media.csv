@@ -1,5 +1,7 @@
 name,source,file
-wide detail,https://example.org/wide-detail,media/example-detail.svg
-tall transparent detail,https://example.org/tall-detail,media/example-tall.svg
-five-second demonstration tone,https://example.org/demonstration-tone,media/example-tone.mp3
-generated test pattern,https://example.org/test-pattern,media/example-motion.mp4
+h100 gpu,https://commons.wikimedia.org/wiki/File:NVIDIA_H100_(%E6%9E%81%E5%AE%A2%E6%B9%BEGeekerwan)_011.png,media/h100-gpu.png
+b200 rack,https://commons.wikimedia.org/wiki/File:Nvidia_DGX_GB200.jpg,media/b200-rack.jpg
+data centre rack,https://commons.wikimedia.org/wiki/File:Rear_of_rack_at_NERSC_data_center_-_closeup.jpg,media/data-centre-rack.jpg
+chart detail images,,media/chart-detail-images.png
+chart detail videos,,media/chart-detail-videos.png
+server sound,https://commons.wikimedia.org/wiki/File:Supermicro_Ambient_Sound.wav,media/server-sound.m4a
