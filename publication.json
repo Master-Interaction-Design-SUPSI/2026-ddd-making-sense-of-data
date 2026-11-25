@@ -409,8 +409,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "a9d8288a1e3c3d68f71a1016ec7b6c6c25009ff7",
-        "message": "/tmp/ddd-prepare-muqpqy57/.archive-prepare-lowa7z9b/imports/.candidate-e5v728ju/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+        "commit": "899c801f20ab84dfe812c96d9c872f89c5f54d07",
+        "message": "/tmp/ddd-prepare-kwc21nol/.archive-prepare-ln980u5r/imports/.candidate-hyhiftvw/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
