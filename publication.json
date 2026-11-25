@@ -302,7 +302,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "731c37cc61a82abdc403f94447a351a9e16e39fc",
+        "commit": "16b4511edd09abeb90b3fdf4cfd1f682351c245d",
         "message": "km-formula.svg: use a static SVG without embedded code, links or animation"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
@@ -357,7 +357,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "be186050923431dc57b2da2c8d1f3689464673b3",
+        "commit": "6ef4a03cf8b923c13b9020e6c6b75e05ac7cbe6c",
         "message": "media/UN-InqC.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
