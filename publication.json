@@ -357,7 +357,7 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "6ef4a03cf8b923c13b9020e6c6b75e05ac7cbe6c",
+        "commit": "2d3f547d5c711b9412dfae504affb0e323b67749",
         "message": "media/UN-InqC.jpg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
