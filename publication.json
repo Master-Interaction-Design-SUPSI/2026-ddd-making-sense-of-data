@@ -272,8 +272,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-06",
       "snapshot": {
-        "commit": "090ba331d9a71d45fea236c4cabcb9148ef6a450",
-        "committed_at": "2026-11-25T09:04:25Z",
+        "commit": "795626f94562ea19b3573c8efa587b93b46e85c6",
+        "committed_at": "2026-11-25T10:50:42Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -284,17 +284,17 @@
             "size": 17
           },
           "text.md": {
-            "blob_sha": "c3429dc4685bde5a45887df7e160c1e1ef39c7e5",
-            "sha256": "cfc4a7973011ff7e59a8d5f594e067df4f8138164de09825ca68e7a9d567aea8",
-            "size": 1897
+            "blob_sha": "a221926937a72bc3499aef067e2c830546ae4dd4",
+            "sha256": "d37b9fa15c34b6eef4425a4e215e6c617c77cd292e9c4a289ba9ba896dedfebc",
+            "size": 2135
           },
           "visual.svg": {
-            "blob_sha": "e26471e60756511715669ad62058c3ba47a74b66",
-            "sha256": "1d20d7c296f46421f3587453e5a87d14b7ea3988376c532c2283494c27bd050e",
-            "size": 1420088
+            "blob_sha": "4b59f390591ae24ee3987b6b4aef4e72aa12c405",
+            "sha256": "887006e19e96982f68249b7f593287c6130f6a8324ab874b1cee698c9639b10e",
+            "size": 1662838
           }
         },
-        "tree": "c55335626bb243823a16523208d3835c8429358d"
+        "tree": "5adcc902e9576f3051b142723cc3d26b9cdf8756"
       },
       "state": "live"
     },
@@ -359,8 +359,8 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
       "snapshot": {
-        "commit": "51f454db756add67d14e65dac2edac76e9938598",
-        "committed_at": "2026-11-25T10:33:30Z",
+        "commit": "958af282b374b1134d052cbffc555da8241e9557",
+        "committed_at": "2026-11-25T10:35:34Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
@@ -406,9 +406,9 @@
             "size": 279997
           },
           "text.md": {
-            "blob_sha": "c57d3a39228a50cf231f2b7c55562aaf94fcda7d",
-            "sha256": "d5f60c276d45c6d3943062b688b7936768ccb54961558b35d89a1e955dc605ec",
-            "size": 4320
+            "blob_sha": "433faeab96795514d1543f891b4dfc057d124816",
+            "sha256": "a26c383a70f84f0c74ccbba8b0ecc2f9384cf1a5044d4fc3bb0ffcc6299b9d10",
+            "size": 2337
           },
           "visual.svg": {
             "blob_sha": "ab648763636e33bf1e553ae801c3a5aa4a66aac5",
@@ -416,7 +416,7 @@
             "size": 832
           }
         },
-        "tree": "54cc814fdefc39beee242cb7e82a429e6b8343c5"
+        "tree": "456e413a964d5fd81f6b13e8a13140e145b13ca2"
       },
       "state": "live"
     },
