@@ -302,8 +302,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "1cc500baf4b882687c488625202e68f2baa9e0cd",
-        "message": "media/Jennifer-Victoria_Group7.svg: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
+        "commit": "67fa8acea7519ee1a9e0722d6b62cbad9cf3b8ad",
+        "message": "media/GPU.png: content filenames must use lowercase letters, digits, dots, hyphens or underscores"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-07",
       "snapshot": {
