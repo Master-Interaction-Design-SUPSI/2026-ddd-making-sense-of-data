@@ -359,16 +359,21 @@
       "problem": null,
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-08",
       "snapshot": {
-        "commit": "07e1db8a389be4895b8ef7ff9cfc9f639cab9f9a",
-        "committed_at": "2026-11-25T10:14:03Z",
+        "commit": "51f454db756add67d14e65dac2edac76e9938598",
+        "committed_at": "2026-11-25T10:33:30Z",
         "contract_version": 2,
         "exclude": [],
         "excluded": {},
         "files": {
           "media.csv": {
-            "blob_sha": "5012e3967d4457db564f9df62fc2ffd026e71730",
-            "sha256": "cd84b053c02af53e7f15879d91b09d5392c157b98921305b37bad4dfd0abc515",
-            "size": 651
+            "blob_sha": "fb3169f0ab54afc2f44a142c75c3deec0beb25d2",
+            "sha256": "a252114d06ac240c62e02dfcf7a584319f8a4128aec5ce66ed585f155520b3e5",
+            "size": 759
+          },
+          "media/companies.png.jpg": {
+            "blob_sha": "d6609f35f43c92e20a4170569cc9fa6968ee9076",
+            "sha256": "100f6488c77b3c4f87c25a54585a9e355e9ecaa12f8b284e02d849906f78853d",
+            "size": 154398
           },
           "media/data_centers_critical_minerals.jpg": {
             "blob_sha": "1a1a34d57da7023d81928979acde25628c23bca7",
@@ -411,7 +416,7 @@
             "size": 832
           }
         },
-        "tree": "ea46916bf72c18b4357bbd5254dd74673632951e"
+        "tree": "54cc814fdefc39beee242cb7e82a429e6b8343c5"
       },
       "state": "live"
     },
@@ -419,8 +424,8 @@
       "branch": "main",
       "exclude": [],
       "problem": {
-        "commit": "94090581b61c4a231f98bdc03b4a7f8aef65c3b9",
-        "message": "/tmp/ddd-prepare-dqf2qn6x/.archive-prepare-30uah5y3/imports/.candidate-y9q0txvk/visual.svg: export a 1920 \u00d7 1080 canvas (viewBox=\"0 0 1920 1080\")"
+        "commit": "15bb07b57d4a07579d8d6283a214238fe6762174",
+        "message": "visual.svg: use a static SVG without embedded code, links or animation"
       },
       "repository": "Master-Interaction-Design-SUPSI/2026-ddd-group-09",
       "snapshot": {
